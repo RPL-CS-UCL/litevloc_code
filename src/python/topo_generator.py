@@ -3,13 +3,25 @@
 # 	--depth_topic /habitat_camera/depth/image \
 # 	--semantic_topic /habitat_camera/semantic/image \
 # 	--odometry_topic /habitat_camera/odometry \
+# 	--topo_int_trans 3.0 \
+# 	--topo_int_rot 45.0 \
 # 	--data_path /Rocket_ssd/dataset/data_cmu_navigation/cmu_navigation_matterport3d_17DRP5sb8fy
+#   --dataset_type matterport3d
+
+# Usage2: python topo_generator.py \
+# 	--rgb_topic /rgb/image_rect_color/compressed \
+# 	--depth_topic /depth_to_rgb/hw_registered/image_rect_raw \
+# 	--odometry_topic /Odometry \
+# 	--imu_topic /sensors/imu \
+# 	--topo_int_trans 5.0 \
+# 	--topo_int_rot 45.0 \
+# 	--data_path /Rocket_ssd/dataset/data_anymal/anymal_real_message_ops_mos/anymal_real_message_ops_mos \
+# 	--dataset_type anymal
 
 import os
 import argparse
 import rospy
 import message_filters
-from sensor_msgs.msg import Image
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu
 from geometry_msgs.msg import TransformStamped
@@ -19,6 +31,7 @@ import cv2
 import numpy as np
 import argparse
 from scipy.spatial.transform import Rotation as R
+from sensor_msgs.msg import Image, CompressedImage
 import math
 
 # Initialize the node
@@ -32,18 +45,27 @@ class TopoGenerator:
 		parser.add_argument('--semantic_topic', type=str, required=True, help='Topic name for semantic images')
 		parser.add_argument('--odometry_topic', type=str, required=True, help='Topic name for odometry data')
 		parser.add_argument('--imu_topic', type=str, default='/imu', required=False, help='Topic name for IMU data')
-		parser.add_argument('--data_path', type=str, default='/tmp', help='data_path')
 		parser.add_argument('--topo_int_trans', type=float, default=3.0)
-		parser.add_argument('--topo_int_rot', type=float, default=45.0)		
+		parser.add_argument('--topo_int_rot', type=float, default=45.0)
+		parser.add_argument('--data_path', type=str, default='/tmp', help='data_path')
+		parser.add_argument('--dataset_type', type=str, default='matterport3d', help='matterport3d, anymal')	
 		self.args = parser.parse_args()
 
 		# ROS Subscriber
-		rgb_sub = message_filters.Subscriber(self.args.rgb_topic, Image)
-		depth_sub = message_filters.Subscriber(self.args.depth_topic, Image)
-		semantic_sub = message_filters.Subscriber(self.args.semantic_topic, Image)
-		camera_odom_sub = message_filters.Subscriber(self.args.odometry_topic, Odometry)
-		ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub, semantic_sub, camera_odom_sub], 100, 0.1, allow_headerless=True)
-		ts.registerCallback(self.image_callback)
+		if self.args.dataset_type == 'anymal':
+			rgb_sub = message_filters.Subscriber(self.args.rgb_topic, CompressedImage)
+			depth_sub = message_filters.Subscriber(self.args.depth_topic, CompressedImage)
+			semantic_sub = message_filters.Subscriber(self.args.semantic_topic, Image)
+			camera_odom_sub = message_filters.Subscriber(self.args.odometry_topic, Odometry)
+			ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub, semantic_sub, camera_odom_sub], 100, 0.1, allow_headerless=True)
+			ts.registerCallback(self.image_callback)
+		else:
+			rgb_sub = message_filters.Subscriber(self.args.rgb_topic, Image)
+			depth_sub = message_filters.Subscriber(self.args.depth_topic, Image)
+			semantic_sub = message_filters.Subscriber(self.args.semantic_topic, Image)
+			camera_odom_sub = message_filters.Subscriber(self.args.odometry_topic, Odometry)
+			ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub, semantic_sub, camera_odom_sub], 100, 0.1, allow_headerless=True)
+			ts.registerCallback(self.image_callback)
 
 		imu_sub = rospy.Subscriber(self.args.imu_topic, Imu, self.imu_callback)
 
@@ -58,6 +80,7 @@ class TopoGenerator:
 
 		# Parameter
 		self.frame_id = 0
+		self.map_id = 0
 		self.pose_file = open('{}/camera_pose.txt'.format(self.args.data_path), 'a')
 		self.noisy_pose_file = open('{}/noisy_camera_pose.txt'.format(self.args.data_path), 'a')
 		self.topomap_pose_file = open('{}/topo_map/camera_pose.txt'.format(self.args.data_path), 'a')
@@ -97,12 +120,13 @@ class TopoGenerator:
 			print('Save topo map: {:3f}, {:3f}'.format(rel_t, rel_angle))
 			self.save_pose(self.topomap_pose_file, timestamp, trans, rot)
 			cv_image = bridge.imgmsg_to_cv2(rgb_image, "bgr8")
-			cv2.imwrite('{}/topo_map/rgb_image/{:06d}.png'.format(self.args.data_path, self.frame_id), cv_image)
+			cv2.imwrite('{}/topo_map/rgb_image/{:06d}.png'.format(self.args.data_path, self.map_id), cv_image)
 			cv_image = bridge.imgmsg_to_cv2(depth_image, "mono8")
-			cv2.imwrite('{}/topo_map/depth_image/{:06d}.png'.format(self.args.data_path, self.frame_id), cv_image)
+			cv2.imwrite('{}/topo_map/depth_image/{:06d}.png'.format(self.args.data_path, self.map_id), cv_image)
 			cv_image = bridge.imgmsg_to_cv2(semantic_image, "bgr8")
-			cv2.imwrite('{}/topo_map/semantic_image/{:06d}.png'.format(self.args.data_path, self.frame_id), cv_image)
+			cv2.imwrite('{}/topo_map/semantic_image/{:06d}.png'.format(self.args.data_path, self.map_id), cv_image)
 			self.last_t, self.last_quat = curr_t, curr_quat
+			self.map_id += 1
 
 		self.frame_id += 1
 
