@@ -1,1 +1,8 @@
 python/test/logs/
+
+condaenv*
+*.swp
+trained_models
+
+output*
+log*
