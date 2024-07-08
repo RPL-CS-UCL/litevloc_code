@@ -79,7 +79,7 @@ class DataGenerator:
 
 		# Initialize pose tracking variables
 		self.last_quat = np.array([1.0, 0.0, 0.0, 0.0])
-		self.last_t = np.array([0.0, 0.0, 0.0])
+		self.last_t = np.array([-1000.0, -1000.0, -1000.0])
 
 		# Setup directories for saving data
 		self.setup_directories()
