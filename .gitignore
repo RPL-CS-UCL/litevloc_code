@@ -6,3 +6,5 @@ trained_models
 
 output*
 log*
+
+__pycache__
