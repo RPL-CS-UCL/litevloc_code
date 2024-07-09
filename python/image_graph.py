@@ -10,22 +10,27 @@ class ImageGraphLoader:
 		pass
 
 	@staticmethod
-	def load_data(image_graph_path, image_size):
+	def load_data(image_graph_path, image_size, sample_map, num_load=10000):
 		image_graph = ImageGraph()
 
 		poses_w_cam = np.loadtxt(os.path.join(image_graph_path, 'map_camera_pose_gt.txt'))
-		for i, pose_w_cam in enumerate(poses_w_cam):
+		for i in range(0, 
+								 	 min(poses_w_cam.shape[0], num_load * sample_map), 
+									 sample_map):
 			img_path = os.path.join(image_graph_path, 'map_rgb', f'{i:06}.png')
 			image = load_image(img_path, image_size)
 
+			pose_w_cam = poses_w_cam[i, :]
 			time = pose_w_cam[0]
 			t_w_cam = pose_w_cam[1:4]
 			quat_w_cam = np.roll(pose_w_cam[4:], 1) # [qw, qx, qy, qz]
 
 			node = Node(i, image, f'image node {i}', time, t_w_cam, quat_w_cam)
 			image_graph.add_node(node)
-			if i > 10:
+
+			if i / sample_map > num_load:
 				break
+
 		return image_graph
 
 class Node:

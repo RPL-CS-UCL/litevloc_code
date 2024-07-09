@@ -8,22 +8,24 @@ class ImageObsLoader:
 		pass
 
 	@staticmethod
-	def load_data(obs_path, image_size, sample_obs):
+	def load_data(obs_path, image_size, sample_obs, num_load=10000):
 		image_obs = ImageObs()
 		
 		poses_w_cam = np.loadtxt(os.path.join(obs_path, 'obs_camera_pose_gt.txt'))
-		for i, pose_w_cam in enumerate(poses_w_cam[::sample_obs, :]):
+		for i in range(0, 
+								 	 min(poses_w_cam.shape[0], num_load * sample_obs), 
+									 sample_obs):
 			img_path = os.path.join(obs_path, 'obs_rgb', f'{i:06}.png')
 			image = load_image(img_path, image_size)
 
+			pose_w_cam = poses_w_cam[i, :]
 			time = pose_w_cam[0]
 			t_w_cam = pose_w_cam[1:4]
 			quat_w_cam = np.roll(pose_w_cam[4:], 1) # [qw, qx, qy, qz]
 
 			node = Node(i, image, f'image node {i}', time, t_w_cam, quat_w_cam)
 			image_obs.add_node(node)
-			if i > 5:
-				break
+
 		return image_obs
 
 class Node:
