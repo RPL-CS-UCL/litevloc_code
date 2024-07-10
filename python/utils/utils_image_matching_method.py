@@ -61,8 +61,3 @@ def save_output(result, img0_path, img1_path, matcher_name, n_kpts, im_size, out
 def initialize_matcher(matcher, device, n_kpts):
     """Initialize the matcher with provided arguments."""
     return get_matcher(matcher, device=device, max_num_keypoints=n_kpts)
-
-def matching_image_pair(matcher, image0, image1):
-    """Process a pair of images using the matcher."""
-    result = matcher(image0, image1)
-    return result
