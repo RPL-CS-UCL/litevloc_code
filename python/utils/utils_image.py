@@ -26,5 +26,5 @@ def load_image(
 	img = transform(pil_img)
 	tensor_size2 = img.shape
 
-	logging.info(f' - adding {path} with resolution {tensor_size1} --> {tensor_size2}')
+	logging.debug(f' - adding {path} with resolution {tensor_size1} --> {tensor_size2}')
 	return img
