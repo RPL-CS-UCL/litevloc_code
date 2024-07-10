@@ -206,9 +206,21 @@ if __name__ == '__main__':
 	data_generator = DataGenerator()
 	if rospy.is_shutdown():
 		print('ROS Shutdown, save poses to {}'.format(data_generator.args.data_path))
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'camera_pose_gt.txt'), data_generator.obs_camera_poses, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'camera_pose_noisy.txt'), data_generator.obs_camera_poses_noisy, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'odom_pose.txt'), data_generator.obs_odom_poses, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'odom_pose_noisy.txt'), data_generator.obs_odom_poses_noisy, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'imu_measurements.txt'), data_generator.imu_measurements, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'map', 'camera_pose_gt.txt'), data_generator.map_camera_poses, fmt='%.5f')
+		np.savetxt(
+			os.path.join(data_generator.args.data_path, 'obs', 'camera_pose_gt.txt'), 
+			data_generator.obs_camera_poses, fmt='%.5f')
+		np.savetxt(
+			os.path.join(data_generator.args.data_path, 'obs', 'camera_pose_noisy.txt'), 
+			data_generator.obs_camera_poses_noisy, fmt='%.5f')
+		np.savetxt(
+			os.path.join(data_generator.args.data_path, 'obs', 'odom_pose.txt'), 
+			data_generator.obs_odom_poses, fmt='%.5f')
+		np.savetxt(
+			os.path.join(data_generator.args.data_path, 'obs', 'odom_pose_noisy.txt'), 
+			data_generator.obs_odom_poses_noisy, fmt='%.5f')
+		np.savetxt(
+			os.path.join(data_generator.args.data_path, 'obs', 'imu_measurements.txt'), 
+			data_generator.imu_measurements, fmt='%.5f')
+		np.savetxt(
+			os.path.join(data_generator.args.data_path, 'map', 'camera_pose_gt.txt'), 
+			data_generator.map_camera_poses, fmt='%.5f')
