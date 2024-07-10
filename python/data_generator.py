@@ -101,11 +101,11 @@ class DataGenerator:
 
 		# Convert and save RGB, depth, and semantic image
 		cv_image = self.RGB_CV_FUNCTION(rgb_image, "bgr8")
-		cv2.imwrite(f'{self.args.data_path}/obs/obs_rgb/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
+		cv2.imwrite(f'{self.args.data_path}/obs/rgb/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
 		cv_image = bridge.imgmsg_to_cv2(depth_image, "passthrough")
-		cv2.imwrite(f'{self.args.data_path}/obs/obs_depth/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
+		cv2.imwrite(f'{self.args.data_path}/obs/depth/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
 		cv_image = self.RGB_CV_FUNCTION(semantic_image, "bgr8")
-		cv2.imwrite(f'{self.args.data_path}/obs/obs_semantic/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
+		cv2.imwrite(f'{self.args.data_path}/obs/semantic/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
 
 		# Convert odometry to translation and quaternion
 		trans, quat = convert_rosodom_to_vec(camera_odom)
@@ -157,11 +157,11 @@ class DataGenerator:
 			print(f'Save map: dis_t: {dis_t:.3f}m, dis_angle: {dis_angle:.3f}deg')
 
 			cv_image = self.RGB_CV_FUNCTION(rgb_image, "bgr8")
-			cv2.imwrite(f'{self.args.data_path}/map/map_rgb/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
+			cv2.imwrite(f'{self.args.data_path}/map/rgb/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
 			cv_image = bridge.imgmsg_to_cv2(depth_image, "passthrough")
-			cv2.imwrite(f'{self.args.data_path}/map/map_depth/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
+			cv2.imwrite(f'{self.args.data_path}/map/depth/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
 			cv_image = self.RGB_CV_FUNCTION(semantic_image, "bgr8")
-			cv2.imwrite(f'{self.args.data_path}/map/map_semantic/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
+			cv2.imwrite(f'{self.args.data_path}/map/semantic/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
 			
 			self.map_camera_poses = np.vstack([self.map_camera_poses, 
 																			np.array([
@@ -191,13 +191,13 @@ class DataGenerator:
 		paths = [
 			base_path,
 			f'{base_path}/map',
-			f'{base_path}/map/map_rgb',
-			f'{base_path}/map/map_depth',
-			f'{base_path}/map/map_semantic',
+			f'{base_path}/map/rgb',
+			f'{base_path}/map/depth',
+			f'{base_path}/map/semantic',
 			f'{base_path}/obs',
-			f'{base_path}/obs/obs_rgb',
-			f'{base_path}/obs/obs_depth',
-			f'{base_path}/obs/obs_semantic',
+			f'{base_path}/obs/rgb',
+			f'{base_path}/obs/depth',
+			f'{base_path}/obs/semantic',
 		]
 		for path in paths:
 				os.makedirs(path, exist_ok=True)
@@ -206,9 +206,9 @@ if __name__ == '__main__':
 	data_generator = DataGenerator()
 	if rospy.is_shutdown():
 		print('ROS Shutdown, save poses to {}'.format(data_generator.args.data_path))
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'obs_camera_pose_gt.txt'), data_generator.obs_camera_poses, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'obs_camera_pose_noisy.txt'), data_generator.obs_camera_poses_noisy, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'obs_odom_pose.txt'), data_generator.obs_odom_poses, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'obs_odom_pose_noisy.txt'), data_generator.obs_odom_poses_noisy, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'obs_imu_measurements.txt'), data_generator.imu_measurements, fmt='%.5f')
-		np.savetxt(os.path.join(data_generator.args.data_path, 'map', 'map_camera_pose_gt.txt'), data_generator.map_camera_poses, fmt='%.5f')
+		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'camera_pose_gt.txt'), data_generator.obs_camera_poses, fmt='%.5f')
+		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'camera_pose_noisy.txt'), data_generator.obs_camera_poses_noisy, fmt='%.5f')
+		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'odom_pose.txt'), data_generator.obs_odom_poses, fmt='%.5f')
+		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'odom_pose_noisy.txt'), data_generator.obs_odom_poses_noisy, fmt='%.5f')
+		np.savetxt(os.path.join(data_generator.args.data_path, 'obs', 'imu_measurements.txt'), data_generator.imu_measurements, fmt='%.5f')
+		np.savetxt(os.path.join(data_generator.args.data_path, 'map', 'camera_pose_gt.txt'), data_generator.map_camera_poses, fmt='%.5f')
