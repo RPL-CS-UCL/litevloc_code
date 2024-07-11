@@ -15,9 +15,11 @@ Usage2: python data_generator.py \
   --depth_topic /depth_to_rgb/hw_registered/image_rect_raw \
 	--semantic_topic /rgb/image_rect_color/compressed \
   --odometry_topic /Odometry \
-  --imu_topic /sensors/imu \
+  --imu_topic /imu \
   --topo_int_trans 5.0 \
   --topo_int_rot 45.0 \
+	--base_frame_id livox_frame \
+	--camera_frame_id rgbd_camera_link \
   --data_path /Rocket_ssd/dataset/data_anymal/anymal_real_message_ops_mos/anymal_real_message_ops_mos \
   --dataset_type anymal
 '''  
@@ -37,7 +39,8 @@ import cv2
 from sensor_msgs.msg import Image, CompressedImage
 
 from pycpptools.python.utils_ros.tools_ros_msg_conversion import convert_rosodom_to_vec
-from pycpptools.python.utils_math.tools_eigen import add_gaussian_noise_to_pose, compute_relative_dis
+from pycpptools.python.utils_math.tools_eigen import add_gaussian_noise_to_pose, compute_relative_dis, convert_vec_to_matrix, convert_matrix_to_vec
+from scipy.spatial.transform import Rotation
 
 bridge = CvBridge()
 
@@ -52,6 +55,8 @@ class DataGenerator:
 		parser.add_argument('--imu_topic', type=str, default='/imu', help='Topic name for IMU data')
 		parser.add_argument('--topo_int_trans', type=float, default=3.0, help='Translation interval for topological map')
 		parser.add_argument('--topo_int_rot', type=float, default=45.0, help='Rotation interval for topological map')
+		parser.add_argument('--base_frame_id', type=str, default='livox_frame', help='base_frame_id')
+		parser.add_argument('--camera_frame_id', type=str, default='rgbd_camera_link', help='camera_frame_id')
 		parser.add_argument('--data_path', type=str, default='/tmp', help='Path to save data')
 		parser.add_argument('--dataset_type', type=str, default='matterport3d', help='Type of dataset (matterport3d, anymal)')
 		self.args = parser.parse_args()
@@ -81,6 +86,14 @@ class DataGenerator:
 		self.last_quat = np.array([1.0, 0.0, 0.0, 0.0])
 		self.last_t = np.array([-1000.0, -1000.0, -1000.0])
 
+		# NOTE(gogojjh): changed according to different dataset type, to transform the SLAM poses to the camera frame
+		if self.args.dataset_type =='matterport3d':
+			self.T_base_cam = np.eye(4, 4)
+		elif self.args.dataset_type == 'anymal':
+			self.T_base_cam = convert_vec_to_matrix(
+				np.array([-0.0509, -0.1229, 0.0047]), 
+				np.array([0.5585, 0.4293, -0.4331, 0.5623]))
+
 		# Setup directories for saving data
 		self.setup_directories()
 
@@ -109,6 +122,10 @@ class DataGenerator:
 
 		# Convert odometry to translation and quaternion
 		trans, quat = convert_rosodom_to_vec(camera_odom)
+		T_w_base = convert_vec_to_matrix(trans, quat)
+		T_w_cam = T_w_base @ self.T_base_cam
+		trans, quat = convert_matrix_to_vec(T_w_cam)
+		# output format: timestamp, tx, ty, tz, qx, qy, qz, qw
 		self.obs_camera_poses = np.vstack([self.obs_camera_poses, 
 																		 np.array([
 																			 timestamp.to_sec(), 
