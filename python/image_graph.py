@@ -19,11 +19,7 @@ class ImageGraphLoader:
 									 num_sample):
 			img_path = os.path.join(image_graph_path, 'rgb', f'{i:06}.png')
 			image = load_image(img_path, image_size, normalized=normalized)
-
-			pose_w_cam = poses_w_cam[i, :]
-			time = pose_w_cam[0]
-			t_w_cam = pose_w_cam[1:4]
-			quat_w_cam = np.roll(pose_w_cam[4:], 1) # [qw, qx, qy, qz]
+			time, t_w_cam, quat_w_cam = poses_w_cam[i, 0], poses_w_cam[i, 1:4], poses_w_cam[i, 4:] 
 
 			node = Node(i, image, f'image node {i}', time, t_w_cam, quat_w_cam, img_path)
 			image_graph.add_node(node)

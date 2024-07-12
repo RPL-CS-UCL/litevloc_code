@@ -2,6 +2,7 @@ import os
 import sys
 from datetime import datetime
 import logging
+import numpy as np
 
 import torch
 
@@ -57,6 +58,16 @@ def save_output(result, img0_path, img1_path, matcher_name, n_kpts, im_size, out
     }
     torch.save(output_dict, dict_path)
     return dict_path
+
+def save_error(rot_e, trans_e, outdir):
+    print('Rotation Error [degree]:\n', rot_e)
+    print('Translation Error [m]:\n', trans_e)
+    
+    print('Mean and STD Rotation Error [degree]:')
+    print(np.mean(rot_e), np.std(rot_e))
+
+    print('Mean and STD Translation Error: [m]')
+    print(np.mean(trans_e), np.std(trans_e))
 
 def initialize_matcher(matcher, device, n_kpts):
     """Initialize the matcher with provided arguments."""
