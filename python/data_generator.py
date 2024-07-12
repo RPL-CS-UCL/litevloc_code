@@ -86,20 +86,15 @@ class DataGenerator:
 		if self.args.dataset_type =='matterport3d':
 			self.T_base_cam = np.eye(4, 4)
 		elif self.args.dataset_type == 'anymal_vlp':
-			# tx ty tz qw qz qy qz
-			self.T_base_cam = np.linalg.inv(
-				convert_vec_to_matrix(
+			self.T_base_cam = convert_vec_to_matrix(
 					np.array([-0.739, -0.056, -0.205]), 
-					np.array([0.528, 0.466, -0.469, -0.533]),
-					'wxyz')
-				)
+					np.array([0.466, -0.469, -0.533, 0.528]),
+					'xyzw')
 		elif self.args.dataset_type == 'anymal_livox':
-			# tx ty tz qw qz qy qz			
-			self.T_base_cam = np.linalg.inv(
-				convert_vec_to_matrix(
+			self.T_base_cam = np.linalg.inv(convert_vec_to_matrix(
 					np.array([-0.0509, -0.1229, 0.0047]), 
-					np.array([0.5585, 0.4293, -0.4331, 0.5623]),
-					'wxyz')
+					np.array([0.4293, -0.4331, 0.5623, 0.5585]),
+					'xyzw')
 				)
 
 		# Setup directories for saving data
@@ -129,55 +124,32 @@ class DataGenerator:
 		cv2.imwrite(f'{self.args.data_path}/obs/semantic/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
 
 		# Convert odometry to translation and quaternion
-		trans, quat = convert_rosodom_to_vec(base_odom)
-		T_w_base = convert_vec_to_matrix(trans, quat)
+		trans, quat = convert_rosodom_to_vec(base_odom, 'xyzw')
+		T_w_base = convert_vec_to_matrix(trans, quat, 'xyzw')
 		T_w_cam = T_w_base @ self.T_base_cam
-		trans, quat = convert_matrix_to_vec(T_w_cam)
+		trans, quat = convert_matrix_to_vec(T_w_cam, 'xyzw')
 		# output format: timestamp, tx, ty, tz, qx, qy, qz, qw
 		self.obs_camera_poses = np.vstack([self.obs_camera_poses, 
-																		 np.array([
-																			 timestamp.to_sec(), 
-																			 trans[0], 
-																			 trans[1], 
-																			 trans[2], 
-																			 quat[1], 
-																			 quat[2], 
-																			 quat[3], 
-																			 quat[0]])])
+																		 np.array([timestamp.to_sec(), 
+																			trans[0], trans[1], trans[2], 
+																			quat[0], quat[1], quat[2], quat[3]])])
 		self.obs_odom_poses = np.vstack([self.obs_odom_poses, 
-																		 np.array([
-																			 timestamp.to_sec(), 
-																			 trans[0], 
-																			 trans[1], 
-																			 trans[2], 
-																			 quat[1], 
-																			 quat[2], 
-																			 quat[3], 
-																			 quat[0]])])		
-		noisy_trans, noisy_quat = add_gaussian_noise_to_pose(trans, quat)
+																		 np.array([timestamp.to_sec(), 
+																			trans[0], trans[1], trans[2], 
+																			quat[0], quat[1], quat[2], quat[3]])])	
+		
+		noisy_trans, noisy_quat = add_gaussian_noise_to_pose(trans, quat, mode='xyzw')
 		self.obs_camera_poses_noisy = np.vstack([self.obs_camera_poses_noisy, 
-																		   			 np.array([
-																								timestamp.to_sec(), 
-																								noisy_trans[0], 
-																								noisy_trans[1], 
-																								noisy_trans[2], 
-																								noisy_quat[1], 
-																								noisy_quat[2], 
-																								noisy_quat[3], 
-																								noisy_quat[0]])])
+																		 np.array([timestamp.to_sec(), 
+																			noisy_trans[0], noisy_trans[1], noisy_trans[2], 
+																			noisy_quat[0], noisy_quat[1], noisy_quat[2], noisy_quat[3]])])
 		self.obs_odom_poses_noisy = np.vstack([self.obs_odom_poses_noisy, 
-																		   			 np.array([
-																								timestamp.to_sec(), 
-																								noisy_trans[0], 
-																								noisy_trans[1], 
-																								noisy_trans[2], 
-																								noisy_quat[1], 
-																								noisy_quat[2], 
-																								noisy_quat[3], 
-																								noisy_quat[0]])])
+																		 np.array([timestamp.to_sec(), 
+																			noisy_trans[0], noisy_trans[1], noisy_trans[2], 
+																			noisy_quat[0], noisy_quat[1], noisy_quat[2], noisy_quat[3]])])
 		
 		# Compute relative displacement and save to topological map if necessary
-		dis_t, dis_angle = compute_relative_dis(self.last_t, self.last_quat, trans, quat)
+		dis_t, dis_angle = compute_relative_dis(self.last_t, self.last_quat, trans, quat, 'xyzw')
 		if dis_t > self.args.topo_int_trans or dis_angle > self.args.topo_int_rot:
 			print(f'Save map: dis_t: {dis_t:.3f}m, dis_angle: {dis_angle:.3f}deg')
 
@@ -189,16 +161,16 @@ class DataGenerator:
 			cv2.imwrite(f'{self.args.data_path}/map/semantic/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
 			
 			self.map_camera_poses = np.vstack([self.map_camera_poses, 
-																			np.array([
-																				timestamp.to_sec(), 
-																				trans[0], 
-																				trans[1], 
-																				trans[2], 
-																				quat[1], 
-																				quat[2], 
-																				quat[3], 
-																				quat[0]])])
+																		 np.array([timestamp.to_sec(), 
+																			trans[0], trans[1], trans[2], 
+																			quat[0], quat[1], quat[2], quat[3]])])	
 			
+			# DEBUG(gogojjh):
+			T_w_map0 = convert_vec_to_matrix(self.last_t, self.last_quat, 'xyzw')
+			T_w_map1 = convert_vec_to_matrix(trans, quat, 'xyzw')
+			T_map0_map1 = np.linalg.inv(T_w_map0) @ T_w_map1
+			print(T_map0_map1)
+
 			self.last_t, self.last_quat = trans, quat
 
 	def imu_callback(self, msg):
