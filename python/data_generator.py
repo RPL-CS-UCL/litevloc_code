@@ -18,10 +18,8 @@ Usage2: python data_generator.py \
   --imu_topic /imu \
   --topo_int_trans 5.0 \
   --topo_int_rot 45.0 \
-	--base_frame_id livox_frame \
-	--camera_frame_id rgbd_camera_link \
   --data_path /Rocket_ssd/dataset/data_anymal/anymal_real_message_ops_mos/anymal_real_message_ops_mos \
-  --dataset_type anymal
+  --dataset_type anymal_vlp
 '''  
 
 import os
@@ -55,15 +53,13 @@ class DataGenerator:
 		parser.add_argument('--imu_topic', type=str, default='/imu', help='Topic name for IMU data')
 		parser.add_argument('--topo_int_trans', type=float, default=3.0, help='Translation interval for topological map')
 		parser.add_argument('--topo_int_rot', type=float, default=45.0, help='Rotation interval for topological map')
-		parser.add_argument('--base_frame_id', type=str, default='livox_frame', help='base_frame_id')
-		parser.add_argument('--camera_frame_id', type=str, default='rgbd_camera_link', help='camera_frame_id')
 		parser.add_argument('--data_path', type=str, default='/tmp', help='Path to save data')
-		parser.add_argument('--dataset_type', type=str, default='matterport3d', help='Type of dataset (matterport3d, anymal)')
+		parser.add_argument('--dataset_type', type=str, default='matterport3d', help='Type of dataset (matterport3d, anymal_vlp, anymal_livox)')
 		self.args = parser.parse_args()
 
 		# Set image type and conversion function based on dataset type
-		self.RGB_IMAGE_TYPE = CompressedImage if self.args.dataset_type == 'anymal' else Image
-		self.RGB_CV_FUNCTION = bridge.compressed_imgmsg_to_cv2 if self.args.dataset_type == 'anymal' else CvBridge().imgmsg_to_cv2
+		self.RGB_IMAGE_TYPE = CompressedImage if 'anymal' in self.args.dataset_type else Image
+		self.RGB_CV_FUNCTION = bridge.compressed_imgmsg_to_cv2 if 'anymal' in self.args.dataset_type else CvBridge().imgmsg_to_cv2
 
 		# Initialize ROS node
 		rospy.init_node('data_generator')
@@ -72,43 +68,55 @@ class DataGenerator:
 		rgb_sub = message_filters.Subscriber(self.args.rgb_topic, self.RGB_IMAGE_TYPE)
 		depth_sub = message_filters.Subscriber(self.args.depth_topic, Image)
 		semantic_sub = message_filters.Subscriber(self.args.semantic_topic, self.RGB_IMAGE_TYPE)
-		camera_odom_sub = message_filters.Subscriber(self.args.odometry_topic, Odometry)
-		ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub, semantic_sub, camera_odom_sub], 100, 0.1, allow_headerless=True)
+		base_odom_sub = message_filters.Subscriber(self.args.odometry_topic, Odometry)
+		ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub, semantic_sub, base_odom_sub], 100, 0.1, allow_headerless=True)
 		ts.registerCallback(self.image_callback)
 
 		# Setup IMU subscriber
 		imu_sub = rospy.Subscriber(self.args.imu_topic, Imu, self.imu_callback)
 
 		# Initialize TF listener
-		self.tf_listener = TransformListener()
+		# self.tf_listener = TransformListener()
 
 		# Initialize pose tracking variables
 		self.last_quat = np.array([1.0, 0.0, 0.0, 0.0])
 		self.last_t = np.array([-1000.0, -1000.0, -1000.0])
 
-		# NOTE(gogojjh): changed according to different dataset type, to transform the SLAM poses to the camera frame
+		# NOTE(gogojjh): changed according to different dataset type, to transform the SLAM poses on the base_frame to the camera_frame
 		if self.args.dataset_type =='matterport3d':
 			self.T_base_cam = np.eye(4, 4)
-		elif self.args.dataset_type == 'anymal':
-			self.T_base_cam = convert_vec_to_matrix(
-				np.array([-0.0509, -0.1229, 0.0047]), 
-				np.array([0.5585, 0.4293, -0.4331, 0.5623]))
+		elif self.args.dataset_type == 'anymal_vlp':
+			# tx ty tz qw qz qy qz
+			self.T_base_cam = np.linalg.inv(
+				convert_vec_to_matrix(
+					np.array([-0.739, -0.056, -0.205]), 
+					np.array([0.528, 0.466, -0.469, -0.533]),
+					'wxyz')
+				)
+		elif self.args.dataset_type == 'anymal_livox':
+			# tx ty tz qw qz qy qz			
+			self.T_base_cam = np.linalg.inv(
+				convert_vec_to_matrix(
+					np.array([-0.0509, -0.1229, 0.0047]), 
+					np.array([0.5585, 0.4293, -0.4331, 0.5623]),
+					'wxyz')
+				)
 
 		# Setup directories for saving data
 		self.setup_directories()
 
-		# Saving pose and IMU data
+		# Initialize camera pose, odom pose (simulated integrated IMU data), and imu measurements
 		self.obs_camera_poses = np.empty((0, 8))
 		self.obs_camera_poses_noisy = np.empty((0, 8))
 		self.obs_odom_poses = np.empty((0, 8))
 		self.obs_odom_poses_noisy = np.empty((0, 8))
-		self.imu_measurements = np.empty((0, 7))
 		self.map_camera_poses = np.empty((0, 8))
+		self.imu_measurements = np.empty((0, 7))
 
 		# Keep the node running
 		rospy.spin()
 
-	def image_callback(self, rgb_image, depth_image, semantic_image, camera_odom):
+	def image_callback(self, rgb_image, depth_image, semantic_image, base_odom):
 		print(f'image_callback: {self.obs_camera_poses.shape[0]}')
 		timestamp = rgb_image.header.stamp
 
@@ -121,7 +129,7 @@ class DataGenerator:
 		cv2.imwrite(f'{self.args.data_path}/obs/semantic/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
 
 		# Convert odometry to translation and quaternion
-		trans, quat = convert_rosodom_to_vec(camera_odom)
+		trans, quat = convert_rosodom_to_vec(base_odom)
 		T_w_base = convert_vec_to_matrix(trans, quat)
 		T_w_cam = T_w_base @ self.T_base_cam
 		trans, quat = convert_matrix_to_vec(T_w_cam)
