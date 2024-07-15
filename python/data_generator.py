@@ -1,25 +1,26 @@
 '''
 Usage1: python data_generator.py \
-   --rgb_topic /habitat_camera/color/image \
-   --depth_topic /habitat_camera/depth/image \
-   --semantic_topic /habitat_camera/semantic/image \
-   --odometry_topic /habitat_camera/odometry \
-   --topo_int_trans 3.0 \
-   --topo_int_rot 45.0 \
-   --data_path /Rocket_ssd/dataset/data_cmu_navigation/cmu_navigation_matterport3d_17DRP5sb8fy \
-   --dataset_type matterport3d
+--rgb_topic /habitat_camera/color/image \
+--depth_topic /habitat_camera/depth/image \
+--semantic_topic /habitat_camera/semantic/image \
+--odometry_topic /habitat_camera/odometry \
+--imu_topic /imu \
+--topo_int_trans 3.0 \
+--topo_int_rot 45.0 \
+--data_path /Titan/dataset/data_topo_loc/cmu_navigation_matterport3d_17DRP5sb8fy \
+--dataset_type matterport3d
 '''
 '''
 Usage2: python data_generator.py \
-  --rgb_topic /rgb/image_rect_color/compressed \
-  --depth_topic /depth_to_rgb/hw_registered/image_rect_raw \
-	--semantic_topic /rgb/image_rect_color/compressed \
-  --odometry_topic /Odometry \
-  --imu_topic /imu \
-  --topo_int_trans 5.0 \
-  --topo_int_rot 45.0 \
-  --data_path /Rocket_ssd/dataset/data_anymal/anymal_real_message_ops_mos/anymal_real_message_ops_mos \
-  --dataset_type anymal_vlp
+--rgb_topic /rgb/image_rect_color/compressed \
+--depth_topic /depth_to_rgb/hw_registered/image_rect_raw \
+--semantic_topic /rgb/image_rect_color/compressed \
+--odometry_topic /Odometry \
+--imu_topic /imu \
+--topo_int_trans 5.0 \
+--topo_int_rot 45.0 \
+--data_path /Titan/dataset/data_topo_loc/anymal_ops_mos \
+--dataset_type anymal_vlp
 '''  
 
 import os
