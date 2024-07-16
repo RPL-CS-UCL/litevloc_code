@@ -3,25 +3,32 @@ import numpy as np
 
 import heapq
 
-from utils.utils_image import load_image
+from utils.utils_image import load_rgb_image, load_depth_image
 
 class ImageGraphLoader:
 	def __init__(self):
 		pass
 
 	@staticmethod
-	def load_data(image_graph_path, image_size, normalized=False, num_sample=1, num_load=10000):
+	def load_data(image_graph_path, image_size, depth_scale, normalized=False, num_sample=1, num_load=10000):
 		image_graph = ImageGraph()
 
 		poses_w_cam = np.loadtxt(os.path.join(image_graph_path, 'camera_pose_gt.txt'))
 		for i in range(0, 
 								 	 min(poses_w_cam.shape[0], num_load * num_sample), 
 									 num_sample):
-			img_path = os.path.join(image_graph_path, 'rgb', f'{i:06}.png')
-			image = load_image(img_path, image_size, normalized=normalized)
+			rgb_img_path = os.path.join(image_graph_path, 'rgb', f'{i:06}.png')
+			rgb_image = load_rgb_image(rgb_img_path, image_size, normalized=normalized)
+
+			depth_img_path = os.path.join(image_graph_path, 'depth', f'{i:06}.png')
+			depth_image = load_depth_image(depth_img_path, image_size, depth_scale)
+			
 			time, t_w_cam, quat_w_cam = poses_w_cam[i, 0], poses_w_cam[i, 1:4], poses_w_cam[i, 4:] 
 
-			node = Node(i, image, f'image node {i}', time, t_w_cam, quat_w_cam, img_path)
+			node = Node(i, 
+							    rgb_image, depth_image, f'camera node {i}', 
+							    time, t_w_cam, quat_w_cam, 
+							    rgb_img_path, depth_img_path)
 			image_graph.add_node(node)
 
 			if i / num_sample > num_load:
@@ -30,27 +37,34 @@ class ImageGraphLoader:
 		return image_graph
 	
 class Node:
-	def __init__(self, id, image, descriptor, time, t_w_cam, quat_w_cam, img_path):
+	def __init__(self, id, 
+							 rgb_image, depth_image, global_descriptor, 
+							 time, t_w_cam, quat_w_cam, 
+							 rgb_img_path, depth_img_path):
 		self.id = id
-		self.image = image
-		self.descriptor = descriptor
+
+		self.rgb_image = rgb_image
+		self.depth_image = depth_image
+
+		self.global_descriptor = global_descriptor
 
 		self.time = time
 		self.t_w_cam = t_w_cam
 		self.quat_w_cam = quat_w_cam
 
-		self.img_path = img_path
+		self.rgb_img_path = rgb_img_path
+		self.depth_img_path = depth_img_path
 
 		self.edges = []
 
 	def add_edge(self, neighbor, weight):
 		self.edges.append((neighbor, weight))
 
-	def set_descriptor(self, descriptor):
-		self.descriptor = descriptor
+	def set_descriptor(self, global_descriptor):
+		self.global_descriptor = global_descriptor
 
 	def get_descriptor(self):
-		return self.descriptor
+		return self.global_descriptor
 
 class ImageGraph:
 	def __init__(self):
@@ -130,10 +144,18 @@ class TestImageGraph():
 		graph = ImageGraph()
 
 		# Add nodes to the graph
-		graph.add_node(Node(1, None, "descriptor_1", 0, np.zeros((1, 3)), np.zeros((1, 4)), 'tmp.png'))
-		graph.add_node(Node(2, None, "descriptor_2", 0, np.zeros((1, 3)), np.zeros((1, 4)), 'tmp.png'))
-		graph.add_node(Node(3, None, "descriptor_3", 0, np.zeros((1, 3)), np.zeros((1, 4)), 'tmp.png'))
-		graph.add_node(Node(4, None, "descriptor_4", 0, np.zeros((1, 3)), np.zeros((1, 4)), 'tmp.png'))
+		graph.add_node(Node(1, None, None, "descriptor_1", 
+												0, np.zeros((1, 3)), np.zeros((1, 4)), 
+												'tmp_rgb.png', 'tmp_depth.png'))
+		graph.add_node(Node(2, None, None, "descriptor_2", 
+												0, np.zeros((1, 3)), np.zeros((1, 4)), 
+												'tmp_rgb.png', 'tmp_depth.png'))
+		graph.add_node(Node(3, None, None, "descriptor_3", 
+												0, np.zeros((1, 3)), np.zeros((1, 4)), 
+												'tmp_rgb.png', 'tmp_depth.png'))
+		graph.add_node(Node(4, None, None, "descriptor_4", 
+												0, np.zeros((1, 3)), np.zeros((1, 4)), 
+												'tmp_rgb.png', 'tmp_depth.png'))
 
 		# Add edges between the nodes with weights
 		graph.add_edge(1, 2, 1.0)
@@ -143,7 +165,7 @@ class TestImageGraph():
 
 		# Get the image descriptor of a specific node
 		node = graph.get_node(2)
-		print(f"Image Descriptor of Node 2: {node.descriptor}")
+		print(f"Image Descriptor of Node 2: {node.global_descriptor}")
 
 		# Find the shortest path from node 1 to node 4
 		distance, path = graph.shortest_path(1, 4)

@@ -1,12 +1,31 @@
 import os
 import sys
+import argparse
 from datetime import datetime
 import logging
 import numpy as np
 
 import torch
 
-from matching import viz2d, get_matcher
+from matching import viz2d, get_matcher, available_models
+
+def parse_arguments():
+	"""Setup command-line arguments."""
+	parser = argparse.ArgumentParser(description="Batch Image Matching Test",
+																		formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	parser.add_argument("--dataset_path", type=str, default="matterport3d", help="path to dataset_path")
+	parser.add_argument("--matcher", type=str, default="sift-lg", choices=available_models, help="choose your matcher")
+	parser.add_argument("--image_size", type=int, default=512, nargs="+",
+											help="Resizing shape for images (HxW). If a single int is passed, set the"
+											"smallest edge of all images to this value, while keeping aspect ratio")
+	parser.add_argument("--n_kpts", type=int, default=2048, help="max num keypoints")
+	parser.add_argument("--device", type=str, default="cuda", choices=["cpu", "cuda"])
+	parser.add_argument("--no_viz", action="store_true", help="pass --no_viz to avoid saving visualizations")
+	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
+	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
+	parser.add_argument('--depth_scale', type=float, default='0.001', help='habitat: 0.039, anymal: 0.001')
+	args = parser.parse_args()
+	return args
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
@@ -80,3 +99,42 @@ def save_error(rot_e, trans_e, out_dir):
 def initialize_matcher(matcher, device, n_kpts):
 	"""Initialize the matcher with provided arguments."""
 	return get_matcher(matcher, device=device, max_num_keypoints=n_kpts)
+
+def rgb(ftensor, true_shape=None):
+    if isinstance(ftensor, list):
+        return [rgb(x, true_shape=true_shape) for x in ftensor]
+    if isinstance(ftensor, torch.Tensor):
+        ftensor = ftensor.detach().cpu().numpy()  # H,W,3
+    if ftensor.ndim == 3 and ftensor.shape[0] == 3:
+        ftensor = ftensor.transpose(1, 2, 0)
+    elif ftensor.ndim == 4 and ftensor.shape[1] == 3:
+        ftensor = ftensor.transpose(0, 2, 3, 1)
+    if true_shape is not None:
+        H, W = true_shape
+        ftensor = ftensor[:H, :W]
+    if ftensor.dtype == np.uint8:
+        img = np.float32(ftensor) / 255
+    else:
+        img = (ftensor * 0.5) + 0.5
+    return img.clip(min=0, max=1)
+
+def save_input_images(rgb_image: np.array, depth_image: np.array, 
+									     rgb_path: str, depth_path: str):
+	from PIL import Image
+	rgb_image = np.transpose(rgb_image.astype(np.uint8), (1, 2, 0))      # 3xHXW -> HxWx3
+	pil_image = Image.fromarray(rgb_image)
+	pil_image.save(rgb_path)
+	depth_image = np.transpose(depth_image.astype(np.uint16), (1, 2, 0)) # 1xHXW -> HxWx1
+	depth_image = np.squeeze(depth_image, axis=2)
+	pil_image = Image.fromarray(depth_image)
+	pil_image.save(depth_path)	
+
+def save_duster_images(rgb_image: np.array, depth_image: np.array, 
+									     rgb_path: str, depth_path: str):
+	from PIL import Image
+	rgb_image = rgb_image.astype(np.uint8)      # HxWx3
+	pil_image = Image.fromarray(rgb_image)
+	pil_image.save(rgb_path)
+	depth_image = depth_image.astype(np.uint16) # HxWx1
+	pil_image = Image.fromarray(depth_image)
+	pil_image.save(depth_path)	
