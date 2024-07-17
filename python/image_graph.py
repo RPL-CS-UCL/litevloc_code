@@ -5,9 +5,9 @@ import heapq
 
 from utils.utils_image import load_rgb_image, load_depth_image
 
-from pycpptools.python.utils_algorithm.shortest_path import dijkstra_shortest_path
-from pycpptools.python.utils_algorithm.base_node import BaseNode
-from pycpptools.python.utils_algorithm.base_graph import BaseGraph
+from pycpptools.src.python.utils_algorithm.shortest_path import dijkstra_shortest_path
+from pycpptools.src.python.utils_algorithm.base_node import BaseNode
+from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
 
 class ImageGraphLoader:
 	def __init__(self):

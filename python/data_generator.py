@@ -37,8 +37,8 @@ from cv_bridge import CvBridge
 import cv2
 from sensor_msgs.msg import Image, CompressedImage
 
-from pycpptools.python.utils_ros.tools_ros_msg_conversion import convert_rosodom_to_vec
-from pycpptools.python.utils_math.tools_eigen import add_gaussian_noise_to_pose, compute_relative_dis, convert_vec_to_matrix, convert_matrix_to_vec
+from pycpptools.src.python.utils_ros.tools_ros_msg_conversion import convert_rosodom_to_vec
+from pycpptools.src.python.utils_math.tools_eigen import add_gaussian_noise_to_pose, compute_relative_dis, convert_vec_to_matrix, convert_matrix_to_vec
 from scipy.spatial.transform import Rotation
 
 bridge = CvBridge()
