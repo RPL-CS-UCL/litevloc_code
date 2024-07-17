@@ -55,6 +55,8 @@ def setup_log_environment(out_dir, args):
 	logging.info(f"The outputs are being saved in {log_dir}")
 	os.makedirs(os.path.join(log_dir, 'preds'))
 	os.makedirs(os.path.join(log_dir, 'preds_depthmap'))
+	os.system(f"rm {os.path.join(out_dir, f'outputs_{args.matcher}', 'latest')}")
+	os.system(f"ln -s {log_dir} {os.path.join(out_dir, f'outputs_{args.matcher}', 'latest')}")
 	return log_dir
 
 def initialize_matcher(matcher, device, n_kpts):
@@ -151,8 +153,7 @@ def plot_images(image1, image2, title1="Image 1", title2="Image 2", save_path=No
 	axes[0].axis('off')
 	fig.colorbar(im1, ax=axes[0])
 
-	# im2 = axes[1].imshow(image2, cmap='viridis', vmin=im1.get_clim()[0], vmax=im1.get_clim()[1])
-	im2 = axes[1].imshow(image2, cmap='viridis')
+	im2 = axes[1].imshow(image2, cmap='viridis', vmin=im1.get_clim()[0], vmax=im1.get_clim()[1])
 	axes[1].set_title(title2)
 	axes[1].axis('off')
 	fig.colorbar(im2, ax=axes[1])
@@ -218,3 +219,9 @@ def save_rgb_depth_images(rgb_image: np.array, depth_image: np.array,
 	depth_image = depth_image.astype(np.uint16) # HxWx1
 	pil_image = Image.fromarray(depth_image)
 	pil_image.save(depth_path)	
+
+def save_image(image: np.array, save_path: str):
+	from PIL import Image
+	image = image.astype(np.uint8)
+	pil_image = Image.fromarray(image)
+	pil_image.save(save_path)
