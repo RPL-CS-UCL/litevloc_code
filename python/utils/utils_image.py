@@ -1,6 +1,7 @@
 import torch
 import torchvision.transforms as tfm
 from PIL import Image
+import numpy as np
 from pathlib import Path
 from typing import Tuple
 import logging
@@ -23,7 +24,7 @@ def load_rgb_image(
 	# Load image and apply transformation
 	pil_img = Image.open(path).convert("RGB")
 	tensor_size1 = (pil_img.size[1], pil_img.size[0])
-	img = transform(pil_img)
+	img = transform(np.array(pil_img))
 	tensor_size2 = img.shape
 
 	logging.debug(f' - adding {path} with resolution {tensor_size1} --> {tensor_size2}')
@@ -44,7 +45,7 @@ def load_depth_image(
 	# Load image and apply transformation
 	pil_img = Image.open(path)
 	tensor_size1 = (pil_img.size[1], pil_img.size[0])
-	img = transform(pil_img) * depth_scale
+	img = transform(np.array(pil_img) * depth_scale)
 	tensor_size2 = img.shape
 
 	logging.debug(f' - adding {path} with resolution {tensor_size1} --> {tensor_size2}')

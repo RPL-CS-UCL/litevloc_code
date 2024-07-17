@@ -21,7 +21,7 @@ class ImageGraphLoader:
 			rgb_image = load_rgb_image(rgb_img_path, image_size, normalized=normalized)
 
 			depth_img_path = os.path.join(image_graph_path, 'depth', f'{i:06}.png')
-			depth_image = load_depth_image(depth_img_path, image_size, depth_scale)
+			depth_image = load_depth_image(depth_img_path, image_size, depth_scale=depth_scale)
 			
 			time, t_w_cam, quat_w_cam = poses_w_cam[i, 0], poses_w_cam[i, 1:4], poses_w_cam[i, 4:] 
 

@@ -25,7 +25,9 @@ def parse_arguments():
 	parser.add_argument("--no_viz", action="store_true", help="pass --no_viz to avoid saving visualizations")
 	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
 	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
-	parser.add_argument('--depth_scale', type=float, default='0.001', help='habitat: 0.039, anymal: 0.001')
+	parser.add_argument('--depth_scale', type=float, default=0.001, help='habitat: 0.039, anymal: 0.001')
+	parser.add_argument('--min_depth_pro', type=float, default=0.1, help='pixels are processed only if depth > min_depth_pro')
+	parser.add_argument('--max_depth_pro', type=float, default=5.5, help='pixels are processed only if depth < min_depth_pro')
 	args = parser.parse_args()
 	return args
 
@@ -149,7 +151,8 @@ def plot_images(image1, image2, title1="Image 1", title2="Image 2", save_path=No
 	axes[0].axis('off')
 	fig.colorbar(im1, ax=axes[0])
 
-	im2 = axes[1].imshow(image2, cmap='viridis', vmin=im1.get_clim()[0], vmax=im1.get_clim()[1])
+	# im2 = axes[1].imshow(image2, cmap='viridis', vmin=im1.get_clim()[0], vmax=im1.get_clim()[1])
+	im2 = axes[1].imshow(image2, cmap='viridis')
 	axes[1].set_title(title2)
 	axes[1].axis('off')
 	fig.colorbar(im2, ax=axes[1])
