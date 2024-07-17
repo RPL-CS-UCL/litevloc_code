@@ -88,7 +88,7 @@ def compute_scale_factor(A, B):
 	Returns:
 			float: Computed scale factor.
 	"""
-	def huber_loss(residual, delta=1.0):
+	def huber_loss(residual, delta=0.1):
 		"""
 		Huber loss function.
 		
@@ -113,9 +113,24 @@ def compute_scale_factor(A, B):
 		"""
 		residual = A - s * B
 		return np.sum(huber_loss(residual))
-	
+
 	result = minimize(objective_function, x0=1.0)
 	return result.x[0]
+
+def compute_residual_matrix(A, B, s):
+	def huber_loss(residual, delta=1.0):
+		"""
+		Huber loss function.
+		
+		Args:
+				residual (np.ndarray): Residuals.
+				delta (float): Delta parameter for Huber loss.
+		
+		Returns:
+				float: Huber loss value.
+		"""
+		return np.where(np.abs(residual) <= delta, 0.5 * residual**2, delta * (np.abs(residual) - 0.5 * delta))
+	return huber_loss(A - s * B)
 
 def plot_images(image1, image2, title1="Image 1", title2="Image 2", save_path=None):
 	"""
@@ -187,6 +202,7 @@ def save_error(rot_e, trans_e, out_dir):
 		out_str += f'Mean, STD, Median, Min, Max Translation Error [m]:\n'
 		out_str += f'{np.mean(trans_e):.3f}, {np.std(trans_e):.3f}, {np.median(trans_e):.3f}, {np.min(trans_e):.3f}, {np.max(trans_e):.3f}\n'
 		print(out_str)
+		print(np.argmax(trans_e))
 		f.write(out_str)
 
 def save_rgb_depth_images(rgb_image: np.array, depth_image: np.array, 
