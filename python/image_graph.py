@@ -13,6 +13,7 @@ class ImageGraphLoader:
 	def load_data(image_graph_path, image_size, depth_scale, normalized=False, num_sample=1, num_load=10000):
 		image_graph = ImageGraph()
 
+		# Each row: time, tx, ty, tz, qx, qy, qz, qw
 		poses_w_cam = np.loadtxt(os.path.join(image_graph_path, 'camera_pose_gt.txt'))
 		for i in range(0, 
 								 	 min(poses_w_cam.shape[0], num_load * num_sample), 
@@ -35,7 +36,8 @@ class ImageGraphLoader:
 				break
 
 		return image_graph
-	
+
+# Node Class	
 class Node:
 	def __init__(self, id, 
 							 rgb_image, depth_image, global_descriptor, 
@@ -57,6 +59,10 @@ class Node:
 
 		self.edges = []
 
+	def __str__(self):
+		out_str = f'Node ID: {self.id} with edge number: {len(self.edges)}'
+		return out_str
+
 	def add_edge(self, neighbor, weight):
 		self.edges.append((neighbor, weight))
 
@@ -66,6 +72,7 @@ class Node:
 	def get_descriptor(self):
 		return self.global_descriptor
 
+# Image Graph Class
 class ImageGraph:
 	def __init__(self):
 		self.nodes = {}
@@ -75,9 +82,9 @@ class ImageGraph:
 			self.nodes[new_node.id] = new_node
 
 	def add_edge(self, from_node, to_node, weight):
-		if from_node in self.nodes and to_node in self.nodes:
-			self.nodes[from_node].add_edge(to_node, weight)
-			self.nodes[to_node].add_edge(from_node, weight)  # Assuming undirected graph
+		if from_node.id in self.nodes and to_node.id in self.nodes:
+			from_node.add_edge(to_node, weight)
+			to_node.add_edge(from_node, weight)  # Assuming undirected graph
 
 	def get_node(self, id):
 		if id in self.nodes:
@@ -92,38 +99,41 @@ class ImageGraph:
 		all_id = [id for id in self.nodes.keys()]
 		return all_id
 
-	def shortest_path(self, start, end):
-		if start not in self.nodes or end not in self.nodes:
+	# Dijkstra's shortest path algorithm (use node as the retrieval key)
+	def shortest_path(self, start_node, goal_node):
+		# Dijkstra's algorithm implementation
+		start_node_id, goal_node_id = start_node.id, goal_node.id
+		if (start_node_id not in self.nodes) or (goal_node_id not in self.nodes):
 			return float('inf'), []
 
-		distances = {node: float('inf') for node in self.nodes}
-		distances[start] = 0
-		priority_queue = [(0, start)]
-		previous_nodes = {node: None for node in self.nodes}
+		# Record priority queue, shortest distance, and previous nodes of each node
+		priority_queue = [(0, start_node)]
+		distances = {node: float('inf') for _, node in self.nodes.items()}
+		distances[start_node] = 0
+		previous_nodes = {node: None for _, node in self.nodes.items()}
 
 		while priority_queue:
 			current_distance, current_node = heapq.heappop(priority_queue)
-
 			if current_distance > distances[current_node]:
 				continue
 
-			for neighbor, weight in self.nodes[current_node].edges:
+			for neighbor, weight in current_node.edges:
 				distance = current_distance + weight
-
 				if distance < distances[neighbor]:
 					distances[neighbor] = distance
 					previous_nodes[neighbor] = current_node
 					heapq.heappush(priority_queue, (distance, neighbor))
 
+		# Record the shortest path from start_node to goal_node
 		path = []
-		current_node = end
+		current_node = goal_node
 		while previous_nodes[current_node] is not None:
 			path.append(current_node)
 			current_node = previous_nodes[current_node]
-		path.append(start)
+		path.append(start_node)
 		path.reverse()
 
-		return distances[end], path
+		return distances[goal_node], path
 
 	def find_connection(self, node):
 		if node in self.nodes:
