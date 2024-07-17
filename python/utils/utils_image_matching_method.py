@@ -6,6 +6,8 @@ import logging
 import numpy as np
 
 import torch
+from scipy.optimize import minimize
+import matplotlib.pyplot as plt
 
 from matching import viz2d, get_matcher, available_models
 
@@ -50,7 +52,98 @@ def setup_log_environment(out_dir, args):
 	logging.info(f"Testing with {args.matcher} with image size {args.image_size}")
 	logging.info(f"The outputs are being saved in {log_dir}")
 	os.makedirs(os.path.join(log_dir, 'preds'))
+	os.makedirs(os.path.join(log_dir, 'preds_depthmap'))
 	return log_dir
+
+def initialize_matcher(matcher, device, n_kpts):
+	"""Initialize the matcher with provided arguments."""
+	return get_matcher(matcher, device=device, max_num_keypoints=n_kpts)
+
+def rgb(ftensor, true_shape=None):
+	if isinstance(ftensor, list):
+			return [rgb(x, true_shape=true_shape) for x in ftensor]
+	if isinstance(ftensor, torch.Tensor):
+			ftensor = ftensor.detach().cpu().numpy()  # H,W,3
+	if ftensor.ndim == 3 and ftensor.shape[0] == 3:
+			ftensor = ftensor.transpose(1, 2, 0)
+	elif ftensor.ndim == 4 and ftensor.shape[1] == 3:
+			ftensor = ftensor.transpose(0, 2, 3, 1)
+	if true_shape is not None:
+			H, W = true_shape
+			ftensor = ftensor[:H, :W]
+	if ftensor.dtype == np.uint8:
+			img = np.float32(ftensor) / 255
+	else:
+			img = (ftensor * 0.5) + 0.5
+	return img.clip(min=0, max=1)
+
+def compute_scale_factor(A, B):
+	"""
+	Compute the scale factor s using the provided equation with a robust M-estimator, remove outliers
+	
+	Args:
+			A (np.ndarray): Reference matrix (depth_image1).
+			B (np.ndarray): Matrix to be scaled (depth_image2).
+	
+	Returns:
+			float: Computed scale factor.
+	"""
+	def huber_loss(residual, delta=1.0):
+		"""
+		Huber loss function.
+		
+		Args:
+				residual (np.ndarray): Residuals.
+				delta (float): Delta parameter for Huber loss.
+		
+		Returns:
+				float: Huber loss value.
+		"""
+		return np.where(np.abs(residual) <= delta, 0.5 * residual**2, delta * (np.abs(residual) - 0.5 * delta))
+
+	def objective_function(s):
+		"""
+		Objective function to minimize.
+		
+		Args:
+				s (float): Scale factor.
+		
+		Returns:
+				float: Sum of Huber loss for residuals.
+		"""
+		residual = A - s * B
+		return np.sum(huber_loss(residual))
+	
+	result = minimize(objective_function, x0=1.0)
+	return result.x[0]
+
+def plot_images(image1, image2, title1="Image 1", title2="Image 2", save_path=None):
+	"""
+	Plot two images side by side with colorbars.
+	
+	Parameters:
+	image1 (numpy.ndarray): The first image.
+	image2 (numpy.ndarray): The second image.
+	title1 (str): Title for the first image.
+	title2 (str): Title for the second image.
+	"""
+	fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+
+	im1 = axes[0].imshow(image1, cmap='viridis')
+	axes[0].set_title(title1)
+	axes[0].axis('off')
+	fig.colorbar(im1, ax=axes[0])
+
+	im2 = axes[1].imshow(image2, cmap='viridis', vmin=im1.get_clim()[0], vmax=im1.get_clim()[1])
+	axes[1].set_title(title2)
+	axes[1].axis('off')
+	fig.colorbar(im2, ax=axes[1])
+
+	if save_path is None:
+		plt.show()
+	else:
+		plt.savefig(save_path, bbox_inches='tight')
+		plt.close()
 
 def save_visualization(image0, image1, mkpts0, mkpts1, out_dir, index, n_viz=1):
 	"""Save visualization of the matching results."""
@@ -83,12 +176,12 @@ def save_error(rot_e, trans_e, out_dir):
 	with open(err_path, 'w') as f:
 		out_str  = f'Rotation Error [degree]:\n'
 		for e in rot_e: out_str += f'{e:.5f}, '
-		out_str += f'\n'
 
+		out_str += f'\n'
 		out_str += f'Translation Error [m]:\n'
 		for e in trans_e: out_str += f'{e:.5f}, '
-		out_str += f'\n'
 
+		out_str += f'\n'
 		out_str += f'Mean, STD, Median, Min, Max Rotation Error [degree]:\n'
 		out_str += f'{np.mean(rot_e):.3f}, {np.std(rot_e):.3f}, {np.median(rot_e):.3f}, {np.min(rot_e):.3f}, {np.max(rot_e):.3f}\n'
 		out_str += f'Mean, STD, Median, Min, Max Translation Error [m]:\n'
@@ -96,45 +189,13 @@ def save_error(rot_e, trans_e, out_dir):
 		print(out_str)
 		f.write(out_str)
 
-def initialize_matcher(matcher, device, n_kpts):
-	"""Initialize the matcher with provided arguments."""
-	return get_matcher(matcher, device=device, max_num_keypoints=n_kpts)
-
-def rgb(ftensor, true_shape=None):
-    if isinstance(ftensor, list):
-        return [rgb(x, true_shape=true_shape) for x in ftensor]
-    if isinstance(ftensor, torch.Tensor):
-        ftensor = ftensor.detach().cpu().numpy()  # H,W,3
-    if ftensor.ndim == 3 and ftensor.shape[0] == 3:
-        ftensor = ftensor.transpose(1, 2, 0)
-    elif ftensor.ndim == 4 and ftensor.shape[1] == 3:
-        ftensor = ftensor.transpose(0, 2, 3, 1)
-    if true_shape is not None:
-        H, W = true_shape
-        ftensor = ftensor[:H, :W]
-    if ftensor.dtype == np.uint8:
-        img = np.float32(ftensor) / 255
-    else:
-        img = (ftensor * 0.5) + 0.5
-    return img.clip(min=0, max=1)
-
-def save_input_images(rgb_image: np.array, depth_image: np.array, 
-									     rgb_path: str, depth_path: str):
-	from PIL import Image
-	rgb_image = np.transpose(rgb_image.astype(np.uint8), (1, 2, 0))      # 3xHXW -> HxWx3
-	pil_image = Image.fromarray(rgb_image)
-	pil_image.save(rgb_path)
-	depth_image = np.transpose(depth_image.astype(np.uint16), (1, 2, 0)) # 1xHXW -> HxWx1
-	depth_image = np.squeeze(depth_image, axis=2)
-	pil_image = Image.fromarray(depth_image)
-	pil_image.save(depth_path)	
-
-def save_duster_images(rgb_image: np.array, depth_image: np.array, 
-									     rgb_path: str, depth_path: str):
+def save_rgb_depth_images(rgb_image: np.array, depth_image: np.array, 
+									        rgb_path: str, depth_path: str):
 	from PIL import Image
 	rgb_image = rgb_image.astype(np.uint8)      # HxWx3
 	pil_image = Image.fromarray(rgb_image)
 	pil_image.save(rgb_path)
+
 	depth_image = depth_image.astype(np.uint16) # HxWx1
 	pil_image = Image.fromarray(depth_image)
 	pil_image.save(depth_path)	
