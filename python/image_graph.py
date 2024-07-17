@@ -4,7 +4,10 @@ import numpy as np
 import heapq
 
 from utils.utils_image import load_rgb_image, load_depth_image
-from utils.utils_shortest_path import dijkstra_shortest_path
+
+from pycpptools.python.utils_algorithm.shortest_path import dijkstra_shortest_path
+from pycpptools.python.utils_algorithm.base_node import BaseNode
+from pycpptools.python.utils_algorithm.base_graph import BaseGraph
 
 class ImageGraphLoader:
 	def __init__(self):
@@ -27,10 +30,10 @@ class ImageGraphLoader:
 			
 			time, t_w_cam, quat_w_cam = poses_w_cam[i, 0], poses_w_cam[i, 1:4], poses_w_cam[i, 4:] 
 
-			node = Node(i, 
-							    rgb_image, depth_image, f'camera node {i}', 
-							    time, t_w_cam, quat_w_cam, 
-							    rgb_img_path, depth_img_path)
+			node = ImageNode(i, 
+							         rgb_image, depth_image, f'camera node {i}', 
+							         time, t_w_cam, quat_w_cam, 
+							         rgb_img_path, depth_img_path)
 			image_graph.add_node(node)
 
 			if i / num_sample > num_load:
@@ -38,13 +41,13 @@ class ImageGraphLoader:
 
 		return image_graph
 
-# Node Class	
-class Node:
+# Image Node Class	
+class ImageNode(BaseNode):
 	def __init__(self, id, 
 							 rgb_image, depth_image, global_descriptor, 
 							 time, t_w_cam, quat_w_cam, 
 							 rgb_img_path, depth_img_path):
-		self.id = id
+		super().__init__(id)
 
 		self.rgb_image = rgb_image
 		self.depth_image = depth_image
@@ -58,18 +61,6 @@ class Node:
 		self.rgb_img_path = rgb_img_path
 		self.depth_img_path = depth_img_path
 
-		self.edges = []
-
-	def __str__(self):
-		out_str = f'Node ID: {self.id} with edge number: {len(self.edges)}'
-		return out_str
-	
-	def __lt__(self, other):
-		return self.id < other.id
-
-	def add_edge(self, neighbor, weight):
-		self.edges.append((neighbor, weight))
-
 	def set_descriptor(self, global_descriptor):
 		self.global_descriptor = global_descriptor
 
@@ -77,43 +68,9 @@ class Node:
 		return self.global_descriptor
 
 # Image Graph Class
-class ImageGraph:
+class ImageGraph(BaseGraph):
 	def __init__(self):
-		self.nodes = {}
-
-	def add_node(self, new_node):
-		if new_node.id not in self.nodes:
-			self.nodes[new_node.id] = new_node
-
-	def add_edge(self, from_node, to_node, weight):
-		if from_node.id in self.nodes and to_node.id in self.nodes:
-			from_node.add_edge(to_node, weight)
-			to_node.add_edge(from_node, weight)  # Assuming undirected graph
-
-	def get_node(self, id):
-		if id in self.nodes:
-			return self.nodes[id]
-		else:
-			return None
-		
-	def get_num_node(self):
-		return len(self.nodes)
-
-	def get_all_id(self):
-		all_id = [id for id in self.nodes.keys()]
-		return all_id
-
-	def contain_node(self, query_node):
-		if query_node.id in self.nodes:
-			return True
-		else:
-			return False
-
-	def find_connection(self, node):
-		if node in self.nodes:
-			return [neighbor for neighbor, _ in self.nodes[node].edges]
-		else:
-			return []
+		super().__init__()
 
 class TestImageGraph():
 	def __init__(self):
@@ -124,46 +81,43 @@ class TestImageGraph():
 		graph = ImageGraph()
 
 		# Add nodes to the graph
-		graph.add_node(Node(1, None, None, "descriptor_1", 
-												0, np.zeros((1, 3)), np.zeros((1, 4)), 
-												'tmp_rgb.png', 'tmp_depth.png'))
-		graph.add_node(Node(2, None, None, "descriptor_2", 
-												0, np.zeros((1, 3)), np.zeros((1, 4)), 
-												'tmp_rgb.png', 'tmp_depth.png'))
-		graph.add_node(Node(3, None, None, "descriptor_3", 
-												0, np.zeros((1, 3)), np.zeros((1, 4)), 
-												'tmp_rgb.png', 'tmp_depth.png'))
-		graph.add_node(Node(4, None, None, "descriptor_4", 
-												0, np.zeros((1, 3)), np.zeros((1, 4)), 
-												'tmp_rgb.png', 'tmp_depth.png'))
+		graph.add_node(ImageNode(1, None, None, "descriptor_1", 
+									0, np.zeros((1, 3)), np.zeros((1, 4)), 
+									'tmp_rgb.png', 'tmp_depth.png'))
+		graph.add_node(ImageNode(2, None, None, "descriptor_2", 
+									0, np.zeros((1, 3)), np.zeros((1, 4)), 
+									'tmp_rgb.png', 'tmp_depth.png'))
+		graph.add_node(ImageNode(3, None, None, "descriptor_3", 
+									0, np.zeros((1, 3)), np.zeros((1, 4)), 
+									'tmp_rgb.png', 'tmp_depth.png'))
+		graph.add_node(ImageNode(4, None, None, "descriptor_4", 
+									0, np.zeros((1, 3)), np.zeros((1, 4)), 
+									'tmp_rgb.png', 'tmp_depth.png'))
 
 		# Add edges between the nodes with weights
-		graph.add_edge(1, 2, 1.0)
-		graph.add_edge(2, 3, 2.0)
-		graph.add_edge(3, 4, 1.0)
-		graph.add_edge(1, 4, 4.0)
+		graph.add_edge(graph.get_node(1), graph.get_node(2), 1.0)
+		graph.add_edge(graph.get_node(2), graph.get_node(3), 2.0)
+		graph.add_edge(graph.get_node(3), graph.get_node(4), 1.0)
+		graph.add_edge(graph.get_node(1), graph.get_node(4), 4.0)
 
 		# Get the image descriptor of a specific node
 		node = graph.get_node(2)
 		print(f"Image Descriptor of Node 2: {node.global_descriptor}")
 
 		# Find the shortest path from node 1 to node 4
-		distance, path = dijkstra_shortest_path(graph, 1, 4)
+		distance, path = dijkstra_shortest_path(graph, graph.get_node(1), graph.get_node(4))
 		print(f"Shortest Path from Node 1 to Node 4: {path} with distance {distance}")
 
 		# Find all connections of a specific node
 		connections = graph.find_connection(2)
 		print(f"Connections of Node 2: {connections}")
 
-		# Build a new connection between two nodes
-		graph.build_connection(2, 4, 2.0)
-
 		# Verify the new connection
 		connections = graph.find_connection(2)
 		print(f"Connections of Node 2 after adding a new connection: {connections}")
 
 		# Find the shortest path again from node 1 to node 4 after adding new connection
-		distance, path = dijkstra_shortest_path(graph, 1, 4)
+		distance, path = dijkstra_shortest_path(graph, graph.get_node(1), graph.get_node(4))
 		print(f"New Shortest Path from Node 1 to Node 4: {path} with distance {distance}")
 
 if __name__ == '__main__':
