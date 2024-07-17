@@ -4,6 +4,7 @@ import numpy as np
 import heapq
 
 from utils.utils_image import load_rgb_image, load_depth_image
+from utils.utils_shortest_path import dijkstra_shortest_path
 
 class ImageGraphLoader:
 	def __init__(self):
@@ -62,6 +63,9 @@ class Node:
 	def __str__(self):
 		out_str = f'Node ID: {self.id} with edge number: {len(self.edges)}'
 		return out_str
+	
+	def __lt__(self, other):
+		return self.id < other.id
 
 	def add_edge(self, neighbor, weight):
 		self.edges.append((neighbor, weight))
@@ -99,51 +103,17 @@ class ImageGraph:
 		all_id = [id for id in self.nodes.keys()]
 		return all_id
 
-	# Dijkstra's shortest path algorithm (use node as the retrieval key)
-	def shortest_path(self, start_node, goal_node):
-		# Dijkstra's algorithm implementation
-		start_node_id, goal_node_id = start_node.id, goal_node.id
-		if (start_node_id not in self.nodes) or (goal_node_id not in self.nodes):
-			return float('inf'), []
-
-		# Record priority queue, shortest distance, and previous nodes of each node
-		priority_queue = [(0, start_node)]
-		distances = {node: float('inf') for _, node in self.nodes.items()}
-		distances[start_node] = 0
-		previous_nodes = {node: None for _, node in self.nodes.items()}
-
-		while priority_queue:
-			current_distance, current_node = heapq.heappop(priority_queue)
-			if current_distance > distances[current_node]:
-				continue
-
-			for neighbor, weight in current_node.edges:
-				distance = current_distance + weight
-				if distance < distances[neighbor]:
-					distances[neighbor] = distance
-					previous_nodes[neighbor] = current_node
-					heapq.heappush(priority_queue, (distance, neighbor))
-
-		# Record the shortest path from start_node to goal_node
-		path = []
-		current_node = goal_node
-		while previous_nodes[current_node] is not None:
-			path.append(current_node)
-			current_node = previous_nodes[current_node]
-		path.append(start_node)
-		path.reverse()
-
-		return distances[goal_node], path
+	def contain_node(self, query_node):
+		if query_node.id in self.nodes:
+			return True
+		else:
+			return False
 
 	def find_connection(self, node):
 		if node in self.nodes:
 			return [neighbor for neighbor, _ in self.nodes[node].edges]
 		else:
 			return []
-
-	def build_connection(self, node, nearby_node, weight):
-		if node in self.nodes and nearby_node in self.nodes:
-			self.add_edge(node, nearby_node, weight)
 
 class TestImageGraph():
 	def __init__(self):
@@ -178,7 +148,7 @@ class TestImageGraph():
 		print(f"Image Descriptor of Node 2: {node.global_descriptor}")
 
 		# Find the shortest path from node 1 to node 4
-		distance, path = graph.shortest_path(1, 4)
+		distance, path = dijkstra_shortest_path(graph, 1, 4)
 		print(f"Shortest Path from Node 1 to Node 4: {path} with distance {distance}")
 
 		# Find all connections of a specific node
@@ -193,7 +163,7 @@ class TestImageGraph():
 		print(f"Connections of Node 2 after adding a new connection: {connections}")
 
 		# Find the shortest path again from node 1 to node 4 after adding new connection
-		distance, path = graph.shortest_path(1, 4)
+		distance, path = dijkstra_shortest_path(graph, 1, 4)
 		print(f"New Shortest Path from Node 1 to Node 4: {path} with distance {distance}")
 
 if __name__ == '__main__':
