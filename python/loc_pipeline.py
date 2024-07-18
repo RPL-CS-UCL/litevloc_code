@@ -1,5 +1,12 @@
 #!/usr/bin/env python
 
+"""
+Usage: python python/loc_pipeline.py --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos --image_size 288 512 --device=cuda \
+--sample_map 1 --sample_obs 5 --depth_scale 0.001 --min_depth_pro 0.1 --max_depth_pro 5.5 \
+--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
+--img_matcher duster --no_viz
+"""
+ 
 import os
 import sys
 import pathlib
@@ -8,6 +15,7 @@ import logging
 import numpy as np
 import torch
 import copy
+import time
 
 import rospy
 from std_msgs.msg import Header
@@ -30,18 +38,12 @@ from utils.utils_image_matching_method import initialize_img_matcher, compute_sc
 from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
 from utils.utils_image_matching_method import save_output as save_img_matcher_output
 from utils.utils_pipeline import *
-
-import time
+from image_graph import ImageGraphLoader
 
 class LocPipeline:
-	def __init__(self):
-  	# Initialize arguments for algorithms
-		self.args = parse_arguments()
-
-		# Setup logging path
-		out_dir = pathlib.Path(os.path.join(self.args.dataset_path, 'output_loc_pipeline'))
-		out_dir.mkdir(exist_ok=True, parents=True)
-		self.log_dir = setup_log_environment(out_dir.as_posix(), self.args)
+	def __init__(self, args, log_dir):
+		self.args = args
+		self.log_dir = log_dir
 
 		# Initialize system variables
 		self.has_global_position = False
@@ -92,7 +94,7 @@ class LocPipeline:
 		data_path = os.path.join(self.args.dataset_path, 'obs')
 		self.image_obs = ImageGraphLoader.load_data(
 			data_path, self.args.image_size, self.args.depth_scale, 
-			normalized=False, num_sample=self.args.sample_obs, num_load=100
+			normalized=False, num_sample=self.args.sample_obs, num_load=20
 		)
 		logging.info(f"Loaded {self.image_graph.get_num_node()} map nodes from {data_path}.")		
 
@@ -314,8 +316,15 @@ class LocPipeline:
 		rate.sleep() # 10Hz
 
 if __name__ == '__main__':
+	# Initialize arguments for algorithms and Setup logging path
+	args = parse_arguments()
+	out_dir = pathlib.Path(os.path.join(args.dataset_path, 'output_loc_pipeline'))
+	out_dir.mkdir(exist_ok=True, parents=True)
+	log_dir = setup_log_environment(out_dir, args)
+
 	rospy.init_node('loc_pipeline_node', anonymous=True)
 
-	loc_pipeline = LocPipeline()
+	# Create an instance of LocPipeline and run the main loop
+	loc_pipeline = LocPipeline(args, log_dir)
 	loc_pipeline.load_data()
 	loc_pipeline.run()

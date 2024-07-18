@@ -1,17 +1,16 @@
 import os
 import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation'))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation/third_party/deep-image-retrieval'))
+
 import logging
 from datetime import datetime
 import argparse
-
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation'))
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation/third_party/deep-image-retrieval'))
 
 import numpy as np
 import matplotlib
 
 from matching import available_models
-from image_graph import ImageGraphLoader
 
 if not hasattr(sys, "ps1"):
 	matplotlib.use("Agg")
@@ -35,21 +34,21 @@ def setup_log_environment(out_dir, args):
 	tmp_dir = os.path.join(out_dir, f'outputs_{args.vpr_method}_{args.img_matcher}')
 	log_dir = os.path.join(tmp_dir, f'{args.vpr_backbone}_' + start_time.strftime('%Y-%m-%d_%H-%M-%S'))
 	setup_logging(log_dir, stdout_level="info")
-
 	logging.info(" ".join(sys.argv))
 	logging.info(f"Arguments: {args}")
 	logging.info(f"Testing with {args.vpr_method} with a {args.vpr_backbone} backbone and descriptors dimension {args.vpr_descriptors_dimension}")
 	logging.info(f"Testing with {args.img_matcher} with image size {args.image_size}")
 	logging.info(f"The outputs are being saved in {log_dir}")
-	
 	os.makedirs(os.path.join(log_dir, 'preds'))
 	os.system(f"rm {os.path.join(tmp_dir, 'latest')}")
 	os.system(f"ln -s {log_dir} {os.path.join(tmp_dir, 'latest')}")
 	return log_dir
 
 def parse_arguments():
-	parser = argparse.ArgumentParser(description="Visual Localization Pipeline",
-																	 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	parser = argparse.ArgumentParser(
+		description="Visual Localization Pipeline",
+		formatter_class=argparse.ArgumentDefaultsHelpFormatter
+	)
 
 	""" 
 	Common parameters
@@ -59,7 +58,6 @@ def parse_arguments():
 											help="Resizing shape for images (HxW). If a single int is passed, set the"
 											"smallest edge of all images to this value, while keeping aspect ratio")
 	parser.add_argument("--no_viz", action="store_true", help="pass --no_viz to avoid saving visualizations")
-
 	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
 	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='habitat: 0.039, anymal: 0.001')
@@ -207,3 +205,7 @@ def save_descriptors(log_dir, descriptors, desc_name):
 	"""Save descriptors to files."""
 	logging.debug(f"Saving the descriptors in {log_dir}")
 	np.save(os.path.join(log_dir, 'preds', f"{desc_name}.npy"), descriptors)
+
+if __name__ == "__main__":
+	args = parse_arguments()
+	setup_log_environment('/tmp/', args)

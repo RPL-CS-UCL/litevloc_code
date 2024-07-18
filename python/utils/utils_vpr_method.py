@@ -14,29 +14,29 @@ import argparse
 import faiss
 
 def setup_logging(log_dir, stdout_level='info'):
-		os.makedirs(log_dir, exist_ok=True)
-		log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-		logging.basicConfig(
-				level=getattr(logging, stdout_level.upper(), 'INFO'),
-				format=log_format,
-				handlers=[
-						logging.FileHandler(os.path.join(log_dir, 'info.log')),
-						logging.StreamHandler(sys.stdout)
-				]
-		)
+	os.makedirs(log_dir, exist_ok=True)
+	log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+	logging.basicConfig(
+		level=getattr(logging, stdout_level.upper(), 'INFO'),
+		format=log_format,
+		handlers=[
+			logging.FileHandler(os.path.join(log_dir, 'info.log')),
+			logging.StreamHandler(sys.stdout)
+		]
+	)
 
 def setup_log_environment(out_dir, args):
-		"""Setup logging and directories."""
-		os.makedirs(out_dir, exist_ok=True)
-		start_time = datetime.now()
-		log_dir = os.path.join(out_dir, f'outputs_{args.method}', f'{args.backbone}_' + start_time.strftime('%Y-%m-%d_%H-%M-%S'))
-		setup_logging(log_dir, stdout_level="info")
-		logging.info(" ".join(sys.argv))
-		logging.info(f"Arguments: {args}")
-		logging.info(f"Testing with {args.method} with a {args.backbone} backbone and descriptors dimension {args.descriptors_dimension}")
-		logging.info(f"The outputs are being saved in {log_dir}")
-		os.makedirs(os.path.join(log_dir, 'preds'))
-		return log_dir
+	"""Setup logging and directories."""
+	os.makedirs(out_dir, exist_ok=True)
+	start_time = datetime.now()
+	log_dir = os.path.join(out_dir, f'outputs_{args.method}', f'{args.backbone}_' + start_time.strftime('%Y-%m-%d_%H-%M-%S'))
+	setup_logging(log_dir, stdout_level="info")
+	logging.info(" ".join(sys.argv))
+	logging.info(f"Arguments: {args}")
+	logging.info(f"Testing with {args.method} with a {args.backbone} backbone and descriptors dimension {args.descriptors_dimension}")
+	logging.info(f"The outputs are being saved in {log_dir}")
+	os.makedirs(os.path.join(log_dir, 'preds'))
+	return log_dir
 
 def initialize_vpr_model(method, backbone, descriptors_dimension, device):
 		"""Initialize and return the model."""
