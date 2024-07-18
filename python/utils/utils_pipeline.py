@@ -1,23 +1,20 @@
 import os
 import sys
+import logging
+from datetime import datetime
+import argparse
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation'))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation/third_party/deep-image-retrieval'))
 
-import logging
-from datetime import datetime
 import numpy as np
-
-import argparse
-import faiss
-
-from matching import viz2d, get_matcher, available_models
-
-from image_graph import ImageGraphLoader
 import matplotlib
+
+from matching import available_models
+from image_graph import ImageGraphLoader
 
 if not hasattr(sys, "ps1"):
 	matplotlib.use("Agg")
-
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)

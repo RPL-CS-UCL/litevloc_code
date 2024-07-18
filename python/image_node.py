@@ -23,6 +23,10 @@ class ImageNode(BaseNode):
 
 		self.next_node = None
 
+	def set_pose(self, t_w_cam, quat_w_cam):
+		self.t_w_cam = t_w_cam
+		self.quat_w_cam = quat_w_cam
+
 	def set_descriptor(self, global_descriptor):
 		self.global_descriptor = global_descriptor
 

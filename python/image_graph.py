@@ -4,7 +4,7 @@ import numpy as np
 from utils.utils_image import load_rgb_image, load_depth_image
 from image_node import ImageNode
 
-from pycpptools.src.python.utils_algorithm.shortest_path import dijkstra_shortest_path
+from pycpptools.src.python.utils_algorithm.shortest_path import dijk_shortest_path
 from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
 
 class ImageGraphLoader:
@@ -77,7 +77,7 @@ class TestImageGraph():
 		print(f"Image Descriptor of Node 2: {node.global_descriptor}")
 
 		# Find the shortest path from node 1 to node 4
-		distance, path = dijkstra_shortest_path(graph, graph.get_node(1), graph.get_node(4))
+		distance, path = dijk_shortest_path(graph, graph.get_node(1), graph.get_node(4))
 		print(f"Shortest Path from Node 1 to Node 4: {path} with distance {distance}")
 
 		# Find all connections of a specific node
@@ -89,7 +89,7 @@ class TestImageGraph():
 		print(f"Connections of Node 2 after adding a new connection: {connections}")
 
 		# Find the shortest path again from node 1 to node 4 after adding new connection
-		distance, path = dijkstra_shortest_path(graph, graph.get_node(1), graph.get_node(4))
+		distance, path = dijk_shortest_path(graph, graph.get_node(1), graph.get_node(4))
 		print(f"New Shortest Path from Node 1 to Node 4: {path} with distance {distance}")
 
 if __name__ == '__main__':
