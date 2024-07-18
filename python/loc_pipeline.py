@@ -31,6 +31,8 @@ from utils.utils_image_matching_method import save_visualization as save_img_mat
 from utils.utils_image_matching_method import save_output as save_img_matcher_output
 from utils.utils_pipeline import *
 
+import time
+
 class LocPipeline:
 	def __init__(self):
   	# Initialize arguments for algorithms
@@ -51,6 +53,8 @@ class LocPipeline:
 		self.curr_subgoal_node = None
 		self.curr_obs_node = None
 
+		self.shortest_path = []
+
 		# Read models for algorithms
 		self.vpr_model = initialize_vpr_model(self.args.vpr_method, 
 																				  self.args.vpr_backbone, 
@@ -63,6 +67,7 @@ class LocPipeline:
 		# Setup ROS publishers and message
 		self.pub_graph = rospy.Publisher('/image_graph', MarkerArray, queue_size=10)
 		self.pub_graph_poses = rospy.Publisher('/image_graph/poses', PoseArray, queue_size=10)
+		self.pub_shortest_path = rospy.Publisher('/image_graph/shortest_path', MarkerArray, queue_size=10)
 
 		self.pub_odom = rospy.Publisher('/odom', Odometry, queue_size=10)
 		self.pub_path = rospy.Publisher('/path', Path, queue_size=10)
@@ -87,7 +92,7 @@ class LocPipeline:
 		data_path = os.path.join(self.args.dataset_path, 'obs')
 		self.image_obs = ImageGraphLoader.load_data(
 			data_path, self.args.image_size, self.args.depth_scale, 
-			normalized=False, num_sample=self.args.sample_obs, num_load=200
+			normalized=False, num_sample=self.args.sample_obs, num_load=100
 		)
 		logging.info(f"Loaded {self.image_graph.get_num_node()} map nodes from {data_path}.")		
 
@@ -154,10 +159,16 @@ class LocPipeline:
 		header.frame_id = "map"
 
 		# Publish image graph
+		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, 'image_graph')
+		self.br.sendTransform(tf_msg)
+		header.frame_id = 'image_graph'
 		pytool_ros.ros_vis.publish_graph(self.image_graph, header, self.pub_graph, self.pub_graph_poses)
+		if self.shortest_path:
+			pytool_ros.ros_vis.publish_shortest_path(self.shortest_path, header, self.pub_shortest_path)
 
 		# Publish odometry, path and tf messages
 		if self.curr_obs_node is not None:
+			header.frame_id = 'map'
 			child_frame_id = "camera"
 
 			odom_msg = pytool_ros.ros_msg.convert_vec_to_rosodom(
@@ -182,10 +193,10 @@ class LocPipeline:
 				self.pub_path_gt.publish(self.path_gt_msg)
 
 			if self.curr_subgoal_node is not None:
-				rgb_img_obs = np.transpose(to_numpy(self.curr_obs_node.rgb_image), (1, 2, 0))
-				rgb_img_subgoal = np.transpose(to_numpy(self.curr_subgoal_node.rgb_image), (1, 2, 0))
+				rgb_img_obs = (np.transpose(to_numpy(self.curr_obs_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
+				rgb_img_subgoal = (np.transpose(to_numpy(self.curr_subgoal_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
 				rgb_img_merge = np.hstack((rgb_img_subgoal, rgb_img_obs))
-				img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(rgb_img_merge, "bgr8", header, compressed=False)
+				img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(rgb_img_merge, "rgb8", header, compressed=False)
 				self.pub_img_goal_obs.publish(img_msg)
 
 	def run(self):
@@ -213,10 +224,11 @@ class LocPipeline:
 
 		##### Main loop: receive camera images, perform global and local localization, and publish messages
 		if self.loc_goal_node is None:
-			self.loc_goal_node = self.image_graph.get_node(10)
+			self.loc_goal_node = self.image_graph.get_node(15)
 
 		rate = rospy.Rate(10) # 10 Hz
 		for obs_id, obs_node in self.image_obs.nodes.items():
+			if rospy.is_shutdown(): break
 			self.curr_obs_node = obs_node
 
 			##### Perform global localization
@@ -248,6 +260,7 @@ class LocPipeline:
 
 						##### Existing path from start to goal node
 						self.has_global_position = True
+						self.shortest_path = tra_path
 						for i in range(len(tra_path) - 1):
 							node = tra_path[i]
 							node_next = tra_path[i + 1]
@@ -265,7 +278,9 @@ class LocPipeline:
 						continue
 			
 			##### Perform local localization if global localization is available
+			start_time = time.time()
 			matcher_result = self.perform_image_matching(self.curr_subgoal_node, self.curr_obs_node)
+			print(f"Local localization time: {time.time() - start_time:.3f}s")
 			if matcher_result is not None:
 				# Get the groundtruth pose
 				print(f'Groundtruth Poses: {self.curr_obs_node.trans_gt.T}')
@@ -280,8 +295,11 @@ class LocPipeline:
 
 				# Compute distance between the subgoal and current observation
 				if self.curr_subgoal_node.get_next_node() is not None:
-					dis_trans, dis_angle = pytool_math.tools_eigen.compute_relative_dis_TF(est_T_subgoal_obs, np.eye(4))
-					if dis_trans < 0.2 and dis_angle < 20.0:
+					# dis_trans, dis_angle = pytool_math.tools_eigen.compute_relative_dis_TF(est_T_subgoal_obs, np.eye(4))
+					# if dis_trans < 0.2 and dis_angle < 20.0:
+
+					# Obs stand front of the subgoal
+					if est_T_subgoal_obs[2, 3] > 1.0:
 						print(f"Switch subgoal from {self.curr_subgoal_node.id} to {self.curr_subgoal_node.get_next_node().id}")
 						self.curr_subgoal_node = self.curr_subgoal_node.get_next_node()
 
