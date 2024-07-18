@@ -10,7 +10,7 @@ import torch
 
 import rospy
 from std_msgs.msg import Header
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PoseArray
 from nav_msgs.msg import Odometry, Path
 from sensor_msgs.msg import Image
 from visualization_msgs.msg import Marker, MarkerArray
@@ -59,6 +59,8 @@ class LocPipeline:
 
 		# Setup ROS publishers
 		self.pub_graph = rospy.Publisher('/image_graph', MarkerArray, queue_size=10)
+		self.pub_graph_poses = rospy.Publisher('/image_graph/poses', PoseArray, queue_size=10)
+
 		self.pub_odom = rospy.Publisher('/odom', Odometry, queue_size=10)
 		self.pub_path = rospy.Publisher('/path', Path, queue_size=10)
 		self.br = tf2_ros.TransformBroadcaster()
@@ -135,39 +137,39 @@ class LocPipeline:
 		return matcher_result
 
 	def publish_message(self):
-		"""
-		Publish odometry, tf, path, and subgoal position using ROS.
-		"""
-		pytool_ros.tools_ros_visualization.publish_graph(self.image_graph, self.pub_graph)
-
-		# Publish odometry, path and tf messages
 		header = Header()
 		header.stamp = rospy.Time.now()
 		header.frame_id = "map"
-		child_frame_id = "camera"
 
-		odom_msg = pytool_math.tools_eigen.convert_vec_to_rosodom(
-			self.current_node.trans_w_node, 
-			self.current_node.quat_w_node, 
-			header, child_frame_id
-		)
-		self.pub_odom.publish(odom_msg)
-		
-		pose_msg = pytool_math.tools_eigen.convert_vec_to_rospose(
-			self.current_node.trans_w_node, 
-			self.current_node.quat_w_node, 
-			header
-		)
-		self.path_msg.header = header
-		self.path_msg.poses.append(pose_msg)
-		self.pub_path.publish(self.path_msg)
+		# Publish image graph
+		pytool_ros.ros_vis.publish_graph(self.image_graph, header, self.pub_graph, self.pub_graph_poses)
 
-		tf_msg = pytool_math.tools_eigen.convert_vec_to_rostf(
-			self.current_node.trans_w_node, 
-			self.current_node.quat_w_node, 
-			header, child_frame_id
-		)
-		self.br.sendTransform(tf_msg)		
+		# Publish odometry, path and tf messages
+		if self.current_node is not None:
+			child_frame_id = "camera"
+
+			odom_msg = pytool_ros.ros_msg.convert_vec_to_rosodom(
+				self.current_node.trans_w_node, 
+				self.current_node.quat_w_node, 
+				header, child_frame_id
+			)
+			self.pub_odom.publish(odom_msg)
+			
+			pose_msg = pytool_ros.ros_msg.convert_vec_to_rospose(
+				self.current_node.trans_w_node, 
+				self.current_node.quat_w_node, 
+				header
+			)
+			self.path_msg.header = header
+			self.path_msg.poses.append(pose_msg)
+			self.pub_path.publish(self.path_msg)
+
+			tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(
+				self.current_node.trans_w_node, 
+				self.current_node.quat_w_node, 
+				header, child_frame_id
+			)
+			self.br.sendTransform(tf_msg)		
 
 	def run(self):
 		##### Create edges between nodes in the graph
@@ -177,8 +179,8 @@ class LocPipeline:
 			map_node_next = self.image_graph.get_node(map_id)
 			if (map_node_prev is not None) and (map_node_next is not None):
 				weight, _ = pytool_math.tools_eigen.compute_relative_dis(
-					map_node_prev.t_w_cam, map_node_next.quat_w_cam, 
-					map_node_next.t_w_cam, map_node_next.quat_w_cam,
+					map_node_prev.trans_w_node, map_node_prev.quat_w_node, 
+					map_node_next.trans_w_node, map_node_next.quat_w_node,
 					mode='xyzw')
 				self.image_graph.add_edge(map_node_prev, map_node_next, weight)
 
@@ -190,7 +192,13 @@ class LocPipeline:
 			db_descriptors[indices] = map_node.get_descriptor().cpu().numpy()
 		print(f"IDs: {db_descriptors_id} extracted {len(db_descriptors)} VPR descriptors.")
 		if self.args.save_descriptors:
-			save_descriptors(self.log_dir, db_descriptors, desc_name="database_descriptors")			
+			save_descriptors(self.log_dir, db_descriptors, desc_name="database_descriptors")
+
+		# DEBUG(gogojjh)
+		rate = rospy.Rate(10)
+		while not rospy.is_shutdown():
+			self.publish_message()
+			rate.sleep()
 
 		##### Main loop: receive camera images, perform global and local localization, and publish messages
 		if self.loc_goal_node is None:
@@ -223,10 +231,7 @@ class LocPipeline:
 					matched_map_node = self.image_graph.get_node(db_descriptors_id[vpr_result[0]])
 					if matched_map_node is not None:
 						tra_distance, tra_path = \
-							pytool_alg.shortest_path.dijk_shortest_path(
-								self.image_graph, 
-								matched_map_node, 
-								self.loc_goal_node)
+							pytool_alg.sp.dijk_shortest_path(self.image_graph, matched_map_node, self.loc_goal_node)
 						if tra_distance == float('inf'):
 							print('No path found between start and goal nodes.')
 							continue
@@ -252,13 +257,13 @@ class LocPipeline:
 			subgoal_node = self.current_node.get_next_node()
 			matcher_result = self.perform_image_matching(subgoal_node, obs_node)
 			if matcher_result is not None:
-				T_w_map = pytool_math.tools_eigen.convert_vec_to_matrix(subgoal_node.t_w_cam, subgoal_node.quat_w_cam, 'xyzw')
-				T_w_obs = pytool_math.tools_eigen.convert_vec_to_matrix(obs_node.t_w_cam, obs_node.quat_w_cam, 'xyzw')
+				# Get the groundtruth pose
+				T_w_map = pytool_math.tools_eigen.convert_vec_to_matrix(subgoal_node.trans_w_node, subgoal_node.quat_w_node, 'xyzw')
+				T_w_obs = pytool_math.tools_eigen.convert_vec_to_matrix(obs_node.trans_w_node, obs_node.quat_w_node, 'xyzw')
 				T_map_obs = np.linalg.inv(T_w_map) @ T_w_obs
-
+				# Get the estimated pose
 				trans_map_obs, quat_map_obs = pytool_math.tools_eigen.convert_matrix_to_vec(matcher_result["est_T_map_obs"], 'xyzw')
 				self.current_node.set_pose(trans_map_obs, quat_map_obs)
-
 				print('Groundtruth Poses:\n', T_map_obs)
 				print(f'Estimated Poses with Meas scale {matcher_result["meas_scale"]}:\n', matcher_result["est_T_map_obs"])
 				if not self.args.no_viz:

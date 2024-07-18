@@ -5,27 +5,26 @@ from pycpptools.src.python.utils_algorithm.base_node import BaseNode
 class ImageNode(BaseNode):
 	def __init__(self, id, 
 							 rgb_image, depth_image, global_descriptor, 
-							 time, t_w_cam, quat_w_cam, 
+							 time, trans_w_node, quat_w_node, 
 							 rgb_img_path, depth_img_path):
-		super().__init__(id)
+		super().__init__(id, trans_w_node, quat_w_node)
 
+		# RGB and depth images
 		self.rgb_image = rgb_image
 		self.depth_image = depth_image
 
-		self.global_descriptor = global_descriptor
-
-		self.time = time
-		self.t_w_cam = t_w_cam
-		self.quat_w_cam = quat_w_cam
-
+		# Path to the RGB and depth images
 		self.rgb_img_path = rgb_img_path
 		self.depth_img_path = depth_img_path
 
-		self.next_node = None
+		# VPR descriptor
+		self.global_descriptor = global_descriptor
 
-	def set_pose(self, t_w_cam, quat_w_cam):
-		self.t_w_cam = t_w_cam
-		self.quat_w_cam = quat_w_cam
+		# Time of the image
+		self.time = time
+
+		# Next node using in the shortest path
+		self.next_node = None
 
 	def set_descriptor(self, global_descriptor):
 		self.global_descriptor = global_descriptor
