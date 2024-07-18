@@ -31,7 +31,10 @@ class ImageGraphLoader:
 			node = ImageNode(i, 
 							         rgb_image, depth_image, f'camera node {i}', 
 							         time, t_w_cam, quat_w_cam, 
-							         rgb_img_path, depth_img_path)
+											 rgb_img_path, depth_img_path)
+			# Map: estimated poses are same to gt poses
+			node.set_pose_gt(t_w_cam, quat_w_cam)
+
 			image_graph.add_node(node)
 
 			if i / num_sample > num_load:

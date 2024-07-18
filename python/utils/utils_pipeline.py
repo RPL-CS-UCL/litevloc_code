@@ -47,14 +47,6 @@ def setup_log_environment(out_dir, args):
 	os.system(f"ln -s {log_dir} {os.path.join(tmp_dir, 'latest')}")
 	return log_dir
 
-def load_map(data_path, image_size, depth_scale, normalized=False, num_sample=1):
-	"""
-	Read map nodes' images, extract VPR descriptors
-	"""
-	image_graph = ImageGraphLoader.load_data(data_path, image_size, depth_scale, 
-																					 normalized=normalized, num_sample=num_sample)
-	return image_graph
-
 def parse_arguments():
 	parser = argparse.ArgumentParser(description="Visual Localization Pipeline",
 																	 formatter_class=argparse.ArgumentDefaultsHelpFormatter)

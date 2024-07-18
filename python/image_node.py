@@ -5,9 +5,9 @@ from pycpptools.src.python.utils_algorithm.base_node import BaseNode
 class ImageNode(BaseNode):
 	def __init__(self, id, 
 							 rgb_image, depth_image, global_descriptor, 
-							 time, trans_w_node, quat_w_node, 
+							 time, trans, quat,
 							 rgb_img_path, depth_img_path):
-		super().__init__(id, trans_w_node, quat_w_node)
+		super().__init__(id, trans, quat)
 
 		# RGB and depth images
 		self.rgb_image = rgb_image
