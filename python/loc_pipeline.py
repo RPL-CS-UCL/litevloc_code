@@ -180,10 +180,12 @@ class LocPipeline:
 				header, child_frame_id
 			)
 			self.pub_odom.publish(odom_msg)
+
 			pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom_msg)
 			self.path_msg.header = header
 			self.path_msg.poses.append(pose_msg)
 			self.pub_path.publish(self.path_msg)
+
 			tf_msg = pytool_ros.ros_msg.convert_odom_to_rostf(odom_msg)
 			self.br.sendTransform(tf_msg)		
 
