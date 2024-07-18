@@ -4,7 +4,7 @@
 Usage: python python/loc_pipeline.py --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos --image_size 288 512 --device=cuda \
 --sample_map 1 --sample_obs 5 --depth_scale 0.001 --min_depth_pro 0.1 --max_depth_pro 5.5 \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
---img_matcher duster --no_viz
+--img_matcher duster --save_img_matcher --no_viz 
 """
  
 import os
@@ -122,17 +122,18 @@ class LocPipeline:
 			
 			"""Save matching results"""
 			out_str += f"Found {num_inliers} inliers after RANSAC. "
-			viz_path = save_img_matcher_visualization(map_node.rgb_image, obs_node.rgb_image, 
-																								mkpts0, mkpts1, self.log_dir, obs_id, n_viz=100)
-			# out_str += f"Viz saved in {viz_path}. "
-			dict_path = save_img_matcher_output(matcher_result, None, None, 
-													 								self.args.img_matcher, self.args.n_kpts, 
-																					self.args.image_size, self.log_dir, obs_id)
-			# out_str += f"Output saved in {dict_path}"       
+			if self.args.save_img_matcher:
+				viz_path = save_img_matcher_visualization(map_node.rgb_image, obs_node.rgb_image, 
+																									mkpts0, mkpts1, self.log_dir, obs_id, n_viz=100)
+				# out_str += f"Viz saved in {viz_path}. "
+				dict_path = save_img_matcher_output(matcher_result, None, None, 
+																						self.args.img_matcher, self.args.n_kpts, 
+																						self.args.image_size, self.log_dir, obs_id)
+				# out_str += f"Output saved in {dict_path}"       
 		except Exception as e:
 			print(f"Error in Matching: {e} due to no overlapping regions or insufficient matching.")
 			return None
-		print(out_str)
+		logging.info(out_str)
 		scene = self.img_matcher.scene
 
 		##### Scale predict depth images
@@ -174,22 +175,24 @@ class LocPipeline:
 			child_frame_id = "camera"
 
 			odom_msg = pytool_ros.ros_msg.convert_vec_to_rosodom(
-				self.curr_obs_node.trans, self.curr_obs_node.quat, header, child_frame_id)
+				self.curr_obs_node.trans, 
+				self.curr_obs_node.quat, 
+				header, child_frame_id
+			)
 			self.pub_odom.publish(odom_msg)
-			
-			pose_msg = pytool_ros.ros_msg.convert_vec_to_rospose(
-				self.curr_obs_node.trans, self.curr_obs_node.quat, header)
+			pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom_msg)
 			self.path_msg.header = header
 			self.path_msg.poses.append(pose_msg)
 			self.pub_path.publish(self.path_msg)
-
-			tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(
-				self.curr_obs_node.trans, self.curr_obs_node.quat, header, child_frame_id)
+			tf_msg = pytool_ros.ros_msg.convert_odom_to_rostf(odom_msg)
 			self.br.sendTransform(tf_msg)		
 
 			if self.curr_obs_node.has_pose_gt:
 				pose_msg = pytool_ros.ros_msg.convert_vec_to_rospose(
-					self.curr_obs_node.trans_gt, self.curr_obs_node.quat_gt, header)			
+					self.curr_obs_node.trans_gt, 
+					self.curr_obs_node.quat_gt, 
+					header
+				)			
 				self.path_gt_msg.header = header
 				self.path_gt_msg.poses.append(pose_msg)
 				self.pub_path_gt.publish(self.path_gt_msg)

@@ -105,6 +105,8 @@ def parse_arguments():
 	"""
 	parser.add_argument("--img_matcher", type=str, default="sift-lg", choices=available_models, help="choose your matcher")
 	parser.add_argument("--n_kpts", type=int, default=2048, help="max num keypoints")
+	parser.add_argument("--save_img_matcher", action="store_true",
+											help="set to True if you want to save image matching by the model")	
 
 	"""
 	Parse the argments
