@@ -11,6 +11,7 @@ import vpr_models
 from visualizations import build_prediction_image, save_file_with_paths
 
 import argparse
+import faiss
 
 def setup_logging(log_dir, stdout_level='info'):
 		os.makedirs(log_dir, exist_ok=True)
@@ -37,10 +38,19 @@ def setup_log_environment(out_dir, args):
 		os.makedirs(os.path.join(log_dir, 'preds'))
 		return log_dir
 
-def initialize_model(method, backbone, descriptors_dimension, device):
+def initialize_vpr_model(method, backbone, descriptors_dimension, device):
 		"""Initialize and return the model."""
 		model = vpr_models.get_model(method, backbone, descriptors_dimension)
 		return model.eval().to(device)
+
+def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):
+	"""Perform kNN search and return predictions."""
+	faiss_index = faiss.IndexFlatL2(descriptors_dimension)
+	faiss_index.add(database_descriptors)
+	del database_descriptors
+	logging.info("Calculating recalls")
+	_, predictions = faiss_index.search(queries_descriptors, max(recall_values))
+	return predictions
 
 def save_descriptors(log_dir, queries_descriptors, database_descriptors):
 		"""Save descriptors to files."""
@@ -52,14 +62,14 @@ def save_visualization(log_dir, query_index, list_of_images_paths, preds_correct
 		"""Save visualization to files."""
 		logging.debug(f"Saving the visualization in {log_dir}")
 		prediction_image = build_prediction_image(list_of_images_paths, preds_correct)
-		pred_image_path = os.path.join(log_dir, 'preds', f"{query_index:03d}.jpg")
+		pred_image_path = os.path.join(log_dir, 'preds', f"vpr_{query_index:06d}.jpg")
 		prediction_image.save(pred_image_path)
 
 		save_file_with_paths(
 			query_path=list_of_images_paths[0],
 			preds_paths=list_of_images_paths[1:],
 			positives_paths=None,
-			output_path=os.path.join(log_dir, 'preds', f"{query_index:03d}.txt"),
+			output_path=os.path.join(log_dir, 'preds', f"vpr_{query_index:06d}.txt"),
 			use_labels=False
 		)
 

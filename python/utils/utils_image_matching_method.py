@@ -59,7 +59,7 @@ def setup_log_environment(out_dir, args):
 	os.system(f"ln -s {log_dir} {os.path.join(out_dir, f'outputs_{args.matcher}', 'latest')}")
 	return log_dir
 
-def initialize_matcher(matcher, device, n_kpts):
+def initialize_img_matcher(matcher, device, n_kpts):
 	"""Initialize the matcher with provided arguments."""
 	return get_matcher(matcher, device=device, max_num_keypoints=n_kpts)
 
@@ -169,13 +169,13 @@ def save_visualization(image0, image1, mkpts0, mkpts1, out_dir, index, n_viz=1):
 	viz2d.plot_images([image0, image1])
 	viz2d.plot_matches(mkpts0[::n_viz], mkpts1[::n_viz], color="lime", lw=0.2)
 	viz2d.add_text(0, f"{len(mkpts1)} matches", fs=20)
-	viz_path = os.path.join(out_dir, "preds", f"{index:06d}.jpg")
+	viz_path = os.path.join(out_dir, "preds", f"match_{index:06d}.jpg")
 	viz2d.save_plot(viz_path)
 	return viz_path
 
 def save_output(result, img0_path, img1_path, matcher_name, n_kpts, im_size, out_dir, index):
 	"""Save the output data to a file."""
-	dict_path = os.path.join(out_dir, "preds", f"{index:06d}.torch")
+	dict_path = os.path.join(out_dir, "preds", f"match_{index:06d}.torch")
 	output_dict = {
 		"num_inliers": result["num_inliers"],
 		"H": result["H"],
