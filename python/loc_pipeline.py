@@ -23,7 +23,7 @@ import tf2_ros
 from matching.utils import to_numpy
 from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search
 from utils.utils_vpr_method import save_visualization as save_vpr_visualization
-from utils.utils_image_matching_method import initialize_img_matcher, compute_scale_factor
+from utils.utils_image_matching_method import initialize_img_matcher, compute_scale_factor, plot_images
 from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
 from utils.utils_image_matching_method import save_output as save_img_matcher_output
 from utils.utils_image import load_rgb_image, load_depth_image
@@ -34,6 +34,10 @@ from image_node import ImageNode
 import pycpptools.src.python.utils_algorithm as pytool_alg
 import pycpptools.src.python.utils_math as pytool_math
 import pycpptools.src.python.utils_ros as pytool_ros
+
+# This is to be able to use matplotlib also without a GUI
+if not hasattr(sys, "ps1"):
+	matplotlib.use("Agg")
 
 class LocPipeline:
 	def __init__(self, args, log_dir):
@@ -103,6 +107,8 @@ class LocPipeline:
 				depth_img_meas[mask] = 0.0
 				depth_img_est[mask] = 0.0
 				meas_scale = compute_scale_factor(depth_img_meas, depth_img_est)
+				# plot_images(depth_img_meas, depth_img_est * meas_scale, title1='Depth (GT)', title2='Depth (Est)', 
+				# 						save_path=os.path.join(self.log_dir, 'preds', f'depth_map_{obs_node.id:06d}.jpg'))
 				im_poses = to_numpy(self.img_matcher.scene.get_im_poses())
 				est_T_ref_obs = np.linalg.inv(im_poses[0]) if abs(np.sum(np.diag(im_poses[1])) - 4.0) < 1e-5 else im_poses[1]
 				est_T_ref_obs[:3, 3] *= meas_scale
@@ -162,15 +168,16 @@ class LocPipeline:
 		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, 'obs', 'camera_pose_gt.txt'))
 
 		rate = rospy.Rate(20)
-		for obs_id in range(3300, len(obs_poses_gt)):
+		for obs_id in range(0, len(obs_poses_gt), 5):
 			if rospy.is_shutdown(): 
 				break
 
 			# Load observation data
+			print(f"obs_id: {obs_id}")
 			rgb_img_path = os.path.join(self.args.dataset_path, 'obs/rgb', f'{obs_id:06d}.png')
 			rgb_img = load_rgb_image(rgb_img_path, self.args.image_size, normalized=False)
 			depth_img_path = os.path.join(self.args.dataset_path, 'obs/depth', f'{obs_id:06d}.png')
-			depth_img = load_depth_image(depth_img_path, self.args.image_size, self.args.depth_scale)
+			depth_img = load_depth_image(depth_img_path, self.args.image_size, depth_scale=self.args.depth_scale)
 			with torch.no_grad():
 				desc = self.vpr_model(rgb_img.unsqueeze(0).to(self.args.device)).cpu().numpy()
 			obs_node = ImageNode(obs_id, rgb_img, depth_img, desc, 0,
@@ -242,6 +249,9 @@ class LocPipeline:
 					trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
 					self.curr_obs_node.set_pose(trans, quat)
 					print(f'Estimated Poses with Meas scale {meas_scale:.3f}: {trans.T}\n')
+
+					if not self.args.no_viz:
+						self.img_matcher.scene.show(cam_size=0.05)				
 
 			self.publish_message()
 			self.last_obs_node = self.curr_obs_node
