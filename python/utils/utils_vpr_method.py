@@ -49,8 +49,8 @@ def perform_knn_search(database_descriptors, queries_descriptors, descriptors_di
 	faiss_index.add(database_descriptors)
 	del database_descriptors
 	logging.info("Calculating recalls")
-	_, predictions = faiss_index.search(queries_descriptors, max(recall_values))
-	return predictions
+	distances, predictions = faiss_index.search(queries_descriptors, max(recall_values))
+	return distances, predictions
 
 def save_descriptors(log_dir, queries_descriptors, database_descriptors):
 		"""Save descriptors to files."""

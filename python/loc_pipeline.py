@@ -82,27 +82,22 @@ class LocPipeline:
 		self.path_msg = Path()
 		self.path_gt_msg = Path()
 
-	def load_data(self):
-		# Read map and observations
+	def read_map_from_file(self):
 		data_path = os.path.join(self.args.dataset_path, 'map')
 		self.image_graph = ImageGraphLoader.load_data(
-			data_path, self.args.image_size, self.args.depth_scale,
-			normalized=False, num_sample=self.args.sample_map
+			data_path, 
+			self.args.image_size, 
+			self.args.depth_scale,
+			normalized=False, 
+			num_sample=self.args.sample_map
 		)
-		logging.info(f"Loaded {self.image_graph.get_num_node()} map nodes from {data_path}.")
-
-		data_path = os.path.join(self.args.dataset_path, 'obs')
-		self.image_obs = ImageGraphLoader.load_data(
-			data_path, self.args.image_size, self.args.depth_scale, 
-			normalized=False, num_sample=self.args.sample_obs, num_load=20
-		)
-		logging.info(f"Loaded {self.image_graph.get_num_node()} map nodes from {data_path}.")		
+		logging.info(f"Loaded {self.image_graph} from {data_path}")
 
 	def extract_vpr_descriptor(self, node):
 		with torch.inference_mode():
 			logging.info("Extracting descriptors for evaluation/testing")
 			descriptor = self.vpr_model(node.rgb_image.unsqueeze(0).to(self.args.device))
-			node.set_descriptor(descriptor)
+			node.set_descriptor(descriptor.cpu().numpy())
 
 	def perform_image_matching(self, map_node, obs_node):
 		"""
@@ -162,9 +157,9 @@ class LocPipeline:
 		header.frame_id = "map"
 
 		# Publish image graph
-		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, 'image_graph')
+		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, 'map_graph')
 		self.br.sendTransform(tf_msg)
-		header.frame_id = 'image_graph'
+		header.frame_id = 'map_graph'
 		pytool_ros.ros_vis.publish_graph(self.image_graph, header, self.pub_graph, self.pub_graph_poses)
 		if self.shortest_path:
 			pytool_ros.ros_vis.publish_shortest_path(self.shortest_path, header, self.pub_shortest_path)
@@ -207,45 +202,33 @@ class LocPipeline:
 				self.pub_img_goal_obs.publish(img_msg)
 
 	def run(self):
-		##### Create edges between nodes in the graph
-		for map_id, _ in self.image_graph.nodes.items():
-			if map_id == 0: continue
-			map_node_prev = self.image_graph.get_node(map_id - self.args.sample_map)
-			map_node_next = self.image_graph.get_node(map_id)
-			if (map_node_prev is not None) and (map_node_next is not None):
-				weight, _ = pytool_math.tools_eigen.compute_relative_dis(
-					map_node_prev.trans_gt, map_node_prev.quat_gt, 
-					map_node_next.trans_gt, map_node_next.quat_gt,
-					mode='xyzw')
-				self.image_graph.add_edge(map_node_prev, map_node_next, weight)
+		rospy.init_node('loc_pipeline_node', anonymous=True)
 
 		##### Extract VPR descriptors of map nodes
 		db_descriptors_id = self.image_graph.get_all_id()
 		db_descriptors = np.empty((self.image_graph.get_num_node(), self.args.vpr_descriptors_dimension), dtype="float32")
 		for indices, (_, map_node) in enumerate(self.image_graph.nodes.items()):
 			self.extract_vpr_descriptor(map_node)
-			db_descriptors[indices] = map_node.get_descriptor().cpu().numpy()
-		print(f"IDs: {db_descriptors_id} extracted {len(db_descriptors)} VPR descriptors.")
+			db_descriptors[indices] = map_node.get_descriptor()
+		print(f"IDs: {db_descriptors_id} extracted {db_descriptors.shape[0]} VPR descriptors.")
 		if self.args.save_descriptors:
 			save_descriptors(self.log_dir, db_descriptors, desc_name="database_descriptors")
 
 		##### Main loop: receive camera images, perform global and local localization, and publish messages
-		if self.loc_goal_node is None:
-			self.loc_goal_node = self.image_graph.get_node(15)
-
 		rate = rospy.Rate(10) # 10 Hz
 		for obs_id, obs_node in self.image_obs.nodes.items():
-			if rospy.is_shutdown(): break
-			self.curr_obs_node = obs_node
+			if rospy.is_shutdown():
+				break
 
+			self.curr_obs_node = obs_node
 			##### Perform global localization
 			if not self.has_global_position:
 				query_descriptor = np.empty((1, self.args.vpr_descriptors_dimension), dtype="float32")
 				self.extract_vpr_descriptor(obs_node)
-				query_descriptor[0] = obs_node.get_descriptor().cpu().numpy()
-				vpr_result = perform_knn_search(db_descriptors, query_descriptor, 
-																				self.args.vpr_descriptors_dimension, 
-																				self.args.recall_values)[0]
+				query_descriptor[0] = obs_node.get_descriptor()
+				_, vpr_result = perform_knn_search(db_descriptors, query_descriptor, 
+																				   self.args.vpr_descriptors_dimension, 
+																				   self.args.recall_values)[0]
 				##### Save VPR results
 				if self.args.num_preds_to_save != 0:
 					list_of_images_paths = [obs_node.rgb_img_path]
@@ -327,9 +310,7 @@ if __name__ == '__main__':
 	out_dir.mkdir(exist_ok=True, parents=True)
 	log_dir = setup_log_environment(out_dir, args)
 
-	rospy.init_node('loc_pipeline_node', anonymous=True)
-
-	# Create an instance of LocPipeline and run the main loop
+	# Create an instance of LocPipeline
 	loc_pipeline = LocPipeline(args, log_dir)
-	loc_pipeline.load_data()
+	loc_pipeline.read_map_from_file()
 	loc_pipeline.run()
