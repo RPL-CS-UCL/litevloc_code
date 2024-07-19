@@ -17,7 +17,7 @@ class ImageNode(BaseNode):
 		self.rgb_img_path = rgb_img_path
 		self.depth_img_path = depth_img_path
 
-		# VPR descriptor
+		# VPR descriptor: numpy.array
 		self.global_descriptor = global_descriptor
 
 		# Time of the image

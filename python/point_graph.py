@@ -21,11 +21,11 @@ class PointGraphLoader:
 			descs = None
 
 		for i in range(0, poses.shape[0]):
-			# Each row: time, tx, ty, tz, qx, qy, qz, qw
-			time, trans, quat = poses[i, 0], poses[i, 1:4], poses[i, 4:] 
 			rgb_img_path = os.path.join(graph_path, 'rgb', f'{i:06}.png')
 			depth_img_path = os.path.join(graph_path, 'depth', f'{i:06}.png')
 
+			# Each row: time, tx, ty, tz, qx, qy, qz, qw
+			time, trans, quat = poses[i, 0], poses[i, 1:4], poses[i, 4:] 
 			node = PointNode(i, f'point node {i}', time, trans, quat, rgb_img_path, depth_img_path)
 			node.set_pose_gt(trans, quat)
 			if descs is not None:

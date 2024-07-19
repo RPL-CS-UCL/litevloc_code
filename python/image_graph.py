@@ -12,33 +12,33 @@ class ImageGraphLoader:
 		pass
 
 	@staticmethod
-	def load_data(image_graph_path, image_size, depth_scale, normalized=False, num_sample=1, num_load=10000):
+	def load_data(graph_path, image_size, depth_scale, normalized=False):
 		image_graph = ImageGraph()
-		poses_w_cam = np.loadtxt(os.path.join(image_graph_path, 'camera_pose_gt.txt'))
-		for i in range(0, 
-								 	 min(poses_w_cam.shape[0], num_load * num_sample), 
-									 num_sample):
-			rgb_img_path = os.path.join(image_graph_path, 'rgb', f'{i:06}.png')
-			rgb_image = load_rgb_image(rgb_img_path, image_size, normalized=normalized)
+		poses = np.loadtxt(os.path.join(graph_path, 'camera_pose_gt.txt'))
+		descs_path = os.path.join(graph_path, 'database_descriptors.npy')
+		if os.path.exists(descs_path):
+			descs = np.load(descs_path)
+		else:	
+			descs = None
 
-			depth_img_path = os.path.join(image_graph_path, 'depth', f'{i:06}.png')
+		for i in range(0, poses.shape[0]):
+			rgb_img_path = os.path.join(graph_path, 'rgb', f'{i:06}.png')
+			rgb_image = load_rgb_image(rgb_img_path, image_size, normalized=normalized)
+			depth_img_path = os.path.join(graph_path, 'depth', f'{i:06}.png')
 			depth_image = load_depth_image(depth_img_path, image_size, depth_scale=depth_scale)
 
 			# Each row: time, tx, ty, tz, qx, qy, qz, qw			
-			time, t_w_cam, quat_w_cam = poses_w_cam[i, 0], poses_w_cam[i, 1:4], poses_w_cam[i, 4:] 
-
+			time, trans, quat = poses[i, 0], poses[i, 1:4], poses[i, 4:] 
 			node = ImageNode(i, 
 											 rgb_image, depth_image, f'image node {i}', 
-											 time, t_w_cam, quat_w_cam, 
+											 time, trans, quat, 
 											 rgb_img_path, depth_img_path)
-			# Map: estimated poses are same to gt poses
-			node.set_pose_gt(t_w_cam, quat_w_cam)
+			node.set_pose_gt(trans, quat)
+			if descs is not None:
+				node.set_descriptor(descs[i, :])
 
 			image_graph.add_node(node)
-			if i / num_sample > num_load:
-				break
-
-		image_graph.read_edge_list(os.path.join(image_graph_path, 'edge_list.txt'))
+		image_graph.read_edge_list(os.path.join(graph_path, 'edge_list.txt'))
 		return image_graph
 
 # Image Graph Class

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 """
-Usage: python global_planner.py --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos --image_size 288 512 --device=cuda \
+Usage: python global_planner.py --start_node_id 0 \
+--dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos --image_size 288 512 --device=cuda \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 
 """
 
@@ -24,7 +25,7 @@ import pycpptools.src.python.utils_ros as pytool_ros
 
 from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search, save_visualization as save_vpr_visualization
 from utils.utils_image import load_rgb_image
-from point_graph import PointGraphLoader  # Update this import to your PointGraphLoader
+from point_graph import PointGraphLoader as GraphLoader
 
 class GlobalPlanner:
 	def __init__(self, args, log_dir):
@@ -50,8 +51,19 @@ class GlobalPlanner:
 
 	def read_map_from_file(self):
 		data_path = os.path.join(self.args.dataset_path, 'map')
-		self.point_graph = PointGraphLoader.load_data(data_path)
+		self.point_graph = GraphLoader.load_data(data_path)
 		logging.info(f"Loaded {self.point_graph} from {data_path}")
+
+	def perform_vpr(self, db_descs, query_desc):
+		query_desc_arr = np.empty((1, self.args.vpr_descriptors_dimension), dtype="float32")
+		query_desc_arr[0] = query_desc
+		dis, pred = perform_knn_search(
+			db_descs,
+			query_desc_arr,
+			self.args.vpr_descriptors_dimension,
+			self.args.recall_values
+		)
+		return dis, pred
 
 	def publish_message(self):
 		header = Header()
@@ -76,46 +88,38 @@ class GlobalPlanner:
 		"""Extract VPR descriptors for the goal nodes"""
 		vpr_start_time = time.time()
 		goal_img_path = os.path.join(self.args.dataset_path, 'map', 'goal.png')
-		goal_img_tensor = load_rgb_image(goal_img_path, self.args.image_size, normalized=False)
-		query_descriptor = np.empty((1, self.args.vpr_descriptors_dimension), dtype="float32")
+		goal_img = load_rgb_image(goal_img_path, self.args.image_size, normalized=False)
 		with torch.no_grad():
-			logging.info("Extracting descriptors for evaluation/testing")
-			descriptor = self.vpr_model(goal_img_tensor.unsqueeze(0).to(self.args.device))
-			query_descriptor[0] = descriptor.cpu().numpy()
-		vpr_distances, vpr_result = perform_knn_search(db_descriptors, query_descriptor, 
-																		 							 self.args.vpr_descriptors_dimension, 
-																		 							 self.args.recall_values)
-		vpr_result = vpr_result[0, :]
-		vpr_distances = vpr_distances[0, :]
-		if len(vpr_result) == 0:
-			print('No goal node found.')
+			desc = self.vpr_model(goal_img.unsqueeze(0).to(self.args.device)).cpu().numpy()
+		vpr_dis, vpr_pred = self.perform_vpr(db_descriptors, desc)
+		vpr_dis, vpr_pred = vpr_dis[0, :], vpr_pred[0, :]		
+		if len(vpr_pred) == 0:
+			print('No goal node found, cannot determine the global position of the goal.')
 			return
 		
 		out_str  = 'Top-K VPR results:\n'
-		out_str += 'Matched ID: ' + ', '.join([f"{id}" for id in vpr_result])
-		out_str += '\n'
-		out_str += 'Distance: ' + ', '.join([f"{d:.3f}" for d in vpr_distances])
-		out_str += f'\nTime taken for VPR: {time.time() - vpr_start_time:.3f}s'
+		out_str += 'Matched ID: ' + ', '.join([f"{id}" for id in vpr_pred]) + '\n'
+		out_str += 'Distance: ' + ', '.join([f"{d:.3f}" for d in vpr_dis]) + '\n'
+		out_str += f'Time taken for VPR: {time.time() - vpr_start_time:.3f}s'
 		print(out_str)
 
 		# Save VPR visualization for the top-k predictions
 		if self.args.num_preds_to_save != 0:
 			list_of_images_paths = [goal_img_path]
-			for i in range(len(vpr_result[:self.args.num_preds_to_save])):
-				map_node = self.point_graph.get_node(db_descriptors_id[vpr_result[i]])
+			for i in range(len(vpr_pred[:self.args.num_preds_to_save])):
+				map_node = self.point_graph.get_node(db_descriptors_id[vpr_pred[i]])
 				list_of_images_paths.append(map_node.rgb_img_path)
 			preds_correct = [None] * len(list_of_images_paths)
 			save_vpr_visualization(self.log_dir, 0, list_of_images_paths, preds_correct)
 
 		"""Shortest path planning"""
-		# Provide a given start node
-		self.plan_start_node = self.point_graph.get_node(0)
+		self.plan_start_node = self.point_graph.get_node(self.args.start_node_id)
 		if self.plan_start_node is None:
 			print('No start node found.')
 			return
 
 		spath_start_time = time.time()
-		goal_node = self.point_graph.get_node(db_descriptors_id[vpr_result[0]])
+		goal_node = self.point_graph.get_node(db_descriptors_id[vpr_pred[0]])
 		if goal_node is not None:
 			tra_distance, tra_path = pytool_alg.sp.dijk_shortest_path(self.point_graph, self.plan_start_node, goal_node)
 			if tra_distance == float('inf'):
@@ -146,6 +150,8 @@ def parse_arguments():
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
 											help="Resizing shape for images (HxW). If a single int is passed, set the"
 											"smallest edge of all images to this value, while keeping aspect ratio")
+	parser.add_argument("--start_node_id", type=int, default=0, help="ID of the start node")
+
 	"""
 	Parameters for VPR methods
 	"""
