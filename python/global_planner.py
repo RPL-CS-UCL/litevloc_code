@@ -87,7 +87,7 @@ class GlobalPlanner:
 
 		"""Extract VPR descriptors for the goal nodes"""
 		vpr_start_time = time.time()
-		goal_img_path = os.path.join(self.args.dataset_path, 'map', 'goal.png')
+		goal_img_path = os.path.join(self.args.dataset_path, 'map', 'goal3.png')
 		goal_img = load_rgb_image(goal_img_path, self.args.image_size, normalized=False)
 		with torch.no_grad():
 			desc = self.vpr_model(goal_img.unsqueeze(0).to(self.args.device)).cpu().numpy()

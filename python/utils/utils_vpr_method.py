@@ -29,13 +29,16 @@ def setup_log_environment(out_dir, args):
 	"""Setup logging and directories."""
 	os.makedirs(out_dir, exist_ok=True)
 	start_time = datetime.now()
-	log_dir = os.path.join(out_dir, f'outputs_{args.method}', f'{args.backbone}_' + start_time.strftime('%Y-%m-%d_%H-%M-%S'))
+	tmp_dir = os.path.join(out_dir, f'outputs_{args.method}')
+	log_dir = os.path.join(tmp_dir, f'{args.backbone}_' + start_time.strftime('%Y-%m-%d_%H-%M-%S'))
 	setup_logging(log_dir, stdout_level="info")
 	logging.info(" ".join(sys.argv))
 	logging.info(f"Arguments: {args}")
 	logging.info(f"Testing with {args.method} with a {args.backbone} backbone and descriptors dimension {args.descriptors_dimension}")
 	logging.info(f"The outputs are being saved in {log_dir}")
 	os.makedirs(os.path.join(log_dir, 'preds'))
+	os.system(f"rm {os.path.join(tmp_dir, 'latest')}")
+	os.system(f"ln -s {log_dir} {os.path.join(tmp_dir, 'latest')}")
 	return log_dir
 
 def initialize_vpr_model(method, backbone, descriptors_dimension, device):

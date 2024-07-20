@@ -167,8 +167,8 @@ class LocPipeline:
 		"""Main loop for processing observations"""
 		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, 'obs', 'camera_pose_gt.txt'))
 
-		rate = rospy.Rate(20)
-		for obs_id in range(0, len(obs_poses_gt), 5):
+		rate = rospy.Rate(100)
+		for obs_id in range(0, len(obs_poses_gt), 15):
 			if rospy.is_shutdown(): 
 				break
 
