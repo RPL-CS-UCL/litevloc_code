@@ -178,8 +178,10 @@ class LocPipeline:
 			rgb_img = load_rgb_image(rgb_img_path, self.args.image_size, normalized=False)
 			depth_img_path = os.path.join(self.args.dataset_path, 'obs/depth', f'{obs_id:06d}.png')
 			depth_img = load_depth_image(depth_img_path, self.args.image_size, depth_scale=self.args.depth_scale)
+			vpr_start_time = time.time()
 			with torch.no_grad():
 				desc = self.vpr_model(rgb_img.unsqueeze(0).to(self.args.device)).cpu().numpy()
+			print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
 			obs_node = ImageNode(obs_id, rgb_img, depth_img, desc, 0,
 													 np.zeros(3), np.array([0, 0, 0, 1]),
 													 rgb_img_path, depth_img_path)
@@ -188,10 +190,10 @@ class LocPipeline:
 
 			"""Perform global localization via. visual place recognition"""
 			if not self.has_global_pos:
-				vpr_start_time = time.time()
+				gl_start_time = time.time()
 				vpr_dis, vpr_pred = self.perform_vpr(db_descriptors, self.curr_obs_node.get_descriptor())
 				vpr_dis, vpr_pred = vpr_dis[0, :], vpr_pred[0, :]
-				print(f"Global localization time via. VPR: {time.time() - vpr_start_time:.3f}s")
+				print(f"Global localization time via. VPR: {time.time() - gl_start_time:.3f}s")
 				if len(vpr_pred) == 0:
 					print('No start node found, cannot determine the global position.')
 					continue

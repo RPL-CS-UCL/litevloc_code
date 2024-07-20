@@ -19,7 +19,10 @@ conda env create -f environment.yaml
 conda activate topo_loc && pip install -r requirements.txt
 ```
 
-4. (Not used) Check CUDA version and install correct torch [link](https://pytorch.org/get-started/previous-versions/) nad [link](https://pytorch.org/get-started/locally/)
+4. Install Pytorch and Torchvision on the Jetson platform
+Check ```RPL-RoboHike/docs/tutorial_setup_jetson_orin.md``` for details
+
+<!-- 4. (Not used) Check CUDA version and install correct torch [link](https://pytorch.org/get-started/previous-versions/) nad [link](https://pytorch.org/get-started/locally/)
 ```
 nvcc -V
 # CUDA 10.2
@@ -29,6 +32,21 @@ pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 torchaudio==0.11.0 --e
 # CUDA 11.8
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 # conda install pytorch==2.3.0 torchvision==0.18.0 torchaudio==2.3.0 pytorch-cuda=11.8 -c pytorch -c nvidia
-```
+``` -->
 
 <!-- 1. ```export PYTHONPATH=$PYTHONPATH:~/robohike_ws/src``` -->
+
+### Issues
+1. ```cannot import name 'cache' from 'functools'```
+Replace the original code with [Link](https://stackoverflow.com/questions/66846743/importerror-cannot-import-name-cache-from-functools)
+```shell script
+from functools import lru_cache
+@lru_cache(maxsize=None)
+  def xxx
+```
+2. ```/lib/aarch64-linux-gnu/libp11-kit.so.0: undefined symbol: ffi_type_pointer, version LIBFFI_BASE_7.0``` using cv_bridge
+Change the ```.so``` [Link](https://blog.csdn.net/qq_38606680/article/details/129118491)
+```
+updatedb && locate libffi.so.7
+
+```

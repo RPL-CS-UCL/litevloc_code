@@ -5,6 +5,11 @@ Usage: python extract_vpr_descriptors.py --dataset_path /Titan/dataset/data_topo
 --image_size 288 512 \
 --device cuda \
 --save_descriptors
+
+Usage for Jetson: python global_planner.py --start_node_id 0 --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos \
+--image_size 200 200 --device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 \
+--vpr_descriptors_dimension=256 --save_descriptors --num_preds_to_save 3 \
+--save_descriptors
 '''
 import os
 import sys
