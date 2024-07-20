@@ -44,6 +44,7 @@ def main(args):
 																					 normalized=True)
 
 	# Extract VPR descriptors for all nodes in the map
+	start_time = time.time()
 	db_descriptors_id = image_graph.get_all_id()
 	db_descriptors = np.empty((image_graph.get_num_node(), args.descriptors_dimension), dtype="float32")
 	for indices, (_, map_node) in enumerate(image_graph.nodes.items()):
@@ -51,6 +52,7 @@ def main(args):
 			desc = model(map_node.rgb_image.unsqueeze(0).to(args.device)).cpu().numpy()
 			db_descriptors[indices, :] = desc[0]
 	print(f"IDs: {db_descriptors_id} extracted {db_descriptors.shape} VPR descriptors.")
+	print(f'Extract each VPR descriptor costs: {(time.time() - start_time) / len(db_descriptors):.3f}s')
 
 	"""Save image descriptors"""
 	if args.save_descriptors:
