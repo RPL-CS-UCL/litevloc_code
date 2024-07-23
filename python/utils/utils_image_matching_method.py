@@ -23,8 +23,6 @@ def parse_arguments():
 	parser.add_argument("--n_kpts", type=int, default=2048, help="max num keypoints")
 	parser.add_argument("--device", type=str, default="cuda", choices=["cpu", "cuda"])
 	parser.add_argument("--no_viz", action="store_true", help="pass --no_viz to avoid saving visualizations")
-	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
-	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='habitat: 0.039, anymal: 0.001')
 	parser.add_argument('--min_depth_pro', type=float, default=0.1, help='pixels are processed only if depth > min_depth_pro')
 	parser.add_argument('--max_depth_pro', type=float, default=5.5, help='pixels are processed only if depth < min_depth_pro')

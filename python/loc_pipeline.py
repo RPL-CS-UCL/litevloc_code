@@ -61,8 +61,11 @@ class LocPipeline:
 		self.path_msg = Path()
 		self.path_gt_msg = Path()
 
+		self.map_camera_type = 'map_zed'
+		self.obs_camera_type = 'obs_zed'
+
 	def read_map_from_file(self):
-		data_path = os.path.join(self.args.dataset_path, 'map')
+		data_path = os.path.join(self.args.dataset_path, self.map_camera_type)
 		self.image_graph = GraphLoader.load_data(
 			data_path,
 			self.args.image_size,
@@ -174,9 +177,9 @@ class LocPipeline:
 
 			# Load observation data
 			print(f"obs_id: {obs_id}")
-			rgb_img_path = os.path.join(self.args.dataset_path, 'obs/rgb', f'{obs_id:06d}.png')
+			rgb_img_path = os.path.join(self.args.dataset_path, f'{self.obs_camera_type}/rgb', f'{obs_id:06d}.png')
 			rgb_img = load_rgb_image(rgb_img_path, self.args.image_size, normalized=False)
-			depth_img_path = os.path.join(self.args.dataset_path, 'obs/depth', f'{obs_id:06d}.png')
+			depth_img_path = os.path.join(self.args.dataset_path, f'{self.obs_camera_type}/depth', f'{obs_id:06d}.png')
 			depth_img = load_depth_image(depth_img_path, self.args.image_size, depth_scale=self.args.depth_scale)
 			vpr_start_time = time.time()
 			with torch.no_grad():
