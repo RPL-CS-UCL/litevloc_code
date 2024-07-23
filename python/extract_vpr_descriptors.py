@@ -43,7 +43,7 @@ def main(args):
 	model = initialize_vpr_model(args.method, args.backbone, args.descriptors_dimension, args.device)
 
 	"""Load images"""
-	map_camera_type = 'map_kinect'
+	map_camera_type = 'map_kinect_5_45'
 	image_graph = ImageGraphLoader.load_data(os.path.join(args.dataset_path, map_camera_type), 
 																					 image_size=args.image_size, 
 																					 depth_scale=0.001,

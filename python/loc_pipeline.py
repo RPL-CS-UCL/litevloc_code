@@ -8,6 +8,11 @@ Usage: python loc_pipeline.py --dataset_path /Titan/dataset/data_topo_loc/anymal
 --obs_camera_type obs_zed --map_camera_type map_zed
 """
 
+"""
+Usage: rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc.bag \
+/vloc/odom /vloc/path /vloc/path_gt /vloc/image_map_obs
+"""
+
 import os
 import pathlib
 import numpy as np
@@ -53,10 +58,10 @@ class LocPipeline:
 		self.pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
 		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
 		
-		self.pub_odom = rospy.Publisher('/odom', Odometry, queue_size=10)
-		self.pub_path = rospy.Publisher('/path', Path, queue_size=10)
-		self.pub_path_gt = rospy.Publisher('/path_gt', Path, queue_size=10)
-		self.pub_map_obs = rospy.Publisher('/image_map_obs', Image, queue_size=10)
+		self.pub_odom = rospy.Publisher('/vloc/odom', Odometry, queue_size=10)
+		self.pub_path = rospy.Publisher('/vloc/path', Path, queue_size=10)
+		self.pub_path_gt = rospy.Publisher('/vloc/path_gt', Path, queue_size=10)
+		self.pub_map_obs = rospy.Publisher('/vloc/image_map_obs', Image, queue_size=10)
 
 		self.br = tf2_ros.TransformBroadcaster()
 		self.path_msg = Path()
