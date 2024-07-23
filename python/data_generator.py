@@ -103,15 +103,16 @@ class DataGenerator:
 			self.T_base_cam = np.eye(4, 4)
 		elif self.args.dataset_type == 'anymal_vlp':
 			self.T_base_cam = convert_vec_to_matrix(
-					np.array([-0.739, -0.056, -0.205]), 
-					np.array([0.466, -0.469, -0.533, 0.528]),
-					'xyzw')
+				np.array([-0.739, -0.056, -0.205]), 
+				np.array([0.466, -0.469, -0.533, 0.528]),
+				'xyzw'
+			)
 		elif self.args.dataset_type == 'anymal_livox':
 			self.T_base_cam = np.linalg.inv(convert_vec_to_matrix(
-					np.array([-0.0509, -0.1229, 0.0047]), 
-					np.array([0.4293, -0.4331, 0.5623, 0.5585]),
-					'xyzw')
-				)
+				np.array([-0.0509, -0.1229, 0.0047]), 
+				np.array([0.4293, -0.4331, 0.5623, 0.5585]),
+				'xyzw')
+			)
 
 		# Setup directories for saving data
 		self.setup_directories()
@@ -135,6 +136,8 @@ class DataGenerator:
 		cv_image = self.RGB_CV_FUNCTION(rgb_image, "bgr8")
 		cv2.imwrite(f'{self.args.data_path}/obs_{self.args.camera_type}/rgb/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
 		cv_image = bridge.imgmsg_to_cv2(depth_image, "passthrough")
+		if depth_image.encoding == "32FC1":
+			cv_image = (cv_image * 1000).astype(np.uint16)
 		cv2.imwrite(f'{self.args.data_path}/obs_{self.args.camera_type}/depth/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
 		cv_image = self.RGB_CV_FUNCTION(semantic_image, "bgr8")
 		cv2.imwrite(f'{self.args.data_path}/obs_{self.args.camera_type}/semantic/{self.obs_camera_poses.shape[0]:06d}.png', cv_image)
@@ -172,6 +175,8 @@ class DataGenerator:
 			cv_image = self.RGB_CV_FUNCTION(rgb_image, "bgr8")
 			cv2.imwrite(f'{self.args.data_path}/map_{self.args.camera_type}/rgb/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
 			cv_image = bridge.imgmsg_to_cv2(depth_image, "passthrough")
+			if depth_image.encoding == "32FC1":
+				cv_image = (cv_image * 1000).astype(np.uint16)
 			cv2.imwrite(f'{self.args.data_path}/map_{self.args.camera_type}/depth/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
 			cv_image = self.RGB_CV_FUNCTION(semantic_image, "bgr8")
 			cv2.imwrite(f'{self.args.data_path}/map_{self.args.camera_type}/semantic/{self.map_camera_poses.shape[0]:06d}.png', cv_image)
