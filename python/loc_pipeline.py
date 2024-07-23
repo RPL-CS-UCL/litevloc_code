@@ -2,9 +2,10 @@
 
 """
 Usage: python loc_pipeline.py --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos --image_size 288 512 --device=cuda \
---sample_map 1 --sample_obs 5 --depth_scale 0.001 --min_depth_pro 0.1 --max_depth_pro 5.5 \
+--depth_scale 0.001 --min_depth_pro 0.1 --max_depth_pro 20.0 \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
---img_matcher duster --save_img_matcher --no_viz 
+--img_matcher duster --save_img_matcher --no_viz \
+--obs_camera_type obs_zed --map_camera_type map_zed
 """
 
 import os
@@ -109,7 +110,7 @@ class LocPipeline:
 				mask = (depth_img_meas < self.args.min_depth_pro) | (depth_img_meas > self.args.max_depth_pro)
 				depth_img_meas[mask] = 0.0
 				depth_img_est[mask] = 0.0
-				meas_scale = compute_scale_factor(depth_img_meas, depth_img_est)
+				meas_scale = compute_scale_factor(depth_img_meas, depth_img_est, delta=0.5)
 				# plot_images(depth_img_meas, depth_img_est * meas_scale, title1='Depth (GT)', title2='Depth (Est)', 
 				# 						save_path=os.path.join(self.log_dir, 'preds', f'depth_map_{obs_node.id:06d}.jpg'))
 				im_poses = to_numpy(self.img_matcher.scene.get_im_poses())
@@ -168,10 +169,10 @@ class LocPipeline:
 		print(f"IDs: {db_descriptors_id} extracted {db_descriptors.shape} VPR descriptors.")
 
 		"""Main loop for processing observations"""
-		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, 'obs', 'camera_pose_gt.txt'))
+		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, self.args.obs_camera_type, 'camera_pose_gt.txt'))
 
 		rate = rospy.Rate(100)
-		for obs_id in range(0, len(obs_poses_gt), 15):
+		for obs_id in range(0, len(obs_poses_gt), 10):
 			if rospy.is_shutdown(): 
 				break
 

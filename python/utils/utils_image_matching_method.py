@@ -79,7 +79,7 @@ def rgb(ftensor, true_shape=None):
 			img = (ftensor * 0.5) + 0.5
 	return img.clip(min=0, max=1)
 
-def compute_scale_factor(A, B):
+def compute_scale_factor(A, B, delta=0.1):
 	"""
 	Compute the scale factor s using the provided equation with a robust M-estimator, remove outliers
 	
@@ -90,7 +90,7 @@ def compute_scale_factor(A, B):
 	Returns:
 			float: Computed scale factor.
 	"""
-	def huber_loss(residual, delta=0.1):
+	def huber_loss(residual, delta):
 		"""
 		Huber loss function.
 		
@@ -114,7 +114,7 @@ def compute_scale_factor(A, B):
 				float: Sum of Huber loss for residuals.
 		"""
 		residual = A - s * B
-		return np.sum(huber_loss(residual))
+		return np.sum(huber_loss(residual, delta))
 
 	result = minimize(objective_function, x0=1.0)
 	return result.x[0]

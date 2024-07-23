@@ -105,14 +105,18 @@ class DataGenerator:
 			self.T_base_cam = convert_vec_to_matrix(
 				np.array([-0.739, -0.056, -0.205]), 
 				np.array([0.466, -0.469, -0.533, 0.528]),
-				'xyzw'
-			)
-		elif self.args.dataset_type == 'anymal_livox':
-			self.T_base_cam = np.linalg.inv(convert_vec_to_matrix(
-				np.array([-0.0509, -0.1229, 0.0047]), 
-				np.array([0.4293, -0.4331, 0.5623, 0.5585]),
 				'xyzw')
-			)
+		elif self.args.dataset_type == 'anymal_livox':
+			if self.args.camera_type == 'kinect':
+				self.T_base_cam = convert_vec_to_matrix(
+					np.array([0.007, -0.053, -0.075]), 
+					np.array([-0.464, 0.455, -0.547, 0.529]),
+					'xyzw')
+			elif self.args.camera_type == 'zed':
+				self.T_base_cam = convert_vec_to_matrix(
+					np.array([0.004, 0.018, -0.021]), 
+					np.array([-0.483, 0.462, -0.530, 0.522]),
+					'xyzw')
 
 		# Setup directories for saving data
 		self.setup_directories()

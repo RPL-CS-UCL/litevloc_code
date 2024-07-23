@@ -58,8 +58,8 @@ def parse_arguments():
 											help="Resizing shape for images (HxW). If a single int is passed, set the"
 											"smallest edge of all images to this value, while keeping aspect ratio")
 	parser.add_argument("--no_viz", action="store_true", help="pass --no_viz to avoid saving visualizations")
-	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
-	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
+	parser.add_argument("--obs_camera_type", type=str, default='obs_zed', help="obs_habitat, obs_zed, obs_kinect")
+	parser.add_argument("--map_camera_type", type=str, default='map_zed', help="map_habitat, map_zed, map_kinect")
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='habitat: 0.039, anymal: 0.001')
 	parser.add_argument('--min_depth_pro', type=float, default=0.1, help='pixels are processed only if depth > min_depth_pro')
 	parser.add_argument('--max_depth_pro', type=float, default=5.5, help='pixels are processed only if depth < min_depth_pro')  
