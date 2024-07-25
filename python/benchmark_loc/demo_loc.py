@@ -10,7 +10,6 @@ import os
 import sys
 from tqdm import tqdm
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 import torch
 import argparse
 import matplotlib
@@ -20,16 +19,17 @@ import numpy as np
 from matching import available_models, get_matcher
 from matching.utils import to_numpy, get_image_pairs_paths
 
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 from utils.utils_image_matching_method import *
 from utils.utils_image import load_rgb_image, load_depth_image
-from pose_solver import *
+from pose_solver import available_solvers, get_solver
 
-import yaml
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map-free-reloc"))
+from config.default import cfg
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):
     matplotlib.use("Agg")
-
 
 def setup_args():
     """Setup command-line arguments."""
@@ -37,6 +37,7 @@ def setup_args():
         description="Image Matching Models",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument("--config", help="path to config file")
     parser.add_argument(
         "--matcher",
         type=str,
@@ -93,14 +94,8 @@ def setup_args():
         type=str,
         nargs="+",
         default=None,
-        choices=["EssentialMatrix", "EssentialMatrixMetricMEAN", "EssentialMatrixMetric", "Procrustes", "PNP"],
+        choices=available_solvers,
     )
-
-    # Configure files
-    parser.add_argument(
-        "--config_file", type=str, default=None, help="path to config file"
-    )
-
     return parser.parse_args()
 
 
@@ -158,26 +153,14 @@ def main(args):
     )
     if args.matcher == "mickey":
         matcher.resize = image_size
-        matcher.K0 = K0
-        matcher.K1 = K1
+        matcher.K0 = torch.from_numpy(K0).unsqueeze(0).to(args.device)
+        matcher.K1 = torch.from_numpy(K0).unsqueeze(0).to(args.device)
 
     """Setup Pose Solver"""
-    with open(args.config_file, "r") as file:
-        cfg = yaml.safe_load(file)
+    cfg.merge_from_file(args.config)
     pose_solver_list = []
     for solver in args.pose_solver:
-        if solver == "EssentialMatrix":
-            pose_solver_list.append(EssentialMatrixSolver(cfg))
-        elif solver == "EssentialMatrixMetricMEAN":
-            pose_solver_list.append(EssentialMatrixMetricSolverMEAN(cfg))
-        elif solver == "EssentialMatrixMetric":
-            pose_solver_list.append(EssentialMatrixMetricSolver(cfg))
-        elif solver == "Procrustes":
-            pose_solver_list.append(ProcrustesSolver(cfg))
-        elif solver == "PNP":
-            pose_solver_list.append(PnPSolver(cfg))
-        else:
-            raise NotImplementedError("Invalid pose solver")
+        pose_solver_list.append(get_solver(solver, cfg))
 
     """Load images and perform feature matching and pose estimation"""
     image0 = load_rgb_image(args.path_rgb_img0, resize=image_size)
@@ -190,6 +173,8 @@ def main(args):
         depth1 = load_depth_image(args.path_depth_img1, resize=image_size, depth_scale=0.001)
     else:
         depth1 = None
+    print(image0.shape, image1.shape, depth0.shape, depth1.shape)
+
     """Perform Feature Matching"""
     start_time = time.time()
     result = matcher(image0, image1)
@@ -205,21 +190,18 @@ def main(args):
     out_str = f"Paths: {str(args.path_rgb_img0), str(args.path_rgb_img1)}. Found {num_inliers} inliers after RANSAC. "
     if args.no_viz:
         viz_path = save_visualization(
-            image0, image1, mkpts0, mkpts1, log_dir, 0, n_viz=100
+            image0, image1, mkpts0, mkpts1, log_dir, 0, n_viz=50
         )
         out_str += f"Viz saved in {viz_path}. "
     print(out_str)
 
     """Perform Pose Estimation"""
-    # output of map-free: T_cam1_cam0
-    # output of campus  : T_cam1_cam0
     if args.matcher == "mickey":
         R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0)
         R, t = to_numpy(R), to_numpy(t)
         T_cam1_cam0 = np.eye(4)
         T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t
         print(f'Mickey Solver:\n', T_cam1_cam0)
-
     elif args.matcher == "duster":
         im_poses = to_numpy(matcher.scene.get_im_poses())
         T_cam1_cam0 = (
@@ -228,48 +210,16 @@ def main(args):
             else np.linalg.inv(im_poses[1])
         )
         print(f'Duster Solver:\n', T_cam1_cam0)
-
     for solver in tqdm(pose_solver_list):
-        if solver.__class__ is EssentialMatrixSolver:
-            R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1)
+        try:
+            depth_img0 = to_numpy(depth0.squeeze(0))
+            depth_img1 = to_numpy(depth1.squeeze(0))
+            R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
             T_cam1_cam0 = np.eye(4)
             T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
-            print(f'EssentialMatrixSolver:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
-
-        elif solver.__class__ is EssentialMatrixMetricSolverMEAN:
-            if depth0 is not None and depth1 is not None:
-                depth_img0 = to_numpy(depth0.squeeze(0))
-                depth_img1 = to_numpy(depth1.squeeze(0))
-                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
-                T_cam1_cam0 = np.eye(4)
-                T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
-                print(f'EssentialMatrixMetricSolverMEAN:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
-
-        elif solver.__class__ is EssentialMatrixMetricSolver:
-            if depth0 is not None and depth1 is not None:
-                depth_img0 = to_numpy(depth0.squeeze(0))
-                depth_img1 = to_numpy(depth1.squeeze(0))
-                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
-                T_cam1_cam0 = np.eye(4)
-                T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
-                print(f'EssentialMatrixMetricSolver:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
-
-        elif solver.__class__ is PnPSolver:
-            if depth0 is not None:
-                depth_img0 = to_numpy(depth0.squeeze(0))
-                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0)
-                T_cam1_cam0 = np.eye(4)
-                T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
-                print(f'PnPSolver:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
-
-        elif solver.__class__ is ProcrustesSolver:
-            if depth0 is not None and depth1 is not None:            
-                depth_img0 = to_numpy(depth0.squeeze(0))
-                depth_img1 = to_numpy(depth1.squeeze(0))
-                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
-                T_cam1_cam0 = np.eye(4)
-                T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
-                print(f'ProcrustesSolver:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
+            print(f'{solver}:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
+        except Exception as e:
+            print(f'Failed to estimate pose with {solver}:', e)
 
     """Visualization"""
     if args.matcher == "duster" and not args.no_viz:

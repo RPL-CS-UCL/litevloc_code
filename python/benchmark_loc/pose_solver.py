@@ -2,7 +2,28 @@ import numpy as np
 import cv2 as cv
 import open3d as o3d
 
+available_solvers = [
+    "essentialmatrix",
+    "essentialmatrixmetricmean",
+    "essentialmatrixmetric",
+    "procrustes",
+    "pnp"
+]
 
+def get_solver(solver, cfg):
+    if solver == "essentialmatrix":
+        return EssentialMatrixSolver(cfg)
+    elif solver == "essentialmatrixmetricmean":
+        return EssentialMatrixMetricSolverMEAN(cfg)
+    elif solver == "essentialmatrixmetric":
+        return EssentialMatrixMetricSolver(cfg)
+    elif solver == "procrustes":
+        return ProcrustesSolver(cfg)
+    elif solver == "pnp":
+        return PnPSolver(cfg)
+    else:
+        raise NotImplementedError("Invalid pose solver")
+    
 def backproject_3d(uv, depth, K):
     """
     Backprojects 2d points given by uv coordinates into 3D using their depth values and intrinsic K
@@ -23,10 +44,10 @@ class EssentialMatrixSolver:
     def __init__(self, cfg):
 
         # EMat RANSAC parameters
-        self.ransac_pix_threshold = cfg["EMAT_RANSAC"]["PIX_THRESHOLD"]
-        self.ransac_confidence = cfg["EMAT_RANSAC"]["CONFIDENCE"]
+        self.ransac_pix_threshold = cfg.EMAT_RANSAC.PIX_THRESHOLD
+        self.ransac_confidence = cfg.EMAT_RANSAC.CONFIDENCE
 
-    def estimate_pose(self, kpts0, kpts1, K0, K1):
+    def estimate_pose(self, kpts0, kpts1, K0, K1, depth0=None, depth1=None):
         """
         Estimates the relative pose (rotation and translation) between two sets of 2D keypoints using the Essential Matrix.
 
@@ -137,7 +158,7 @@ class EssentialMatrixMetricSolver(EssentialMatrixSolver):
 
     def __init__(self, cfg):
         super().__init__(cfg)
-        self.ransac_scale_threshold = cfg["EMAT_RANSAC"]["SCALE_THRESHOLD"]
+        self.ransac_scale_threshold = cfg.EMAT_RANSAC.SCALE_THRESHOLD
 
     def estimate_pose(self, kpts0, kpts1, K0, K1, depth0, depth1):
         """Estimates metric translation vector using by back-projecting E-mat inliers to 3D using depthmaps."""
@@ -193,11 +214,11 @@ class PnPSolver:
 
     def __init__(self, cfg):
         # PnP RANSAC parameters
-        self.ransac_iterations = cfg["PNP"]["RANSAC_ITER"]
-        self.reprojection_inlier_threshold = cfg["PNP"]["REPROJECTION_INLIER_THRESHOLD"]
-        self.confidence = cfg["PNP"]["CONFIDENCE"]
+        self.ransac_iterations = cfg.PNP.RANSAC_ITER
+        self.reprojection_inlier_threshold = cfg.PNP.REPROJECTION_INLIER_THRESHOLD
+        self.confidence = cfg.PNP.CONFIDENCE
 
-    def estimate_pose(self, pts0, pts1, K0, K1, depth0):
+    def estimate_pose(self, pts0, pts1, K0, K1, depth0, depth1=None):
         """
         Estimates the relative pose (rotation and translation) between two sets of 2D-3D correspondences using the Perspective-n-Point (PnP) algorithm with RANSAC.
 
@@ -284,8 +305,8 @@ class ProcrustesSolver:
     def __init__(self, cfg):
 
         # Procrustes RANSAC parameters
-        self.ransac_max_corr_distance = cfg["PROCRUSTES"]["MAX_CORR_DIST"]
-        self.refine = cfg["PROCRUSTES"]["REFINE"]
+        self.ransac_max_corr_distance = cfg.PROCRUSTES.MAX_CORR_DIST
+        self.refine = cfg.PROCRUSTES.REFINE
 
     def estimate_pose(self, pts0, pts1, K0, K1, depth0, depth1):
         """
