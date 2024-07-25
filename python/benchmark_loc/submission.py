@@ -1,4 +1,8 @@
+# [Computation]:
 # python submission.py --config path/to/config --checkpoint path/to/checkpoint --o results/your_method --split val
+# [Evaluation]:
+# python -m mickey/benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/mickey_essentialmatrixmetric/submission.zip --split val
+
 import os
 import sys
 import argparse
@@ -47,66 +51,74 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
 
     running_time = []
     for data in tqdm(loader):
-        data = data_to_model_device(data, matcher)
-        rgb_img0, rgb_img1 = data['image0'], data['image1']
-        rgb_img0 = rgb_img0.squeeze(0)
-        rgb_img1 = rgb_img1.squeeze(0)
+        try:
+            data = data_to_model_device(data, matcher)
+            rgb_img0, rgb_img1 = data['image0'], data['image1']
+            rgb_img0 = rgb_img0.squeeze(0)
+            rgb_img1 = rgb_img1.squeeze(0)
 
-        K0, K1 = data['K_color0'], data['K_color1']
-        if str_matcher == "mickey":
-            matcher.K0, matcher.K1 = K0, K1
+            K0, K1 = data['K_color0'], data['K_color1']
+            if str_matcher == "mickey":
+                matcher.K0, matcher.K1 = K0, K1
 
-        """Image Matching"""
-        start_time = time.time()
-        matcher_result = matcher(rgb_img0, rgb_img1)
-        matching_time = time.time() - start_time
-        num_inliers, mkpts0, mkpts1 = (
-            matcher_result["num_inliers"],
-            matcher_result["inliers0"],
-            matcher_result["inliers1"],
-        )
-        # print("Found {} matched keypoints".format(num_inliers))
+            """Image Matching"""
+            start_time = time.time()
+            matcher_result = matcher(rgb_img0, rgb_img1)
+            matching_time = time.time() - start_time
+            num_inliers, mkpts0, mkpts1 = (
+                matcher_result["num_inliers"],
+                matcher_result["inliers0"],
+                matcher_result["inliers1"],
+            )
+            # print("Found {} matched keypoints".format(num_inliers))
 
-        """Pose Estimation"""
-        start_time = time.time()
-        if str_matcher == "mickey":
-            R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0)
-            R, t = to_numpy(R), to_numpy(t)
-            inliers = to_numpy(matcher.scene["inliers"].squeeze(0))[0]
-        # elif str_matcher == "duster":
-        #     im_poses = to_numpy(matcher.scene.get_im_poses())
-        #     T = (im_poses[0]
-        #         if abs(np.sum(np.diag(im_poses[1])) - 4.0) < 1e-5
-        #         else np.linalg.inv(im_poses[1]))        
-        #     R, t = T[:3, :3], T[:3, 3]
-        #     inliers = to_numpy(matcher_result["num_inliers"])
-        else:
-            depth_img0 = to_numpy(data['depth0'].squeeze(0))
-            depth_img1 = to_numpy(data['depth1'].squeeze(0))
-            K0 = to_numpy(K0.squeeze(0))
-            K1 = to_numpy(K1.squeeze(0))
-            R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
-        solver_time = time.time() - start_time
+            """Pose Estimation"""
+            start_time = time.time()
+            if str_matcher == "mickey":
+                R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0)
+                R, t = to_numpy(R), to_numpy(t)
+                inliers = to_numpy(matcher.scene["inliers"].squeeze(0))[0]
+            # elif str_matcher == "duster":
+            #     im_poses = to_numpy(matcher.scene.get_im_poses())
+            #     T = (im_poses[0]
+            #         if abs(np.sum(np.diag(im_poses[1])) - 4.0) < 1e-5
+            #         else np.linalg.inv(im_poses[1]))        
+            #     R, t = T[:3, :3], T[:3, 3]
+            #     inliers = to_numpy(matcher_result["num_inliers"])
+            else:
+                depth_img0 = to_numpy(data['depth0'].squeeze(0))
+                depth_img1 = to_numpy(data['depth1'].squeeze(0))
+                K0 = to_numpy(K0.squeeze(0))
+                K1 = to_numpy(K1.squeeze(0))
+                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
+            solver_time = time.time() - start_time
 
-        running_time.append(matching_time + solver_time)
+            running_time.append(matching_time + solver_time)
 
-        """Save Results"""
-        scene = data['scene_id'][0]
-        query_img = data['pair_names'][1][0]
-        # ignore frames without poses (e.g. not enough feature matches)
-        if np.isnan(R).any() or np.isnan(t).any() or np.isinf(t).any():
-            continue
+            """Save Results"""
+            scene = data['scene_id'][0]
+            query_img = data['pair_names'][1][0]
+            # ignore frames without poses (e.g. not enough feature matches)
+            if np.isnan(R).any() or np.isnan(t).any() or np.isinf(t).any():
+                continue
 
-        # populate results_dict
-        estimated_pose = Pose(image_name=query_img,
-                              q=mat2quat(R).reshape(-1),
-                              t=t.reshape(-1),
-                              inliers=inliers)
-        # print(data['T_0to1'].squeeze(0).cpu().detach().numpy()[:3, 3], t)
-        results_dict[scene].append(estimated_pose)
+            # populate results_dict
+            estimated_pose = Pose(image_name=query_img,
+                                q=mat2quat(R).reshape(-1),
+                                t=t.reshape(-1),
+                                inliers=inliers)
+            # print(data['T_0to1'].squeeze(0).cpu().detach().numpy()[:3, 3], t)
+            results_dict[scene].append(estimated_pose)
 
-        # if str_matcher == "duster":
-        #     matcher.scene.show(cam_size=0.05)
+            # if str_matcher == "duster":
+            #     matcher.scene.show(cam_size=0.05)
+        except Exception as e:
+            scene = data['scene_id'][0]
+            query_img = data['pair_names'][1][0]            
+            estimated_pose = Pose(image_name=query_img, q=mat2quat(np.eye(3)), t=np.zeros(3), inliers=0.0)
+            results_dict[scene].append(estimated_pose)
+            tqdm.write(f"Error with {str_matcher}: {e}")    
+            tqdm.write(f"(duster) May occur due to no overlapping regions or insufficient matching.")
 
     avg_runtime = np.mean(running_time)
     return results_dict, avg_runtime
@@ -127,8 +139,8 @@ def eval(args):
     if args.split == 'test':
         dataloader = DataModule(cfg).test_dataloader()
     elif args.split == 'val':
-        cfg.TRAINING.BATCH_SIZE = 1
-        cfg.TRAINING.NUM_WORKERS = 4
+        cfg.TRAINING.BATCH_SIZE = 2
+        cfg.TRAINING.NUM_WORKERS = 2
         dataloader = DataModule(cfg).val_dataloader()
     else:
         raise NotImplemented(f'Invalid split: {args.split}')
@@ -137,24 +149,21 @@ def eval(args):
     output_root.mkdir(parents=True, exist_ok=True)
     with open(output_root / "runtime_results.txt", "w") as f:
         for model in args.models:
-            # try:
-                matcher = get_matcher(model, device=args.device)
-                for pose_solver in args.pose_solvers:
-                    print(f"Running Image Matching: {model} with Pose Solver: {pose_solver}")
-                    solver = get_solver(pose_solver, cfg)
-                    results_dict, avg_runtime = predict(dataloader, matcher, solver, model, pose_solver)
+            matcher = get_matcher(model, device=args.device)
+            for pose_solver in args.pose_solvers:
+                print(f"Running Image Matching: {model} with Pose Solver: {pose_solver}")
+                solver = get_solver(pose_solver, cfg)
+                results_dict, avg_runtime = predict(dataloader, matcher, solver, model, pose_solver)
 
-                    # Save runtimes to txt
-                    runtime_str = f"{model}_{pose_solver}: {avg_runtime:.3f}s"
-                    f.write(runtime_str + "\n")
-                    tqdm.write(runtime_str)
+                # Save runtimes to txt
+                runtime_str = f"{model}_{pose_solver}: {avg_runtime:.3f}s"
+                f.write(runtime_str + "\n")
+                tqdm.write(runtime_str)
 
-                    # Save predictions to txt per scene within zip
-                    log_dir = Path(os.path.join(output_root, f"{model}_{pose_solver}"))
-                    log_dir.mkdir(parents=True, exist_ok=True)
-                    save_submission(results_dict, log_dir / "submission.zip")
-            # except Exception as e:
-            #     tqdm.write(f"Error with {model}: {e}")    
+                # Save predictions to txt per scene within zip
+                log_dir = Path(os.path.join(output_root, f"{model}_{pose_solver}"))
+                log_dir.mkdir(parents=True, exist_ok=True)
+                save_submission(results_dict, log_dir / "submission.zip")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
