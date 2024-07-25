@@ -1,1 +1,0 @@
-/Titan/code/robohike_ws/src/topo_loc/python/benchmark_loc/data/toy_example/im0.jpg /Titan/code/robohike_ws/src/topo_loc/python/benchmark_loc/data/toy_example/im1.jpg

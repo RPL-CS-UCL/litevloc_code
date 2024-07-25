@@ -88,6 +88,8 @@ def main(args):
         args.matcher, device=args.device, max_num_keypoints=args.n_kpts
     )
     if args.matcher == "mickey":
+        print("Problem with Mickey matcher of the intrinsics")
+        exit()
         matcher.resize = image_size
         matcher.path_intrinsics = args.path_intrinsics
 
