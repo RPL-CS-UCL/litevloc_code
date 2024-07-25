@@ -8,6 +8,7 @@ Usage: python test_image_matching_method.py \
 import time
 import os
 import sys
+from tqdm import tqdm
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 import torch
@@ -62,23 +63,37 @@ def setup_args():
         "--out_dir", type=str, default=None, help="path where outputs are saved"
     )
 
-    parser.add_argument("--img0", type=str, default=None, help="path to img0")
-    parser.add_argument("--img1", type=str, default=None, help="path to img1")
+    parser.add_argument(
+        "--path_rgb_img0", type=str, default=None, help="path to path_rgb_img0"
+    )
+
+    parser.add_argument(
+        "--path_rgb_img1", type=str, default=None, help="path to path_rgb_img1"
+    )
+
+    parser.add_argument(
+        "--path_depth_img0", type=str, default=None, help="path to path_depth_img0"
+    )
+
+    parser.add_argument(
+        "--path_depth_img1", type=str, default=None, help="path to path_depth_img1"
+    )
 
     # Path intrinsics for Mickey matcher (if not provided, we use defaults)
     parser.add_argument(
-        "--intrinsics0", type=str, default=None, help="path to intrinsics0"
+        "--path_intrinsics0", type=str, default=None, help="path to intrinsics0"
     )
     parser.add_argument(
-        "--intrinsics1", type=str, default=None, help="path to intrinsics1"
+        "--path_intrinsics1", type=str, default=None, help="path to intrinsics1"
     )
 
     # Pose solver selection
     parser.add_argument(
         "--pose_solver",
         type=str,
+        nargs="+",
         default=None,
-        choices=["EssentialMatrix", "EssentialMatrixMetric", "Procrustes", "PNP"],
+        choices=["EssentialMatrix", "EssentialMatrixMetricMEAN", "EssentialMatrixMetric", "Procrustes", "PNP"],
     )
 
     # Configure files
@@ -96,15 +111,15 @@ def read_intrinsics(path_intrinsics, resize):
     Parameters
     ----------
     path_intrinsics : str
-            Path to the file containing the intrinsic parameters.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    Path to the file containing the intrinsic parameters.
     resize : tuple or list of int, optional
-            The new size (height, width) to which the intrinsic parameters should be scaled.
-            If None, no resizing is performed.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    The new size (height, width) to which the intrinsic parameters should be scaled.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    If None, no resizing is performed.
 
     Returns
     -------
     numpy.ndarray
-            The intrinsic camera matrix after optional resizing.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    The intrinsic camera matrix after optional resizing.
     """
 
     def correct_intrinsic_scale(K, scale_x, scale_y):
@@ -135,9 +150,8 @@ def main(args):
     log_dir = setup_log_environment(args.out_dir, args)
 
     """Setup Matcher"""
-    img0_path, img1_path = args.img0, args.img1
-    K0 = read_intrinsics(args.intrinsics0, image_size)
-    K1 = read_intrinsics(args.intrinsics1, image_size)
+    K0 = read_intrinsics(args.path_intrinsics0, image_size)
+    K1 = read_intrinsics(args.path_intrinsics1, image_size)
 
     matcher = get_matcher(
         args.matcher, device=args.device, max_num_keypoints=args.n_kpts
@@ -150,21 +164,32 @@ def main(args):
     """Setup Pose Solver"""
     with open(args.config_file, "r") as file:
         cfg = yaml.safe_load(file)
-    if args.pose_solver == "EssentialMatrix":
-        pose_solver = EssentialMatrixSolver(cfg)
-    elif args.pose_solver == "EssentialMatrixMetric":
-        pose_solver = EssentialMatrixMetricSolver(cfg)
-    elif args.pose_solver == "Procrustes":
-        pose_solver = ProcrustesSolver(cfg)
-    elif args.pose_solver == "PNP":
-        pose_solver = PnPSolver(cfg)
-    else:
-        raise NotImplementedError("Invalid pose solver")
+    pose_solver_list = []
+    for solver in args.pose_solver:
+        if solver == "EssentialMatrix":
+            pose_solver_list.append(EssentialMatrixSolver(cfg))
+        elif solver == "EssentialMatrixMetricMEAN":
+            pose_solver_list.append(EssentialMatrixMetricSolverMEAN(cfg))
+        elif solver == "EssentialMatrixMetric":
+            pose_solver_list.append(EssentialMatrixMetricSolver(cfg))
+        elif solver == "Procrustes":
+            pose_solver_list.append(ProcrustesSolver(cfg))
+        elif solver == "PNP":
+            pose_solver_list.append(PnPSolver(cfg))
+        else:
+            raise NotImplementedError("Invalid pose solver")
 
     """Load images and perform feature matching and pose estimation"""
-    image0 = load_rgb_image(img0_path, resize=image_size)
-    image1 = load_rgb_image(img1_path, resize=image_size)
-
+    image0 = load_rgb_image(args.path_rgb_img0, resize=image_size)
+    image1 = load_rgb_image(args.path_rgb_img1, resize=image_size)
+    if args.path_depth_img0 is not None:
+        depth0 = load_depth_image(args.path_depth_img0, resize=image_size, depth_scale=0.001)
+    else:
+        depth0 = None
+    if args.path_depth_img1 is not None:
+        depth1 = load_depth_image(args.path_depth_img1, resize=image_size, depth_scale=0.001)
+    else:
+        depth1 = None
     """Perform Feature Matching"""
     start_time = time.time()
     result = matcher(image0, image1)
@@ -177,8 +202,8 @@ def main(args):
     )
     print("Found {} matched keypoints".format(num_inliers))
 
-    out_str = f"Paths: {str(img0_path), str(img1_path)}. Found {num_inliers} inliers after RANSAC. "
-    if not args.no_viz:
+    out_str = f"Paths: {str(args.path_rgb_img0), str(args.path_rgb_img1)}. Found {num_inliers} inliers after RANSAC. "
+    if args.no_viz:
         viz_path = save_visualization(
             image0, image1, mkpts0, mkpts1, log_dir, 0, n_viz=100
         )
@@ -186,32 +211,70 @@ def main(args):
     print(out_str)
 
     """Perform Pose Estimation"""
+    # output of map-free: T_cam1_cam0
+    # output of campus  : T_cam1_cam0
     if args.matcher == "mickey":
-        R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0).T
+        R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0)
         R, t = to_numpy(R), to_numpy(t)
-        T = np.eye(4)
-        T[:3, :3], T[:3, 3] = R, t
-        print(T)
+        T_cam1_cam0 = np.eye(4)
+        T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t
+        print(f'Mickey Solver:\n', T_cam1_cam0)
+
     elif args.matcher == "duster":
         im_poses = to_numpy(matcher.scene.get_im_poses())
-        T = (
-            np.linalg.inv(im_poses[0])
+        T_cam1_cam0 = (
+            im_poses[0]
             if abs(np.sum(np.diag(im_poses[1])) - 4.0) < 1e-5
-            else im_poses[1]
+            else np.linalg.inv(im_poses[1])
         )
-        print(T)
+        print(f'Duster Solver:\n', T_cam1_cam0)
 
-    R, t, inliers = pose_solver.estimate_pose(mkpts0, mkpts1, K0, K1)
-    T = np.eye(4)
-    T[:3, :3], T[:3, 3] = R, t
-    print(T)
-    print("Number of inliers: ", inliers)
+    for solver in tqdm(pose_solver_list):
+        if solver.__class__ is EssentialMatrixSolver:
+            R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1)
+            T_cam1_cam0 = np.eye(4)
+            T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
+            print(f'EssentialMatrixSolver:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
+
+        elif solver.__class__ is EssentialMatrixMetricSolverMEAN:
+            if depth0 is not None and depth1 is not None:
+                depth_img0 = to_numpy(depth0.squeeze(0))
+                depth_img1 = to_numpy(depth1.squeeze(0))
+                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
+                T_cam1_cam0 = np.eye(4)
+                T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
+                print(f'EssentialMatrixMetricSolverMEAN:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
+
+        elif solver.__class__ is EssentialMatrixMetricSolver:
+            if depth0 is not None and depth1 is not None:
+                depth_img0 = to_numpy(depth0.squeeze(0))
+                depth_img1 = to_numpy(depth1.squeeze(0))
+                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
+                T_cam1_cam0 = np.eye(4)
+                T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
+                print(f'EssentialMatrixMetricSolver:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
+
+        elif solver.__class__ is PnPSolver:
+            if depth0 is not None:
+                depth_img0 = to_numpy(depth0.squeeze(0))
+                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0)
+                T_cam1_cam0 = np.eye(4)
+                T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
+                print(f'PnPSolver:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
+
+        elif solver.__class__ is ProcrustesSolver:
+            if depth0 is not None and depth1 is not None:            
+                depth_img0 = to_numpy(depth0.squeeze(0))
+                depth_img1 = to_numpy(depth1.squeeze(0))
+                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
+                T_cam1_cam0 = np.eye(4)
+                T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t.reshape(3)
+                print(f'ProcrustesSolver:\nNumber of inliers:{inliers}\n', T_cam1_cam0)
 
     """Visualization"""
     if args.matcher == "duster" and not args.no_viz:
         scene = matcher.scene
         scene.show(cam_size=0.05)
-
 
 if __name__ == "__main__":
     args = setup_args()

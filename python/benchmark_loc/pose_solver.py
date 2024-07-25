@@ -38,8 +38,8 @@ class EssentialMatrixSolver:
 
         Returns:
         tuple: A tuple containing:
-            - R (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3].
-            - t (numpy.ndarray): Estimated translation vector. Shape: [3, 1].
+            - R (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate kpts0 to kpts1
+            - t (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translates kpts0 to kpts1
             - inliers (int): Number of inliers used in the final pose estimation.
         """
         R = np.full((3, 3), np.nan)
@@ -210,8 +210,8 @@ class PnPSolver:
 
         Returns:
         tuple: A tuple containing:
-            - R (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3].
-            - t (numpy.ndarray): Estimated translation vector. Shape: [3, 1].
+            - R (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate kpts0 to kpts1.
+            - t (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate kpts0 to kpts1.
             - inliers (int): Number of inliers used in the final pose estimation.
         """
         # uses nearest neighbour
@@ -233,13 +233,13 @@ class PnPSolver:
         depth_pts0 = depth_pts0[valid]
 
         # backproject points to 3D in each sensors' local coordinates
-        xyz_0 = backproject_3d(pts0, depth_pts0, K0).numpy()
+        xyz_0 = backproject_3d(pts0, depth_pts0, K0)
 
         # get relative pose using PnP + RANSAC
         succ, rvec, tvec, inliers = cv.solvePnPRansac(
             xyz_0,
             pts1,
-            K1.numpy(),
+            K1,
             None,
             iterationsCount=self.ransac_iterations,
             reprojectionError=self.reprojection_inlier_threshold,
@@ -252,7 +252,7 @@ class PnPSolver:
             succ, rvec, tvec, _ = cv.solvePnPGeneric(
                 xyz_0[inliers],
                 pts1[inliers],
-                K1.numpy(),
+                K1,
                 None,
                 useExtrinsicGuess=True,
                 rvec=rvec,
@@ -301,8 +301,8 @@ class ProcrustesSolver:
 
         Returns:
         tuple: A tuple containing:
-            - R (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3].
-            - t (numpy.ndarray): Estimated translation vector. Shape: [3, 1].
+            - R (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate kpts0 to kpts1.
+            - t (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate kpts0 to kpts1.
             - inliers (int): Number of inliers used in the final pose estimation.
         """
         # uses nearest neighbour
