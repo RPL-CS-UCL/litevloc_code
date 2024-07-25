@@ -96,15 +96,15 @@ def read_intrinsics(path_intrinsics, resize):
     Parameters
     ----------
     path_intrinsics : str
-        Path to the file containing the intrinsic parameters.
+            Path to the file containing the intrinsic parameters.
     resize : tuple or list of int, optional
-        The new size (height, width) to which the intrinsic parameters should be scaled.
-        If None, no resizing is performed.
+            The new size (height, width) to which the intrinsic parameters should be scaled.
+            If None, no resizing is performed.
 
     Returns
     -------
     numpy.ndarray
-        The intrinsic camera matrix after optional resizing.
+            The intrinsic camera matrix after optional resizing.
     """
 
     def correct_intrinsic_scale(K, scale_x, scale_y):
@@ -189,14 +189,26 @@ def main(args):
     if args.matcher == "mickey":
         R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0).T
         R, t = to_numpy(R), to_numpy(t)
-        print(R, "\n", t)
-    else:
-        R, t, inliers = pose_solver.estimate_pose(mkpts0, mkpts1, K0, K1)
-        t = t.reshape((3, 1))
-        print(R, "\n", t)
+        T = np.eye(4)
+        T[:3, :3], T[:3, 3] = R, t
+        print(T)
+    elif args.matcher == "duster":
+        im_poses = to_numpy(matcher.scene.get_im_poses())
+        T = (
+            np.linalg.inv(im_poses[0])
+            if abs(np.sum(np.diag(im_poses[1])) - 4.0) < 1e-5
+            else im_poses[1]
+        )
+        print(T)
+
+    R, t, inliers = pose_solver.estimate_pose(mkpts0, mkpts1, K0, K1)
+    T = np.eye(4)
+    T[:3, :3], T[:3, 3] = R, t
+    print(T)
+    print("Number of inliers: ", inliers)
 
     """Visualization"""
-    if args.matcher == "duster" and args.no_viz:
+    if args.matcher == "duster" and not args.no_viz:
         scene = matcher.scene
         scene.show(cam_size=0.05)
 
