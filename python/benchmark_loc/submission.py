@@ -139,7 +139,7 @@ def eval(args):
     if args.split == 'test':
         dataloader = DataModule(cfg).test_dataloader()
     elif args.split == 'val':
-        cfg.TRAINING.BATCH_SIZE = 2
+        cfg.TRAINING.BATCH_SIZE = 1
         cfg.TRAINING.NUM_WORKERS = 2
         dataloader = DataModule(cfg).val_dataloader()
     else:
