@@ -1,7 +1,7 @@
 # [Computation]:
-# python submission.py --config path/to/config --checkpoint path/to/checkpoint --o results/your_method --split val
-# [Evaluation]:
-# python -m mickey/benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/mickey_essentialmatrixmetric/submission.zip --split val
+# python submission.py --config ../config/dataset/mapfree.yaml --models master --pose_solver essentialmatrixmetric --out_dir /Titan/dataset/data_mapfree/results --split val
+# [Evaluation] (in mickey folder):
+# python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetric/submission.zip --split val --log error
 
 import os
 import sys
@@ -25,7 +25,6 @@ from matching.utils import to_numpy, get_image_pairs_paths
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map-free-reloc"))
 from config.default import cfg
 from lib.datasets.datamodules import DataModule
-from lib.models.builder import build_model
 from lib.utils.data import data_to_model_device
 
 @dataclass
@@ -56,10 +55,8 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             rgb_img0, rgb_img1 = data['image0'], data['image1']
             rgb_img0 = rgb_img0.squeeze(0)
             rgb_img1 = rgb_img1.squeeze(0)
-
             K0, K1 = data['K_color0'], data['K_color1']
-            if str_matcher == "mickey":
-                matcher.K0, matcher.K1 = K0, K1
+            if str_matcher == "mickey": matcher.K0, matcher.K1 = K0, K1         
 
             """Image Matching"""
             start_time = time.time()
@@ -90,10 +87,17 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 depth_img1 = to_numpy(data['depth1'].squeeze(0))
                 K0 = to_numpy(K0.squeeze(0))
                 K1 = to_numpy(K1.squeeze(0))
+                """Definition of solver output"""
+                # R10 (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate kpts0 to kpts1.
+                # t10 (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate kpts0 to kpts1.
+                # inliers (int): Number of inliers used in the final pose estimation.
                 R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
-            solver_time = time.time() - start_time
-
+            solver_time = time.time() - start_time           
             running_time.append(matching_time + solver_time)
+
+            if str_matcher == "duster" and args.viz:
+                print('Visualization')
+                matcher.scene.show(cam_size=0.05)
 
             """Save Results"""
             scene = data['scene_id'][0]
@@ -110,8 +114,6 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             # print(data['T_0to1'].squeeze(0).cpu().detach().numpy()[:3, 3], t)
             results_dict[scene].append(estimated_pose)
 
-            # if str_matcher == "duster":
-            #     matcher.scene.show(cam_size=0.05)
         except Exception as e:
             scene = data['scene_id'][0]
             query_img = data['pair_names'][1][0]            
@@ -140,7 +142,7 @@ def eval(args):
         dataloader = DataModule(cfg).test_dataloader()
     elif args.split == 'val':
         cfg.TRAINING.BATCH_SIZE = 1
-        cfg.TRAINING.NUM_WORKERS = 2
+        cfg.TRAINING.NUM_WORKERS = 1
         dataloader = DataModule(cfg).val_dataloader()
     else:
         raise NotImplemented(f'Invalid split: {args.split}')
@@ -183,18 +185,12 @@ if __name__ == "__main__":
         choices=available_solvers,
     )
     parser.add_argument(
-        "--image_size",
-        type=int,
-        default=None,
-        nargs="+",
-        help="Resizing shape for images (HxW). If a single int is passed, set the"
-        "smallest edge of all images to this value, while keeping aspect ratio",
+        "--device", type=str, default="cuda", choices=["cpu", "cuda"]
     )
-    parser.add_argument("--device", type=str, default="cuda", choices=["cpu", "cuda"])
     parser.add_argument(
-        "--no_viz",
+        "--viz",
         action="store_true",
-        help="pass --no_viz to avoid saving visualizations",
+        help="pass --viz to avoid saving visualizations",
     )
     parser.add_argument(
         "--out_dir", type=str, default=None, help="path where outputs are saved"

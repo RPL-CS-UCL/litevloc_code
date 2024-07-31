@@ -149,8 +149,8 @@ def main(args):
     )
     if args.matcher == "mickey":
         matcher.resize = image_size
-        matcher.K0 = torch.from_numpy(K0).unsqueeze(0).to(device)
-        matcher.K1 = torch.from_numpy(K0).unsqueeze(0).to(device)
+        matcher.K0 = torch.from_numpy(K0).unsqueeze(0).to(args.device)
+        matcher.K1 = torch.from_numpy(K0).unsqueeze(0).to(args.device)
 
     """Setup Pose Solver"""
     cfg.merge_from_file(args.config)

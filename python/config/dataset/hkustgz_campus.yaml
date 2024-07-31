@@ -1,13 +1,12 @@
 MODEL: FeatureMatching
 DATASET:
-  DATA_SOURCE: 'MapFree'
-  DATA_ROOT: '/Titan/dataset/data_mapfree/'
-  # SCENES: [s00460, s00461, s00462, s00463, s00464, s00465, s00466, s00467, s00468, s00469, s00470]  # should be a list [] or None. If none, use all scenes.
-  SCENES: [s00460_sample]
-  ESTIMATED_DEPTH: mickey  # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
+  DATA_SOURCE: 'MapFree'  # To determine the dataloader
+  DATA_ROOT: '/Titan/dataset/data_apmp/test_out3/'
+  SCENES: [s00000_sample]
+  ESTIMATED_DEPTH: None   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
-  HEIGHT: 720
-  WIDTH: 540
+  HEIGHT: 288             # Images are resized
+  WIDTH: 512
   MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!
