@@ -1,9 +1,9 @@
 MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'
-  DATA_ROOT: '/Titan/dataset/data_mapfree/'
+  DATA_ROOT: '/Titan/dataset/data_mapfree'
   # SCENES: [s00460, s00461, s00462, s00463, s00464, s00465, s00466, s00467, s00468, s00469, s00470]  # should be a list [] or None. If none, use all scenes.
-  SCENES: [s00460_sample]
+  SCENES: [s00460]
   ESTIMATED_DEPTH: mickey  # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
   HEIGHT: 720

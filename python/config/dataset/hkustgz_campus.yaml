@@ -5,8 +5,8 @@ DATASET:
   SCENES: [s00000_sample]
   ESTIMATED_DEPTH: None   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
-  HEIGHT: 288             # Images are resized
-  WIDTH: 512
+  HEIGHT: 720             # Images are resized
+  WIDTH: 1280
   MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!

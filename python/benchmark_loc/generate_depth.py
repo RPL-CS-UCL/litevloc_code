@@ -68,8 +68,12 @@ def eval(args):
 		raise NotImplemented(f'Invalid split: {args.split}')
 	
 	"""Depth Model"""
-	if args.model == "zoedepth":
-		model = torch.hub.load("../../../ZoeDepth", "ZoeD_N", source="local", pretrained=True).to(args.device)
+	if args.model == "zoedepth_n":
+		model = torch.hub.load("../../../ZoeDepth", "ZoeD_N", source="local", pretrained=True).to(args.device)	
+	elif args.model == "zoedepth_k":
+		model = torch.hub.load("../../../ZoeDepth", "ZoeD_K", source="local", pretrained=True).to(args.device)
+	elif args.model == "zoedepth_nk":
+		model = torch.hub.load("../../../ZoeDepth", "ZoeD_NK", source="local", pretrained=True).to(args.device)
 	else:
 		return
 
@@ -81,7 +85,7 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("--config", help="path to config file")
 	parser.add_argument(
-		"--model", type=str, default="zoedepth", help='zoedepth'
+		"--model", type=str, default="zoedepth_nk", help='zoedepth_n, zoedepth_k, zoedepth_nk'
 	)
 	parser.add_argument(
 		"--device", type=str, default="cuda", choices=["cpu", "cuda"]
