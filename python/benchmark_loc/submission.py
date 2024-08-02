@@ -22,6 +22,9 @@ from pose_solver import available_solvers, get_solver
 from matching import available_models, get_matcher
 from matching.utils import to_numpy, get_image_pairs_paths
 
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
+from utils.utils_image_matching_method import save_visualization
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map-free-reloc"))
 from config.default import cfg
 from lib.datasets.datamodules import DataModule
@@ -75,13 +78,6 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0)
                 R, t = to_numpy(R), to_numpy(t)
                 inliers = to_numpy(matcher.scene["inliers"].squeeze(0))[0]
-            # elif str_matcher == "duster":
-            #     im_poses = to_numpy(matcher.scene.get_im_poses())
-            #     T = (im_poses[0]
-            #         if abs(np.sum(np.diag(im_poses[1])) - 4.0) < 1e-5
-            #         else np.linalg.inv(im_poses[1]))        
-            #     R, t = T[:3, :3], T[:3, 3]
-            #     inliers = to_numpy(matcher_result["num_inliers"])
             else:
                 depth_img0 = to_numpy(data['depth0'].squeeze(0))
                 depth_img1 = to_numpy(data['depth1'].squeeze(0))
@@ -90,40 +86,40 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 """Definition of solver output"""
                 # R10 (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate kpts0 to kpts1.
                 # t10 (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate kpts0 to kpts1.
-                # inliers (int): Number of inliers used in the final pose estimation.
-                R, t, inliers = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
+                # inliers_solver (int): Number of inliers used in the final pose estimation.
+                R, t, inliers_solver = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
             solver_time = time.time() - start_time           
             running_time.append(matching_time + solver_time)
-
-            if str_matcher == "duster" and args.viz:
-                print('Visualization')
-                matcher.scene.show(cam_size=0.05)
 
             """Save Results"""
             scene = data['scene_id'][0]
             query_img = data['pair_names'][1][0]
-            # ignore frames without poses (e.g. not enough feature matches)
             if np.isnan(R).any() or np.isnan(t).any() or np.isinf(t).any():
-                continue
+                raise ValueError("Estimated pose is NaN or infinite.")
 
             # populate results_dict
             estimated_pose = Pose(image_name=query_img,
-                                q=mat2quat(R).reshape(-1),
-                                t=t.reshape(-1),
-                                inliers=inliers)
-            # print(data['T_0to1'].squeeze(0).cpu().detach().numpy()[:3, 3], t)
+                                  q=mat2quat(R).reshape(-1),
+                                  t=t.reshape(-1),
+                                  inliers=num_inliers)
             results_dict[scene].append(estimated_pose)
 
-            # DEBUG(gogojjh):
-            if inliers < 100:
-                print(f"Inliers number < 100: {inliers} at {data['scene_id'][0]}/{query_img}")
+            if args.debug:
+                print(t.T)
+                if num_inliers < 100:
+                    print(f"Inliers number < 100: {num_inliers} at {data['scene_id'][0]}/{data['pair_names']}")
+                save_visualization(
+                    rgb_img0, rgb_img1, mkpts0, mkpts1, 
+                    args.out_dir, 0, n_viz=100, line_width=0.6)                    
+                if str_matcher == "duster" and args.viz:
+                    print('Visualization')
+                    matcher.scene.show(cam_size=0.05)
+                input()
         except Exception as e:
             scene = data['scene_id'][0]
             query_img = data['pair_names'][1][0]
-            # estimated_pose = Pose(image_name=query_img, q=mat2quat(np.eye(3)), t=np.zeros(3), inliers=0.0)
-            # results_dict[scene].append(estimated_pose)
             tqdm.write(f"Error with {str_matcher}: {e}")
-            tqdm.write(f"(duster) May occur due to no overlapping regions or insufficient matching at {query_img}.")
+            tqdm.write(f"(duster) May occur due to no overlapping regions or insufficient matching at {scene}/{query_img}.")
 
     avg_runtime = np.mean(running_time)
     return results_dict, avg_runtime
@@ -195,6 +191,11 @@ if __name__ == "__main__":
         action="store_true",
         help="pass --viz to avoid saving visualizations",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="pass --debug to visualize intermediate results",
+    )    
     parser.add_argument(
         "--out_dir", type=str, default=None, help="path where outputs are saved"
     )
