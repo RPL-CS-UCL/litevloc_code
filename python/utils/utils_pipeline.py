@@ -60,6 +60,7 @@ def parse_arguments():
 	parser.add_argument("--no_viz", action="store_true", help="pass --no_viz to avoid saving visualizations")
 	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
 	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
+	parser.add_argument("--unit_type", action="store_true", help="depth images are encoded to uint16 (True) or float32 (False)")
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='habitat: 0.039, anymal: 0.001')
 	parser.add_argument('--min_depth_pro', type=float, default=0.1, help='pixels are processed only if depth > min_depth_pro')
 	parser.add_argument('--max_depth_pro', type=float, default=5.5, help='pixels are processed only if depth < min_depth_pro')  
@@ -201,6 +202,9 @@ def parse_arguments():
 	if args.image_size and len(args.image_size) > 2:
 			raise ValueError(f"The --image_size parameter can only take up to 2 values, but has received {len(args.image_size)}.")
 	
+	if args.unit_type and abs(args.depth_scale - 1.0) > 1e-3:
+			raise ValueError(f"The depth scale should be 1.0 not {args.depth_scale} since unit_type is True.")
+
 	return args
 
 def save_descriptors(log_dir, descriptors, desc_name):
