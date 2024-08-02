@@ -114,13 +114,16 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             # print(data['T_0to1'].squeeze(0).cpu().detach().numpy()[:3, 3], t)
             results_dict[scene].append(estimated_pose)
 
+            # DEBUG(gogojjh):
+            if inliers < 100:
+                print(f"Inliers number < 100: {inliers} at {data['scene_id'][0]}/{query_img}")
         except Exception as e:
             scene = data['scene_id'][0]
-            query_img = data['pair_names'][1][0]            
-            estimated_pose = Pose(image_name=query_img, q=mat2quat(np.eye(3)), t=np.zeros(3), inliers=0.0)
-            results_dict[scene].append(estimated_pose)
-            tqdm.write(f"Error with {str_matcher}: {e}")    
-            tqdm.write(f"(duster) May occur due to no overlapping regions or insufficient matching.")
+            query_img = data['pair_names'][1][0]
+            # estimated_pose = Pose(image_name=query_img, q=mat2quat(np.eye(3)), t=np.zeros(3), inliers=0.0)
+            # results_dict[scene].append(estimated_pose)
+            tqdm.write(f"Error with {str_matcher}: {e}")
+            tqdm.write(f"(duster) May occur due to no overlapping regions or insufficient matching at {query_img}.")
 
     avg_runtime = np.mean(running_time)
     return results_dict, avg_runtime
