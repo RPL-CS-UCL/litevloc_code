@@ -8,3 +8,5 @@ output*
 log*
 
 __pycache__
+
+dataset/
