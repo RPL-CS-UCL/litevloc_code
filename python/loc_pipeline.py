@@ -2,9 +2,15 @@
 
 """
 Usage: python loc_pipeline.py --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos --image_size 288 512 --device=cuda \
---sample_map 1 --sample_obs 5 --depth_scale 0.001 --min_depth_pro 0.1 --max_depth_pro 5.5 \
+--depth_scale 0.001 --min_depth_pro 0.1 --max_depth_pro 20.0 \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
---img_matcher duster --save_img_matcher --no_viz 
+--img_matcher duster --save_img_matcher --no_viz \
+--obs_camera_type obs_zed --map_camera_type map_zed
+"""
+
+"""
+Usage: rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc.bag \
+/vloc/odom /vloc/path /vloc/path_gt /vloc/image_map_obs
 """
 
 import os
@@ -52,17 +58,20 @@ class LocPipeline:
 		self.pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
 		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
 		
-		self.pub_odom = rospy.Publisher('/odom', Odometry, queue_size=10)
-		self.pub_path = rospy.Publisher('/path', Path, queue_size=10)
-		self.pub_path_gt = rospy.Publisher('/path_gt', Path, queue_size=10)
-		self.pub_map_obs = rospy.Publisher('/image_map_obs', Image, queue_size=10)
+		self.pub_odom = rospy.Publisher('/vloc/odom', Odometry, queue_size=10)
+		self.pub_path = rospy.Publisher('/vloc/path', Path, queue_size=10)
+		self.pub_path_gt = rospy.Publisher('/vloc/path_gt', Path, queue_size=10)
+		self.pub_map_obs = rospy.Publisher('/vloc/image_map_obs', Image, queue_size=10)
 
 		self.br = tf2_ros.TransformBroadcaster()
 		self.path_msg = Path()
 		self.path_gt_msg = Path()
 
+		self.map_camera_type = 'map_zed'
+		self.obs_camera_type = 'obs_zed'
+
 	def read_map_from_file(self):
-		data_path = os.path.join(self.args.dataset_path, 'map')
+		data_path = os.path.join(self.args.dataset_path, self.map_camera_type)
 		self.image_graph = GraphLoader.load_data(
 			data_path,
 			self.args.image_size,
@@ -106,7 +115,7 @@ class LocPipeline:
 				mask = (depth_img_meas < self.args.min_depth_pro) | (depth_img_meas > self.args.max_depth_pro)
 				depth_img_meas[mask] = 0.0
 				depth_img_est[mask] = 0.0
-				meas_scale = compute_scale_factor(depth_img_meas, depth_img_est)
+				meas_scale = compute_scale_factor(depth_img_meas, depth_img_est, delta=0.5)
 				# plot_images(depth_img_meas, depth_img_est * meas_scale, title1='Depth (GT)', title2='Depth (Est)', 
 				# 						save_path=os.path.join(self.log_dir, 'preds', f'depth_map_{obs_node.id:06d}.jpg'))
 				im_poses = to_numpy(self.img_matcher.scene.get_im_poses())
@@ -165,18 +174,18 @@ class LocPipeline:
 		print(f"IDs: {db_descriptors_id} extracted {db_descriptors.shape} VPR descriptors.")
 
 		"""Main loop for processing observations"""
-		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, 'obs', 'camera_pose_gt.txt'))
+		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, self.args.obs_camera_type, 'camera_pose_gt.txt'))
 
 		rate = rospy.Rate(100)
-		for obs_id in range(0, len(obs_poses_gt), 15):
+		for obs_id in range(0, len(obs_poses_gt), 10):
 			if rospy.is_shutdown(): 
 				break
 
 			# Load observation data
 			print(f"obs_id: {obs_id}")
-			rgb_img_path = os.path.join(self.args.dataset_path, 'obs/rgb', f'{obs_id:06d}.png')
+			rgb_img_path = os.path.join(self.args.dataset_path, f'{self.obs_camera_type}/rgb', f'{obs_id:06d}.png')
 			rgb_img = load_rgb_image(rgb_img_path, self.args.image_size, normalized=False)
-			depth_img_path = os.path.join(self.args.dataset_path, 'obs/depth', f'{obs_id:06d}.png')
+			depth_img_path = os.path.join(self.args.dataset_path, f'{self.obs_camera_type}/depth', f'{obs_id:06d}.png')
 			depth_img = load_depth_image(depth_img_path, self.args.image_size, depth_scale=self.args.depth_scale)
 			vpr_start_time = time.time()
 			with torch.no_grad():
