@@ -16,14 +16,8 @@ import matplotlib
 from pathlib import Path
 import numpy as np
 
-from matching import (
-    available_models,
-    get_matcher,
-)  # Import necessary modules from matching package
-from matching.utils import (
-    to_numpy,
-    get_image_pairs_paths,
-)  # Import utility for getting image pairs
+from matching import available_models, get_matcher
+from matching.utils import to_numpy, get_image_pairs_paths
 
 from utils.utils_image_matching_method import *
 from utils.utils_image import load_rgb_image, load_depth_image
