@@ -10,16 +10,16 @@ available_solvers = [
     "pnp"
 ]
 
-def get_solver(solver, cfg):
-    if solver == "essentialmatrix":
+def get_solver(str_solver, cfg):
+    if str_solver == "essentialmatrix":
         return EssentialMatrixSolver(cfg)
-    elif solver == "essentialmatrixmetricmean":
+    elif str_solver == "essentialmatrixmetricmean":
         return EssentialMatrixMetricSolverMEAN(cfg)
-    elif solver == "essentialmatrixmetric":
+    elif str_solver == "essentialmatrixmetric":
         return EssentialMatrixMetricSolver(cfg)
-    elif solver == "procrustes":
+    elif str_solver == "procrustes":
         return ProcrustesSolver(cfg)
-    elif solver == "pnp":
+    elif str_solver == "pnp":
         return PnPSolver(cfg)
     else:
         raise NotImplementedError("Invalid pose solver")
