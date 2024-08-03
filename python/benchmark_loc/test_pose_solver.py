@@ -99,7 +99,7 @@ def eval(args):
     depth_points_transformed = transform_point_cloud(depth_points, T10)
     depth_img1 = project_point_cloud(depth_points_transformed, K, (width, height))
 
-    mkpts0 = np.random.rand(10, 2) * 640  # Random 2D points
+    mkpts0 = np.random.rand(10, 2) * 640  # Random 2D points  
 
     # Load configs
     cfg.merge_from_file(args.config)
