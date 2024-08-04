@@ -1,7 +1,5 @@
 # [Computation]:
-# python submission.py --config ../config/dataset/mapfree.yaml --models master --pose_solver essentialmatrixmetric --out_dir /Titan/dataset/data_mapfree/results --split val
-# [Evaluation] (in mickey folder):
-# python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetric/submission.zip --split val --log error
+# python generate_depth.py --config ../config/dataset/hkustgz_campus.yaml --out_dir /Titan/dataset/data_apmp/zoe_depths --split test
 
 import os
 import sys
