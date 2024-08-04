@@ -1,7 +1,7 @@
 # [Computation]:
-# python submission.py --config ../config/dataset/mapfree.yaml --models master --pose_solver essentialmatrixmetric --out_dir /Titan/dataset/data_mapfree/results --split val
+# python submission.py --config ../config/dataset/mapfree.yaml --models master --pose_solver essentialmatrixmetricmean --out_dir /Titan/dataset/data_mapfree/results --split val
 # [Evaluation] (in mickey folder):
-# python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetric/submission.zip --split val --log error
+# python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetricmean/submission.zip --split val --log error
 
 import os
 import sys
@@ -105,6 +105,7 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             results_dict[scene].append(estimated_pose)
 
             if args.debug:
+                # print(R)
                 print(t.T)
                 if num_inliers < 100:
                     print(f"Inliers number < 100: {num_inliers} at {data['scene_id'][0]}/{data['pair_names']}")
@@ -123,7 +124,6 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
 
     avg_runtime = np.mean(running_time)
     return results_dict, avg_runtime
-
 
 def save_submission(results_dict: dict, output_path: Path):
     with ZipFile(output_path, "w") as zip:

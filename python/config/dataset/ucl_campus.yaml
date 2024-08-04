@@ -1,7 +1,7 @@
 MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
-  DATA_ROOT: '/Rocket_ssd/dataset/data_anymal/data_generation_20240731'
+  DATA_ROOT: '/Rocket_ssd/dataset/data_anymal/ucl_campus'
   # SCENES: [s00000, s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008, s00009, s00010]
   SCENES: [s00001]
   ESTIMATED_DEPTH: zed   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
@@ -21,4 +21,4 @@ EMAT_RANSAC:
   CONFIDENCE: 0.9999
 PROCRUSTES:
   MAX_CORR_DIST: 0.05 # meters
-  REFINE: False # refine pose with ICP
+  REFINE: False # refine pose with Icp
