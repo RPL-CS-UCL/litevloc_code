@@ -15,7 +15,7 @@ class DepthRegistration:
     def __init__(self):
         self.last_depth_cloud = None
         self.T_w_cam = np.eye(4)
-        self.radius = 0.4
+        self.radius = 0.05
         
         self.depth_sub = Subscriber("/habitat_camera/depth/image", Image)
         self.info_sub = Subscriber("/habitat_camera/depth/camera_info", CameraInfo)
@@ -39,19 +39,19 @@ class DepthRegistration:
         image_shape = (info_msg.width, info_msg.height)
 
         depth_points = self.depth_image_to_point_cloud(depth_img, K, image_shape)
-        depth_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(depth_points))
-        depth_cloud.voxel_down_sample(self.radius)
+        depth_cloud_raw = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(depth_points))
+        depth_cloud = depth_cloud_raw.voxel_down_sample(self.radius)
 
         # Register the current depth points with the last depth points
         start_time = time.time()
         if self.last_depth_cloud is not None:
-            T_last_curr = self.estimate_pose_icp(depth_cloud, self.last_depth_cloud, np.eye(4))
-            # self.draw_registration_result(depth_cloud, self.last_depth_cloud, T_last_curr)
+            self.T_last_curr = self.estimate_pose_icp(depth_cloud, self.last_depth_cloud, np.eye(4))
+            # self.draw_registration_result(depth_cloud, self.last_depth_cloud, self.T_last_curr)
         else:
-            T_last_curr = np.eye(4)
+            self.T_last_curr = np.eye(4)
         print(f"Time taken for ICP: {time.time() - start_time:.3f}s")
 
-        self.T_w_cam = self.T_w_cam @ T_last_curr
+        self.T_w_cam = self.T_w_cam @ self.T_last_curr
         self.last_depth_cloud = depth_cloud
 
         # Publish the current transformation as odometry
@@ -60,7 +60,7 @@ class DepthRegistration:
         self.publish_odometry(self.T_w_cam, header)
 
         ##### DEBUG(gogojjh):
-        print(T_last_curr[:3, 3].reshape(1, 3), self.T_w_cam[:3, 3].reshape(1, 3))
+        print(self.T_last_curr[:3, 3].reshape(1, 3), self.T_w_cam[:3, 3].reshape(1, 3))
 
     def draw_registration_result(self, source, target, transformation):
         radius = 0.2
@@ -95,15 +95,18 @@ class DepthRegistration:
         return points
 
     def estimate_pose_icp(self, source, target, current_transformation):
-        threshold = 0.5
         source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=1, max_nn=30))
         target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=1, max_nn=30))
+        
+        threshold = 0.5
+        loss = o3d.pipelines.registration.TukeyLoss(k=0.05)
         result_icp = o3d.pipelines.registration.registration_icp(
             source, target, threshold, current_transformation, 
-            o3d.pipelines.registration.TransformationEstimationPointToPlane(),
-            o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-2,
-                                    relative_rmse=1e-2,
-                                    max_iteration=5))
+            o3d.pipelines.registration.TransformationEstimationPointToPlane(loss),
+            o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-6,
+                                    relative_rmse=1e-6,
+                                    max_iteration=100))
+
         # threshold = 0.5
         # result_icp = o3d.pipelines.registration.registration_icp(
         #     source, target, threshold, current_transformation, 
