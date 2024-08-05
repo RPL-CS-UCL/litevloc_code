@@ -15,7 +15,7 @@ class DepthRegistration:
     def __init__(self):
         self.last_depth_cloud = None
         self.T_w_cam = np.eye(4)
-        self.radius = 0.2
+        self.radius = 0.4
         
         self.depth_sub = Subscriber("/habitat_camera/depth/image", Image)
         self.info_sub = Subscriber("/habitat_camera/depth/camera_info", CameraInfo)
@@ -96,21 +96,21 @@ class DepthRegistration:
 
     def estimate_pose_icp(self, source, target, current_transformation):
         threshold = 0.5
-        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.5, max_nn=30))
-        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.5, max_nn=30))
+        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=1, max_nn=30))
+        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=1, max_nn=30))
         result_icp = o3d.pipelines.registration.registration_icp(
             source, target, threshold, current_transformation, 
             o3d.pipelines.registration.TransformationEstimationPointToPlane(),
-            o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-3,
-                                    relative_rmse=1e-3,
-                                    max_iteration=20))
-        # threshold = 0.2
+            o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-2,
+                                    relative_rmse=1e-2,
+                                    max_iteration=5))
+        # threshold = 0.5
         # result_icp = o3d.pipelines.registration.registration_icp(
         #     source, target, threshold, current_transformation, 
         #     o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-        #     o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-3,
-        #                             relative_rmse=1e-3,
-        #                             max_iteration=10))
+        #     o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-2,
+        #                             relative_rmse=1e-2,
+        #                             max_iteration=20))
         # print('inlier_rmse: {}m'.format(result_icp.inlier_rmse))
         # print('current_transformation:\n{}'.format(current_transformation))
         return result_icp.transformation
