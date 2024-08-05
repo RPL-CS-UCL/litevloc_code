@@ -2,11 +2,12 @@ MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
   DATA_ROOT: '/Titan/dataset/data_apmp/hkustgz_campus/'
-  SCENES: [s00000, s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008, s00009, s00010, s00011, s00012, s00013, s00014, s00015, s00016, s00017]
-  ESTIMATED_DEPTH: None   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
+  # SCENES: [s00000, s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008, s00009, s00010, s00011, s00012, s00013, s00014, s00015, s00016, s00017]
+  SCENES: [s00000_sample]
+  ESTIMATED_DEPTH: zoe   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
-  HEIGHT: 720             # Images are resized
-  WIDTH: 1280
+  HEIGHT: 288             # Images are resized
+  WIDTH: 512
   MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!

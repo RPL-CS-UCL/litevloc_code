@@ -115,7 +115,8 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 if str_matcher == "duster" and args.viz:
                     print('Visualization')
                     matcher.scene.show(cam_size=0.05)
-                input()
+                time.sleep(0.5)
+                # input()
         except Exception as e:
             scene = data['scene_id'][0]
             query_img = data['pair_names'][1][0]
