@@ -17,6 +17,7 @@ from pycpptools.src.python.utils_sensor.camera_pinhole import CameraPinhole
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Select a fixed number of camera keyframes to maximize region coverage.")
     parser.add_argument('--path_dataset', type=str, required=True, help="Path to the dataset file")
+    parser.add_argument('--out_dir', type=str, required=True, help="Path to the stored file")
     parser.add_argument('--select_cam_ratio', type=float, default=0.1, help="Sample ratio for cameras")
     parser.add_argument('--grid_resolution', type=float, default=1.0, help="Resolution of the grid")
     parser.add_argument('--coverage_threshold', type=float, default=0.95, help="Coverage threshold")
@@ -26,13 +27,15 @@ def parse_arguments():
 
 def crop_points(points):
     """Real Anymal"""
+    # max_depth = 8.0
     # points = points[(points[:, 1] > -2.0) & (points[:, 1] < -0.5)]
-    # points = points[(points[:, 2] < 8.0)]
+    # points = points[(points[:, 2] < max_depth)]
     # points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.5]    
 
     """Simu Matterport3d"""
+    max_depth = 7.5
     points = points[(points[:, 1] > -1.0) & (points[:, 1] < 0.5)]
-    points = points[(points[:, 2] < 5.0)]
+    points = points[(points[:, 2] < max_depth)]
     points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.1]
     return points
 
@@ -49,6 +52,7 @@ class KeyFrameSelect:
         self.K = np.array([[intrinsics[0], 0, intrinsics[2]], [0, intrinsics[1], intrinsics[3]], [0, 0, 1]])
         self.num_select_cam = int(len(self.poses) * self.args.select_cam_ratio)
         self.sample_step = 5
+        self.start_indice = 0
 
         # Create a grid map
         min_x, max_x = np.min(self.poses[:, 0]) - 1, np.max(self.poses[:, 0]) + 1
@@ -70,6 +74,7 @@ class KeyFrameSelect:
     def store_depth_points(self):
         for indice, pose in enumerate(self.poses):
             if indice % self.sample_step != 0: continue
+            if indice < self.start_indice: continue
             if self.args.viz:
                 print(f"Storing Depth Points: {indice}")
             path_depth = os.path.join(self.args.path_dataset, f'seq/{indice:06d}.depth.png')
@@ -104,7 +109,7 @@ class KeyFrameSelect:
         for point_ij in points_ij:
             grid_map._occupancy[point_ij[0], point_ij[1]] = value
 
-    def run(self):
+    def select_greedy(self):
         select_cam_id = []
         all_cam_id = [k for k in self.world_depth_points_dict.keys()]
         num_total_occu = self.get_num_occupancy(self.full_grid_map)
@@ -113,7 +118,7 @@ class KeyFrameSelect:
             print(f"Remain Occupancy Ratio: {remain_occu_ratio:.5f}, Num of Select Cameras: {len(select_cam_id)}")
             if remain_occu_ratio > self.args.coverage_threshold or len(select_cam_id) > self.num_select_cam: break
 
-            random_cam_id = np.random.choice(all_cam_id, size=10, replace=False)
+            random_cam_id = np.random.choice(all_cam_id, size=20, replace=False)
             num_new_covered_list = []
             for cam_id in random_cam_id:
                 points_world = self.world_depth_points_dict[cam_id]
@@ -138,7 +143,9 @@ class KeyFrameSelect:
 
 def main():
     args = parse_arguments()
-    
+    os.makedirs(args.out_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.out_dir, 'seq'), exist_ok=True)
+
     print('Creating KeyFrameSelect Object')
     keyframe_select = KeyFrameSelect(args)
     print(f'Number of cameras: {len(keyframe_select.poses)}, Selected cameras: {keyframe_select.num_select_cam}')
@@ -154,24 +161,59 @@ def main():
         plt.ylabel('Y')
         plt.title('Full Occupancy Map')
         plt.show()
+    else:
+        gridshow(keyframe_select.full_grid_map.occupancy(), extent=keyframe_select.full_grid_map.get_extent_xy())
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Full Occupancy Map')        
+        plt.savefig(os.path.join(args.out_dir, 'full_occupancy_map.png'))
 
     print('Selecting Keyframes ...')
-    select_cam_id = keyframe_select.run()
+    select_cam_id = keyframe_select.select_greedy()
     if args.viz:
         gridshow(keyframe_select.inc_grid_map.occupancy(), extent=keyframe_select.inc_grid_map.get_extent_xy())
         plt.xlabel('X')
         plt.ylabel('Y')
         plt.title('Inc Occupancy Map From Selected Cameras')
         plt.show()
+    else:
+        gridshow(keyframe_select.inc_grid_map.occupancy(), extent=keyframe_select.inc_grid_map.get_extent_xy())
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Inc Occupancy Map From Selected Cameras')       
+        plt.savefig(os.path.join(args.out_dir, 'inc_occupancy_map.png'))        
 
     print(f'Selected Cameras: ' + ' '.join([str(i) for i in select_cam_id]))
     if args.viz:
         plot_cameras(keyframe_select.poses, 10, title='Raw Camera Observations')
         plot_cameras(keyframe_select.poses[select_cam_id], 1, title='Selected Camera Observations')
         plt.show()
+    else:
+        plot_cameras(keyframe_select.poses, 10, title='Raw Camera Observations')
+        plt.savefig(os.path.join(args.out_dir, 'raw_camera_poses.png'))
+        plot_cameras(keyframe_select.poses[select_cam_id], 1, title='Selected Camera Observations')
+        plt.savefig(os.path.join(args.out_dir, 'selected_camera_poses.png'))
 
-    path_output = os.path.join(args.path_dataset, 'selected_keyframes.txt')
-    np.savetxt(path_output, select_cam_id.reshape(-1, 1), fmt='%d')
+    """Save the selected keyframes"""
+    new_cam_id = 0
+    for cam_id in select_cam_id:
+        path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.color.jpg')
+        new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.color.jpg')
+        os.system(f'cp {path_img} {new_path_img}')
+
+        path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.depth.png')
+        new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.depth.png')
+        os.system(f'cp {path_img} {new_path_img}')
+
+        path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.semantic.png')
+        new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.semantic.png')
+        os.system(f'cp {path_img} {new_path_img}')
+        new_cam_id += 1
+    new_poses = np.loadtxt(os.path.join(args.path_dataset, 'poses.txt'))[select_cam_id, :]
+    new_intrinsics = np.loadtxt(os.path.join(args.path_dataset, 'intrinsics.txt'))[select_cam_id, :]
+    np.savetxt(os.path.join(args.out_dir, 'poses.txt'), new_poses, fmt='%.5f')
+    np.savetxt(os.path.join(args.out_dir, 'intrinsics.txt'), new_intrinsics, fmt='%.5f')
+    np.savetxt(os.path.join(args.out_dir, 'selected_keyframes_rawid.txt'), select_cam_id.reshape(-1, 1), fmt='%d')
 
 if __name__ == "__main__":
     main()
