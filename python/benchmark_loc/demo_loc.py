@@ -1,31 +1,34 @@
 """
-Usage: python test_image_matching_method.py \
---matcher duster \
---input /Titan/code/robohike_ws/src/topo_loc/python/test/logs/match_pairs.txt \
---image_sizesd 288 512
+Usage: 
+python demo_loc.py \
+--matcher master \
+--config data/toy_example/loc_config.yaml \
+--path_rgb_img0 data/toy_example/im2.jpg \
+--path_rgb_img1 data/toy_example/im3.jpg \
+--path_depth_img0 data/toy_example/im2_depth.png \
+--path_depth_img1 data/toy_example/im3_depth.png \
+--path_intrinsics0 data/toy_example/im2_intrinsics.txt \
+--path_intrinsics1 data/toy_example/im3_intrinsics.txt
 """
 
 import time
 import os
 import sys
-from tqdm import tqdm
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map-free-reloc"))
 
+from tqdm import tqdm
 import torch
 import argparse
 import matplotlib
 from pathlib import Path
 import numpy as np
-
 from matching import available_models, get_matcher
 from matching.utils import to_numpy, get_image_pairs_paths
-
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 from utils.utils_image_matching_method import *
 from utils.utils_image import load_rgb_image, load_depth_image
-from pose_solver import available_solvers, get_solver
-
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map-free-reloc"))
-from config.default import cfg
+from utils.pose_solver import available_solvers, get_solver
+from utils.pose_solver_default import cfg
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):
@@ -99,7 +102,6 @@ def setup_args():
     )
     return parser.parse_args()
 
-
 def read_intrinsics(path_intrinsics, resize):
     """
     Reads the intrinsic camera parameters from a file and optionally resizes them.    
@@ -133,7 +135,6 @@ def read_intrinsics(path_intrinsics, resize):
             if resize is not None:
                 K = correct_intrinsic_scale(K, resize[0] / W, resize[1] / H).numpy()
     return K
-
 
 def main(args):
     """Setup Logging"""

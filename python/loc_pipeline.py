@@ -1,19 +1,23 @@
 #!/usr/bin/env python
 
 """
-Usage: python loc_pipeline.py --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos --image_size 288 512 --device=cuda \
---depth_scale 0.001 --min_depth_pro 0.1 --max_depth_pro 20.0 \
+Usage: 
+python loc_pipeline.py \
+--dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
+--image_size 288 512 --device=cuda \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
---img_matcher duster --save_img_matcher --no_viz \
---obs_camera_type obs_zed --map_camera_type map_zed
-"""
+--img_matcher master --save_img_matcher \
+--pose_solver pnp --config_pose_solver config/dataset/matterport3d.yaml \
+--no_viz
 
-"""
-Usage: rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc.bag \
+Usage: 
+rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc.bag \
 /vloc/odom /vloc/path /vloc/path_gt /vloc/image_map_obs
 """
 
 import os
+import sys
+
 import pathlib
 import numpy as np
 import torch
@@ -29,17 +33,18 @@ import tf2_ros
 from matching.utils import to_numpy
 from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search
 from utils.utils_vpr_method import save_visualization as save_vpr_visualization
-from utils.utils_image_matching_method import initialize_img_matcher, compute_scale_factor, plot_images
+from utils.utils_image_matching_method import initialize_img_matcher
 from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
-from utils.utils_image_matching_method import save_output as save_img_matcher_output
 from utils.utils_image import load_rgb_image, load_depth_image
 from utils.utils_pipeline import *
+from utils.pose_solver import get_solver
+from utils.pose_solver_default import cfg
 from image_graph import ImageGraphLoader as GraphLoader
 from image_node import ImageNode
 
-import pycpptools.src.python.utils_algorithm as pytool_alg
 import pycpptools.src.python.utils_math as pytool_math
 import pycpptools.src.python.utils_ros as pytool_ros
+import pycpptools.src.python.utils_sensor as pytool_sensor
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):
@@ -53,7 +58,14 @@ class LocPipeline:
 		self.has_local_position = False
 
 		self.vpr_model = initialize_vpr_model(self.args.vpr_method, self.args.vpr_backbone, self.args.vpr_descriptors_dimension, self.args.device)
+		logging.info(f"VPR model: {self.args.vpr_method}")
+
 		self.img_matcher = initialize_img_matcher(self.args.img_matcher, self.args.device, self.args.n_kpts)
+		logging.info(f"Image matcher: {self.args.img_matcher}")
+		
+		cfg.merge_from_file(self.args.config_pose_solver)
+		self.pose_solver = get_solver(self.args.pose_solver, cfg)
+		logging.info(f"Pose solver: {self.args.pose_solver}")
 
 		self.pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
 		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
@@ -67,18 +79,21 @@ class LocPipeline:
 		self.path_msg = Path()
 		self.path_gt_msg = Path()
 
-		self.map_camera_type = 'map_zed'
-		self.obs_camera_type = 'obs_zed'
-
 	def read_map_from_file(self):
-		data_path = os.path.join(self.args.dataset_path, self.map_camera_type)
+		data_path = self.args.dataset_path
 		self.image_graph = GraphLoader.load_data(
 			data_path,
 			self.args.image_size,
-			self.args.depth_scale,
+			depth_scale=self.args.depth_scale,
 			normalized=False
 		)
 		logging.info(f"Loaded {self.image_graph} from {data_path}")
+
+		# Extract VPR descriptors for all nodes in the map
+		# Constant variables
+		self.DB_DESCRIPTORS_ID = np.array(self.image_graph.get_all_id())
+		self.DB_DESCRIPTORS = np.array([map_node.get_descriptor() for _, map_node in self.image_graph.nodes.items()], dtype="float32")
+		print(f"IDs: {self.DB_DESCRIPTORS_ID} extracted {self.DB_DESCRIPTORS.shape} VPR descriptors.")
 
 	def perform_vpr(self, db_descs, query_desc):
 		query_desc_arr = np.empty((1, self.args.vpr_descriptors_dimension), dtype="float32")
@@ -93,7 +108,8 @@ class LocPipeline:
 
 	def perform_image_matching(self, map_node, obs_node):
 		try:
-			matcher_result = self.img_matcher(map_node.rgb_image, obs_node.rgb_image)
+			# obs_node.rgb_image has depth
+			matcher_result = self.img_matcher(obs_node.rgb_image, map_node.rgb_image)
 			num_inliers, H, mkpts0, mkpts1 = (
 				matcher_result["num_inliers"],
 				matcher_result["H"],
@@ -102,28 +118,14 @@ class LocPipeline:
 			)
 			out_str = f"Paths: map_id ({map_node.id}), obs_id ({obs_node.id}). "
 			out_str += f"Found {num_inliers} inliers after RANSAC. "
+
 			"""Save matching results"""
 			if self.args.save_img_matcher:
-				save_img_matcher_visualization(map_node.rgb_image, obs_node.rgb_image, 
-																			 mkpts0, mkpts1, self.log_dir, obs_node.id, n_viz=100)
-				# save_img_matcher_output(matcher_result, None, None, 
-				# 												self.args.img_matcher, self.args.n_kpts, 
-				# 												self.args.image_size, self.log_dir, obs_node.id)
-			if num_inliers > 100:
-				depth_img_meas = np.squeeze(np.transpose(to_numpy(obs_node.depth_image), (1, 2, 0)), axis=2)
-				depth_img_est = to_numpy(self.img_matcher.scene.get_depthmaps())[1]
-				mask = (depth_img_meas < self.args.min_depth_pro) | (depth_img_meas > self.args.max_depth_pro)
-				depth_img_meas[mask] = 0.0
-				depth_img_est[mask] = 0.0
-				meas_scale = compute_scale_factor(depth_img_meas, depth_img_est, delta=0.5)
-				# plot_images(depth_img_meas, depth_img_est * meas_scale, title1='Depth (GT)', title2='Depth (Est)', 
-				# 						save_path=os.path.join(self.log_dir, 'preds', f'depth_map_{obs_node.id:06d}.jpg'))
-				im_poses = to_numpy(self.img_matcher.scene.get_im_poses())
-				est_T_ref_obs = np.linalg.inv(im_poses[0]) if abs(np.sum(np.diag(im_poses[1])) - 4.0) < 1e-5 else im_poses[1]
-				est_T_ref_obs[:3, 3] *= meas_scale
-				matcher_result["meas_scale"] = meas_scale
-				matcher_result["est_T_ref_obs"] = est_T_ref_obs
-				return matcher_result
+				save_img_matcher_visualization(
+					obs_node.rgb_image, map_node.rgb_image,
+					mkpts0, mkpts1, self.log_dir, obs_node.id, n_viz=100)
+				
+			return matcher_result
 		except Exception as e:
 			logging.error(f"Error in image matching: {e}")
 		return None
@@ -168,39 +170,50 @@ class LocPipeline:
 	def run(self):
 		rospy.init_node('loc_pipeline_node', anonymous=True)
 
-		# Extract VPR descriptors for all nodes in the map
-		db_descriptors_id = np.array(self.image_graph.get_all_id())
-		db_descriptors = np.array([map_node.get_descriptor() for _, map_node in self.image_graph.nodes.items()], dtype="float32")
-		print(f"IDs: {db_descriptors_id} extracted {db_descriptors.shape} VPR descriptors.")
-
 		"""Main loop for processing observations"""
-		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, self.args.obs_camera_type, 'camera_pose_gt.txt'))
+		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, '../out_general', 'poses.txt'))
+		obs_cam_intrinsics = np.loadtxt(os.path.join(self.args.dataset_path, '../out_general', 'intrinsics.txt'))
 
 		rate = rospy.Rate(100)
 		for obs_id in range(0, len(obs_poses_gt), 10):
-			if rospy.is_shutdown(): 
-				break
+			if rospy.is_shutdown(): break
 
 			# Load observation data
-			print(f"obs_id: {obs_id}")
-			rgb_img_path = os.path.join(self.args.dataset_path, f'{self.obs_camera_type}/rgb', f'{obs_id:06d}.png')
-			rgb_img = load_rgb_image(rgb_img_path, self.args.image_size, normalized=False)
-			depth_img_path = os.path.join(self.args.dataset_path, f'{self.obs_camera_type}/depth', f'{obs_id:06d}.png')
-			depth_img = load_depth_image(depth_img_path, self.args.image_size, depth_scale=self.args.depth_scale)
+			print(f"Loading observation with id {obs_id}")
+			img_size = self.args.image_size
+
+			rgb_img_path = os.path.join(self.args.dataset_path, '../out_general/seq', f'{obs_id:06d}.color.jpg')
+			rgb_img = load_rgb_image(rgb_img_path, img_size, normalized=False)
+
+			depth_img_path = os.path.join(self.args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
+			depth_img = load_depth_image(depth_img_path, img_size, depth_scale=self.args.depth_scale)
+
+			K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
+						  obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
+						  0, 0, 1], dtype=np.float32).reshape(3, 3)
+			raw_img_size = (obs_cam_intrinsics[obs_id, 4], obs_cam_intrinsics[obs_id, 5]) # width, height
+			if img_size is not None:
+				K = pytool_sensor.utils.correct_intrinsic_scale(K, img_size[0] / raw_img_size[0], img_size[1] / raw_img_size[1])
+			else:
+				img_size = raw_img_size
+
+			# Extract VPR descriptors
 			vpr_start_time = time.time()
 			with torch.no_grad():
 				desc = self.vpr_model(rgb_img.unsqueeze(0).to(self.args.device)).cpu().numpy()
 			print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
-			obs_node = ImageNode(obs_id, rgb_img, depth_img, desc, 0,
-													 np.zeros(3), np.array([0, 0, 0, 1]),
-													 rgb_img_path, depth_img_path)
+
+			# Create observation node
+			obs_node = ImageNode(obs_id, rgb_img, depth_img, desc, 0, K, img_size,
+								 np.zeros(3), np.array([0, 0, 0, 1]),
+								 rgb_img_path, depth_img_path)
 			obs_node.set_pose_gt(obs_poses_gt[obs_id, 1:4], obs_poses_gt[obs_id, 4:])
 			self.curr_obs_node = obs_node
 
 			"""Perform global localization via. visual place recognition"""
 			if not self.has_global_pos:
 				gl_start_time = time.time()
-				vpr_dis, vpr_pred = self.perform_vpr(db_descriptors, self.curr_obs_node.get_descriptor())
+				vpr_dis, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
 				vpr_dis, vpr_pred = vpr_dis[0, :], vpr_pred[0, :]
 				print(f"Global localization time via. VPR: {time.time() - gl_start_time:.3f}s")
 				if len(vpr_pred) == 0:
@@ -211,13 +224,13 @@ class LocPipeline:
 				if self.args.num_preds_to_save != 0:
 					list_of_images_paths = [self.curr_obs_node.rgb_img_path]
 					for i in range(len(vpr_pred[:self.args.num_preds_to_save])):
-						map_node = self.image_graph.get_node(db_descriptors_id[vpr_pred[i]])
+						map_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[vpr_pred[i]])
 						list_of_images_paths.append(map_node.rgb_img_path)
 					preds_correct = [None] * len(list_of_images_paths)
 					save_vpr_visualization(self.log_dir, 0, list_of_images_paths, preds_correct)				
 
 				self.has_global_pos = True
-				self.global_pos_node = self.image_graph.get_node(db_descriptors_id[vpr_pred[0]])
+				self.global_pos_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[vpr_pred[0]])
 				self.curr_obs_node.set_pose(self.global_pos_node.trans, self.global_pos_node.quat)
 				self.last_obs_node = None
 			else:
@@ -226,47 +239,65 @@ class LocPipeline:
 
 			"""Perform local localization via. image matching"""
 			if self.has_global_pos:
+				# Find the most similar map node as the reference node
 				db_poses = np.empty((self.image_graph.get_num_node(), 3), dtype="float32")
 				for indices, (_, map_node) in enumerate(self.image_graph.nodes.items()):
 					db_poses[indices, :] = map_node.trans
 				query_pose = self.curr_obs_node.trans.reshape(1, 3)
 
-				min_dis = 25.0
+				min_dis = 15.0
 				knn_dis, knn_pred = perform_knn_search(db_poses, query_pose, 3, recall_values=[10])
 				knn_dis, knn_pred = knn_dis[0], knn_pred[0]
 				knn_pred, knn_dis = knn_pred[knn_dis < min_dis], knn_dis[knn_dis < min_dis]
-				db_descriptors_select = db_descriptors[knn_pred, :]
-				db_descriptors_id_select = db_descriptors_id[knn_pred]
+				db_descriptors_select = self.DB_DESCRIPTORS[knn_pred, :]
+				db_descriptors_id_select = self.DB_DESCRIPTORS_ID[knn_pred]
 				print('db_descriptors_id_select: ', db_descriptors_id_select)
-
 				vpr_dis, vpr_pred = self.perform_vpr(db_descriptors_select, self.curr_obs_node.get_descriptor())
 				self.ref_map_node = self.image_graph.get_node(db_descriptors_id_select[vpr_pred[0, 0]])
-				# print(f'VPR dis: {vpr_dis}')
 				print(f'Found the reference map node: {self.ref_map_node.id}')
 
 				im_start_time = time.time()
 				matcher_result = self.perform_image_matching(self.ref_map_node, self.curr_obs_node)
 				print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s")
 
-				if matcher_result is not None:
-					print(f'Groundtruth Poses: {self.curr_obs_node.trans_gt.T}')
-					meas_scale, est_T_ref_obs = matcher_result["meas_scale"], matcher_result["est_T_ref_obs"]
-					T_w_map_node = pytool_math.tools_eigen.convert_vec_to_matrix(
-						self.ref_map_node.trans_gt, 
-						self.ref_map_node.quat_gt, 
-						'xyzw'
-					)
-					T_w_obs = T_w_map_node @ est_T_ref_obs
+				try:
+					T_mapnode_obs = None
+					if self.args.img_matcher == "mickey":
+						R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
+						R, t = to_numpy(R), to_numpy(t)
+						T_mapnode_obs = np.eye(4)
+						T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t
+						print(f'Mickey Solver:\n', T_mapnode_obs)
+					else:
+						depth_img0 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
+						mkpts0, mkpts1 = (
+							matcher_result["inliers0"],
+							matcher_result["inliers1"],
+						)					
+						R, t, inliers = self.pose_solver.estimate_pose(
+							mkpts0, mkpts1, 
+							self.curr_obs_node.K, self.ref_map_node.K, 
+							depth_img0, None)
+						T_mapnode_obs = np.eye(4)
+						T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
+						print(f'{self.pose_solver}:\nNumber of inliers:{inliers}\n', T_mapnode_obs)
+				except Exception as e:
+					print(f'Failed to estimate pose with {self.pose_solver}:', e)
+
+				if T_mapnode_obs is not None:
+					T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
+						self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
+					T_w_obs = T_w_mapnode @ T_mapnode_obs
 					trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
 					self.curr_obs_node.set_pose(trans, quat)
-					print(f'Estimated Poses with Meas scale {meas_scale:.3f}: {trans.T}\n')
-
-					if not self.args.no_viz:
-						self.img_matcher.scene.show(cam_size=0.05)				
+					
+					print(f'Groundtruth Poses: {self.curr_obs_node.trans_gt.T}')
+					print(f'Estimated Poses: {trans.T}\n')
 
 			self.publish_message()
 			self.last_obs_node = self.curr_obs_node
 			rate.sleep()
+			input()
 
 if __name__ == '__main__':
 	args = parse_arguments()

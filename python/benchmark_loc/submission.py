@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from transforms3d.quaternions import mat2quat
 
-from pose_solver import available_solvers, get_solver
+from python.utils.pose_solver import available_solvers, get_solver
 from matching import available_models, get_matcher
 from matching.utils import to_numpy, get_image_pairs_paths
 

@@ -100,7 +100,6 @@ def initialize_img_matcher(matcher, device, n_kpts):
     """Initialize the matcher with provided arguments."""
     return get_matcher(matcher, device=device, max_num_keypoints=n_kpts)
 
-
 def rgb(ftensor, true_shape=None):
     if isinstance(ftensor, list):
         return [rgb(x, true_shape=true_shape) for x in ftensor]

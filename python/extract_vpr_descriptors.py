@@ -1,33 +1,31 @@
-'''
-Usage: python extract_vpr_descriptors.py --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos \
+"""
+Usage:
+python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
 --method cosplace --backbone ResNet18 --descriptors_dimension 512 \
 --num_preds_to_save 3 \
 --image_size 288 512 \
 --device cuda \
 --save_descriptors
 
-Usage for Jetson: python global_planner.py --start_node_id 0 --dataset_path /Titan/dataset/data_topo_loc/anymal_ops_mos \
---image_size 200 200 --device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 \
---vpr_descriptors_dimension=256 --save_descriptors --num_preds_to_save 3 \
+Usage for Jetson: 
+python global_planner.py --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
+--method cosplace --backbone ResNet18 --descriptors_dimension 256 \
+--num_preds_to_save 3 \
+--image_size 200 200 \
+--device cuda \
 --save_descriptors
-'''
+"""
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../'))
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../VPR-methods-evaluation'))
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../VPR-methods-evaluation/third_party/deep-image-retrieval'))
 
 import time
-import argparse
 import matplotlib
 from pathlib import Path
 import numpy as np
 import torch
 
 from utils.utils_vpr_method import *
-from utils.utils_image import load_rgb_image
 from image_graph import ImageGraphLoader
-from image_node import ImageNode
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):
@@ -43,11 +41,7 @@ def main(args):
 	model = initialize_vpr_model(args.method, args.backbone, args.descriptors_dimension, args.device)
 
 	"""Load images"""
-	map_camera_type = 'map_kinect_5_45'
-	image_graph = ImageGraphLoader.load_data(os.path.join(args.dataset_path, map_camera_type), 
-																					 image_size=args.image_size, 
-																					 depth_scale=0.001,
-																					 normalized=True)
+	image_graph = ImageGraphLoader.load_data(args.dataset_path, args.image_size, depth_scale=0.001, normalized=True)
 
 	# Extract VPR descriptors for all nodes in the map
 	start_time = time.time()

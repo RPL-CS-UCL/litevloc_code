@@ -1,16 +1,17 @@
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation'))
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation/third_party/deep-image-retrieval'))
-
 import logging
 from datetime import datetime
 import argparse
-
 import numpy as np
 import matplotlib
-
 from matching import available_models
+from utils.pose_solver import available_solvers
+
+sys.path.extend([
+	os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation'),
+	os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation/third_party/deep-image-retrieval')
+])
 
 if not hasattr(sys, "ps1"):
 	matplotlib.use("Agg")
@@ -58,12 +59,12 @@ def parse_arguments():
 											help="Resizing shape for images (HxW). If a single int is passed, set the"
 											"smallest edge of all images to this value, while keeping aspect ratio")
 	parser.add_argument("--no_viz", action="store_true", help="pass --no_viz to avoid saving visualizations")
-	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
-	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
+	# parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
+	# parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
 	parser.add_argument("--unit_type", action="store_true", help="depth images are encoded to uint16 (True) or float32 (False)")
-	parser.add_argument('--depth_scale', type=float, default=0.001, help='habitat: 0.039, anymal: 0.001')
-	parser.add_argument('--min_depth_pro', type=float, default=0.1, help='pixels are processed only if depth > min_depth_pro')
-	parser.add_argument('--max_depth_pro', type=float, default=5.5, help='pixels are processed only if depth < min_depth_pro')  
+	parser.add_argument('--depth_scale', type=float, default=0.001, help='0.001 or 1')
+	# parser.add_argument('--min_depth_pro', type=float, default=0.1, help='pixels are processed only if depth > min_depth_pro')
+	# parser.add_argument('--max_depth_pro', type=float, default=5.5, help='pixels are processed only if depth < min_depth_pro')  
 
 	"""
 	Parameters for VPR methods
@@ -108,6 +109,12 @@ def parse_arguments():
 	parser.add_argument("--n_kpts", type=int, default=2048, help="max num keypoints")
 	parser.add_argument("--save_img_matcher", action="store_true",
 											help="set to True if you want to save image matching by the model")	
+
+	"""
+	Parameters for pose solver
+	"""
+	parser.add_argument("--pose_solver", type=str, default="pnp", choices=available_solvers)
+	parser.add_argument("--config_pose_solver", type=str, default="matterport3d.yaml")
 
 	"""
 	Parse the argments
