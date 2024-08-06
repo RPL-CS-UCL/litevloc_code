@@ -15,10 +15,10 @@ class ImageGraphLoader:
 	@staticmethod
 	def load_data(graph_path, img_size, depth_scale, normalized=False):
 		image_graph = ImageGraph()
+		
 		poses = np.loadtxt(os.path.join(graph_path, 'poses.txt'))
 		intrinsics = np.loadtxt(os.path.join(graph_path, 'intrinsics.txt'))
 		descs_path = os.path.join(graph_path, 'database_descriptors.npy')
-		
 		if os.path.exists(descs_path):
 			descs = np.load(descs_path)
 		else:	
@@ -43,12 +43,16 @@ class ImageGraphLoader:
 			raw_img_size = (intrinsics[i, 4], intrinsics[i, 5]) # width, height
 			if img_size is not None:
 				K = correct_intrinsic_scale(K, img_size[0] / raw_img_size[0], img_size[1] / raw_img_size[1])
+				node = ImageNode(i, rgb_image, depth_image, f'image node {i}', 
+								 time, trans, quat, 
+								 K, img_size,
+								 rgb_img_path, depth_img_path)
 			else:
-				img_size = raw_img_size
-			
-			node = ImageNode(i, rgb_image, depth_image, f'image node {i}', 
-							time, trans, quat, K, img_size,
-							rgb_img_path, depth_img_path)
+				node = ImageNode(i, rgb_image, depth_image, f'image node {i}', 
+								 time, trans, quat, 
+								 K, raw_img_size,
+								 rgb_img_path, depth_img_path)
+
 			node.set_pose_gt(trans, quat)
 			if descs is not None:
 				node.set_descriptor(descs[i, :])

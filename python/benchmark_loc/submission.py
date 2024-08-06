@@ -12,17 +12,16 @@ from dataclasses import dataclass
 from zipfile import ZipFile
 
 import time
-import torch
 import numpy as np
 from tqdm import tqdm
 
 from transforms3d.quaternions import mat2quat
 
-from python.utils.pose_solver import available_solvers, get_solver
 from matching import available_models, get_matcher
-from matching.utils import to_numpy, get_image_pairs_paths
+from matching.utils import to_numpy
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
+from utils.pose_solver import available_solvers, get_solver
 from utils.utils_image_matching_method import save_visualization
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map-free-reloc"))
@@ -59,7 +58,7 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             rgb_img0 = rgb_img0.squeeze(0)
             rgb_img1 = rgb_img1.squeeze(0)
             K0, K1 = data['K_color0'], data['K_color1']
-            if str_matcher == "mickey": matcher.K0, matcher.K1 = K0, K1         
+            if str_matcher == "mickey": matcher.K0, matcher.K1 = K0, K1
 
             """Image Matching"""
             start_time = time.time()

@@ -21,7 +21,7 @@ def load_rgb_image(
         transformations.append(
             tfm.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         )
-    if resize:
+    if resize is not None:
         transformations.append(tfm.Resize(size=resize, antialias=True))
     transform = tfm.Compose(transformations)
 
@@ -46,7 +46,7 @@ def load_depth_image(
         resize = (resize, resize)
     # Set up transformations: - Convert to tensor, - Resize
     transformations = [tfm.ToTensor()]
-    if resize:
+    if resize is not None:
         transformations.append(tfm.Resize(size=resize, antialias=True))
     transform = tfm.Compose(transformations)
 

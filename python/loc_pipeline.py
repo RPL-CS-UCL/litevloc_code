@@ -175,7 +175,7 @@ class LocPipeline:
 		obs_cam_intrinsics = np.loadtxt(os.path.join(self.args.dataset_path, '../out_general', 'intrinsics.txt'))
 
 		rate = rospy.Rate(100)
-		for obs_id in range(0, len(obs_poses_gt), 10):
+		for obs_id in range(0, len(obs_poses_gt), 1):
 			if rospy.is_shutdown(): break
 
 			# Load observation data
@@ -204,8 +204,9 @@ class LocPipeline:
 			print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
 
 			# Create observation node
-			obs_node = ImageNode(obs_id, rgb_img, depth_img, desc, 0, K, img_size,
-								 np.zeros(3), np.array([0, 0, 0, 1]),
+			obs_node = ImageNode(obs_id, rgb_img, depth_img, desc,
+								 0, np.zeros(3), np.array([0, 0, 0, 1]),
+								 K, img_size,
 								 rgb_img_path, depth_img_path)
 			obs_node.set_pose_gt(obs_poses_gt[obs_id, 1:4], obs_poses_gt[obs_id, 4:])
 			self.curr_obs_node = obs_node
@@ -245,7 +246,8 @@ class LocPipeline:
 					db_poses[indices, :] = map_node.trans
 				query_pose = self.curr_obs_node.trans.reshape(1, 3)
 
-				min_dis = 15.0
+				# DEBUG(gogojjh): may fin dwrong reference node
+				min_dis = 5.0
 				knn_dis, knn_pred = perform_knn_search(db_poses, query_pose, 3, recall_values=[10])
 				knn_dis, knn_pred = knn_dis[0], knn_pred[0]
 				knn_pred, knn_dis = knn_pred[knn_dis < min_dis], knn_dis[knn_dis < min_dis]
@@ -280,9 +282,9 @@ class LocPipeline:
 							depth_img0, None)
 						T_mapnode_obs = np.eye(4)
 						T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
-						print(f'{self.pose_solver}:\nNumber of inliers:{inliers}\n', T_mapnode_obs)
+						print(f'{self.args.pose_solver}:\nNumber of inliers: {inliers}\n', T_mapnode_obs)
 				except Exception as e:
-					print(f'Failed to estimate pose with {self.pose_solver}:', e)
+					print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
 
 				if T_mapnode_obs is not None:
 					T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
@@ -297,7 +299,7 @@ class LocPipeline:
 			self.publish_message()
 			self.last_obs_node = self.curr_obs_node
 			rate.sleep()
-			input()
+			# input()
 
 if __name__ == '__main__':
 	args = parse_arguments()
