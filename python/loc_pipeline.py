@@ -66,6 +66,7 @@ class LocPipeline:
 		self.pose_solver = get_solver(self.args.pose_solver, cfg)
 		logging.info(f"Pose solver: {self.args.pose_solver}")
 
+	def setup_ros_publishers(self):
 		self.pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
 		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
 		
@@ -133,7 +134,7 @@ class LocPipeline:
 			logging.error(f"Error in image matching: {e}")
 		return None
 
-	def perform_global_loc(self):
+	def perform_global_loc(self, save=False):
 		gl_start_time = time.time()
 		vpr_dis, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
 		vpr_dis, vpr_pred = vpr_dis[0, :], vpr_pred[0, :]
@@ -143,7 +144,7 @@ class LocPipeline:
 			return {'succ': False, 'map_id': None}
 
 		# Save VPR visualization for the top-k predictions
-		if self.args.num_preds_to_save != 0:
+		if save:
 			list_of_images_paths = [self.curr_obs_node.rgb_img_path]
 			for i in range(len(vpr_pred[:self.args.num_preds_to_save])):
 				map_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[vpr_pred[i]])
@@ -160,11 +161,11 @@ class LocPipeline:
 		knn_dis, knn_pred = knn_dis[0], knn_pred[0]
 		knn_pred, knn_dis = knn_pred[knn_dis < min_dis], knn_dis[knn_dis < min_dis]
 		db_select, db_id_select = self.DB_DESCRIPTORS[knn_pred, :], self.DB_DESCRIPTORS_ID[knn_pred]
-		print('Near Map ID and dis: ', db_id_select, knn_dis)
+		logging.info('Near Map ID and dis: ', db_id_select, knn_dis)
 		# find the most similar map node
 		vpr_dis, vpr_pred = self.perform_vpr(db_select, self.curr_obs_node.get_descriptor())
-		vpr_dis, vpr_pred = vpr_dis[0][:5], vpr_pred[0][:5]
-		while len(vpr_pred) > 0:
+		vpr_dis, vpr_pred = vpr_dis[0], vpr_pred[0]
+		while len(vpr_pred) > 0 and vpr_pred[0] > 0:
 			map_id = db_id_select[vpr_pred[0]]
 			im_start_time = time.time()
 			matcher_result = self.perform_image_matching(self.image_graph.get_node(map_id), self.curr_obs_node)
@@ -247,13 +248,11 @@ def perform_localization(loc: LocPipeline, args):
 	"""Main loop for processing observations"""
 	obs_poses_gt = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'poses.txt'))
 	obs_cam_intrinsics = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'intrinsics.txt'))
+	img_size = args.image_size
 
-	rate = rospy.Rate(100)
 	for obs_id in range(0, len(obs_poses_gt), 30):
 		if rospy.is_shutdown(): break
-
 		print(f"Loading observation with id {obs_id}")
-		img_size = args.image_size
 
 		rgb_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.color.jpg')
 		rgb_img = load_rgb_image(rgb_img_path, img_size, normalized=False)
@@ -261,13 +260,17 @@ def perform_localization(loc: LocPipeline, args):
 		depth_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
 		depth_img = load_depth_image(depth_img_path, img_size, depth_scale=args.depth_scale)
 
-		K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
-						obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
-						0, 0, 1], dtype=np.float32).reshape(3, 3)
+		raw_K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
+						  obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
+						  0, 0, 1], dtype=np.float32).reshape(3, 3)
 		raw_img_size = (obs_cam_intrinsics[obs_id, 4], obs_cam_intrinsics[obs_id, 5]) # width, height
 		if img_size is not None:
-			K = pytool_sensor.utils.correct_intrinsic_scale(K, img_size[0] / raw_img_size[0], img_size[1] / raw_img_size[1])
+			K = pytool_sensor.utils.correct_intrinsic_scale(
+				raw_K, 
+				img_size[0] / raw_img_size[0], 
+				img_size[1] / raw_img_size[1])
 		else:
+			K = raw_K
 			img_size = raw_img_size
 
 		# Extract VPR descriptors
@@ -286,7 +289,7 @@ def perform_localization(loc: LocPipeline, args):
 
 		"""Perform global localization via. visual place recognition"""
 		if not loc.has_global_pos:
-			result = loc.perform_global_loc()
+			result = loc.perform_global_loc(save=(args.num_preds_to_save!=0))
 			if result['succ']:
 				matched_map_id = result['map_id']
 				loc.has_global_pos = True
@@ -315,7 +318,7 @@ def perform_localization(loc: LocPipeline, args):
 
 		loc.publish_message()
 		loc.last_obs_node = loc.curr_obs_node
-		rate.sleep()
+		time.sleep(0.01)
 		input()
 
 if __name__ == '__main__':
@@ -324,8 +327,11 @@ if __name__ == '__main__':
 	out_dir.mkdir(exist_ok=True, parents=True)
 	log_dir = setup_log_environment(out_dir, args)
 
+	# Initialize the localization pipeline
 	loc_pipeline = LocPipeline(args, log_dir)
 	loc_pipeline.read_map_from_file()
 
 	rospy.init_node('loc_pipeline_node', anonymous=True)
+	loc_pipeline.setup_ros_publishers()
+
 	perform_localization(loc_pipeline, args)
