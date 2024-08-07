@@ -95,6 +95,11 @@ class LocPipeline:
 		self.DB_DESCRIPTORS = np.array([map_node.get_descriptor() for _, map_node in self.image_graph.nodes.items()], dtype="float32")
 		print(f"IDs: {self.DB_DESCRIPTORS_ID} extracted {self.DB_DESCRIPTORS.shape} VPR descriptors.")
 
+		self.DB_POSES = np.empty((self.image_graph.get_num_node(), 7), dtype="float32")
+		for indices, (_, map_node) in enumerate(self.image_graph.nodes.items()):
+			self.DB_POSES[indices, :3] = map_node.trans
+			self.DB_POSES[indices, 3:] = map_node.quat
+
 	def perform_vpr(self, db_descs, query_desc):
 		query_desc_arr = np.empty((1, self.args.vpr_descriptors_dimension), dtype="float32")
 		query_desc_arr[0] = query_desc
@@ -175,7 +180,7 @@ class LocPipeline:
 		obs_cam_intrinsics = np.loadtxt(os.path.join(self.args.dataset_path, '../out_general', 'intrinsics.txt'))
 
 		rate = rospy.Rate(100)
-		for obs_id in range(0, len(obs_poses_gt), 1):
+		for obs_id in range(100, len(obs_poses_gt), 10):
 			if rospy.is_shutdown(): break
 
 			# Load observation data
@@ -240,28 +245,41 @@ class LocPipeline:
 
 			"""Perform local localization via. image matching"""
 			if self.has_global_pos:
-				# Find the most similar map node as the reference node
-				db_poses = np.empty((self.image_graph.get_num_node(), 3), dtype="float32")
-				for indices, (_, map_node) in enumerate(self.image_graph.nodes.items()):
-					db_poses[indices, :] = map_node.trans
-				query_pose = self.curr_obs_node.trans.reshape(1, 3)
+				# _, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
+				# knn_pred = knn_pred[0]
+				# if len(knn_pred) == 0: continue
+				# dis_TF_list = [pytool_math.tools_eigen.compute_relative_dis_TF(
+				# 	pytool_math.tools_eigen.convert_vec_to_matrix(self.curr_obs_node.trans, self.curr_obs_node.quat, 'xyzw'),
+				# 	pytool_math.tools_eigen.convert_vec_to_matrix(self.DB_POSES[knn_pred[i], :3], self.DB_POSES[knn_pred[i], 3:], 'xyzw')
+				# ) for i in range(len(knn_pred))]
 
+				#######################################################
 				# DEBUG(gogojjh): may fin dwrong reference node
-				min_dis = 5.0
-				knn_dis, knn_pred = perform_knn_search(db_poses, query_pose, 3, recall_values=[10])
+				#######################################################
+				min_dis = 10.0
+				knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
 				knn_dis, knn_pred = knn_dis[0], knn_pred[0]
 				knn_pred, knn_dis = knn_pred[knn_dis < min_dis], knn_dis[knn_dis < min_dis]
 				db_descriptors_select = self.DB_DESCRIPTORS[knn_pred, :]
 				db_descriptors_id_select = self.DB_DESCRIPTORS_ID[knn_pred]
 				print('db_descriptors_id_select: ', db_descriptors_id_select)
 				vpr_dis, vpr_pred = self.perform_vpr(db_descriptors_select, self.curr_obs_node.get_descriptor())
-				self.ref_map_node = self.image_graph.get_node(db_descriptors_id_select[vpr_pred[0, 0]])
-				print(f'Found the reference map node: {self.ref_map_node.id}')
-
-				im_start_time = time.time()
-				matcher_result = self.perform_image_matching(self.ref_map_node, self.curr_obs_node)
-				print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s")
-
+				vpr_dis, vpr_pred = vpr_dis[0], vpr_pred[0]
+				while len(vpr_pred) > 0:
+					map_id = db_descriptors_id_select[vpr_pred[0]]
+					self.ref_map_node = self.image_graph.get_node(map_id)
+					print(f'Found the reference map node: {self.ref_map_node.id}')
+	
+					im_start_time = time.time()
+					matcher_result = self.perform_image_matching(self.ref_map_node, self.curr_obs_node)
+					print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s")
+	
+					if matcher_result is None or matcher_result["num_inliers"] < 100:					
+						vpr_pred = np.delete(vpr_pred, 0)
+						continue
+					else:
+						break
+				if len(vpr_pred) == 0: continue
 				try:
 					T_mapnode_obs = None
 					if self.args.img_matcher == "mickey":
@@ -282,19 +300,18 @@ class LocPipeline:
 							depth_img0, None)
 						T_mapnode_obs = np.eye(4)
 						T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
-						print(f'{self.args.pose_solver}:\nNumber of inliers: {inliers}\n', T_mapnode_obs)
+						print(f'{self.args.pose_solver}: Number of inliers: {inliers}\n', T_mapnode_obs)
+
+					if T_mapnode_obs is not None:
+						T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
+							self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
+						T_w_obs = T_w_mapnode @ T_mapnode_obs
+						trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
+						self.curr_obs_node.set_pose(trans, quat)
+						print(f'Groundtruth Poses: {self.curr_obs_node.trans_gt.T}')
+						print(f'Estimated Poses: {trans.T}\n')
 				except Exception as e:
 					print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
-
-				if T_mapnode_obs is not None:
-					T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
-						self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
-					T_w_obs = T_w_mapnode @ T_mapnode_obs
-					trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
-					self.curr_obs_node.set_pose(trans, quat)
-					
-					print(f'Groundtruth Poses: {self.curr_obs_node.trans_gt.T}')
-					print(f'Estimated Poses: {trans.T}\n')
 
 			self.publish_message()
 			self.last_obs_node = self.curr_obs_node

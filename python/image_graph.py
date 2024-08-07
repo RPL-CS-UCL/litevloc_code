@@ -36,6 +36,7 @@ class ImageGraphLoader:
 
 			# Each row: time, tx, ty, tz, qx, qy, qz, qw
 			time, trans, quat = poses[i, 0], poses[i, 1:4], poses[i, 4:]
+
 			# Each row: fx fy cx cy width height
 			K = np.array([intrinsics[i, 0], 0, intrinsics[i, 2], 
 						  0, intrinsics[i, 1], intrinsics[i, 3], 
