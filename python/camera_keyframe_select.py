@@ -2,19 +2,19 @@
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
---grid_resolution 0.1 --num_select_cam 15 --coverage_threshold 0.85
+--grid_resolution 0.1 --num_select_cam 15 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_EDJbREhghzL/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_EDJbREhghzL/out_map \
---grid_resolution 0.1 --num_select_cam 25 --coverage_threshold 0.85
+--grid_resolution 0.1 --num_select_cam 25 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_B6ByNegPMK/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_B6ByNegPMK/out_map \
---grid_resolution 0.1 --num_select_cam 75 --coverage_threshold 0.85
+--grid_resolution 0.1 --num_select_cam 75 --coverage_threshold 0.9
 
-python select_keyframe_greedy.py \
+python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_map/ \
 --grid_resolution 0.1 --select_cam_ratio 0.003 --coverage_threshold 0.8
@@ -24,7 +24,7 @@ import os
 import sys
 import numpy as np
 import argparse
-from CMap2D import CMap2D
+import CMap2D
 from map2d import gridshow
 import matplotlib.pyplot as plt
 
@@ -33,7 +33,7 @@ import open3d as o3d
 
 from pycpptools.src.python.utils_sensor.tools_depth_image import depth_image_to_point_cloud, transform_point_cloud
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix
-from pycpptools.src.python.utils_visualization.tools_vis_camera import plot_cameras
+from pycpptools.src.python.utils_visualization.tools_vis_camera import plot_cameras, plot_connected_cameras
 from pycpptools.src.python.utils_sensor.camera_pinhole import CameraPinhole
 
 def parse_arguments():
@@ -62,17 +62,27 @@ def crop_points(points):
     return points
 
 def check_connection(grid_map, reso, pose_i, pose_j):
-    trans_i, trans_j = pose_i[:2], pose_j[:2]
-    length = np.linalg.norm(trans_j - trans_i)
-    dir = (trans_j - trans_i) / length
-    step_size = reso / 2
-    num_steps = int(length / step_size)
-    for i in range(num_steps):
-        trans = (trans_i + i * step_size * dir).reshape(1, 2)
-        point_ij = grid_map.xy_to_ij(trans, clip_if_outside=True).astype(int)
-        if grid_map._occupancy[point_ij[0, 1], point_ij[0, 1]] > 0.999:
-            return None
-    return length
+    goal = grid_map.xy_to_ij(pose_i[:2].reshape(1, 2))
+    start = grid_map.xy_to_ij(pose_j[:2].reshape(1, 2))
+    grid = grid_map.dijkstra(goal[0], inv_value=1000, connectedness=8)
+    path, jumps = CMap2D.path_from_dijkstra_field(grid, start[0], connectedness=8)
+    # physical length
+    phy_length = np.linalg.norm(pose_i[:2] - pose_j[:2])
+    # shortest path length length
+    path_length = np.sum(np.linalg.norm(np.diff(path, axis=0), axis=1) * reso)
+    """DEBUG(gogojjh):"""
+    # print(path)
+    # print(start, goal)
+    # fig = plt.figure()
+    # gridshow(grid)
+    # plt.plot(path[:, 0], path[:, 1], 'b-')
+    # plt.show()
+    # print(f"Path Length: {path_length}, Phy Length: {phy_length}")
+    """"""
+    if ((path[-1] == goal).all()) and (path_length < 7.0) and (path_length <= phy_length * 1.3):
+        return path_length
+    else:
+        return None
 
 class KeyFrameSelect:
     def __init__(self, args):
@@ -102,10 +112,10 @@ class KeyFrameSelect:
         occupancy = np.zeros((width, height), dtype=np.float32) # x, y
         origin = (min_x, min_y)
 
-        self.inc_grid_map = CMap2D()
+        self.inc_grid_map = CMap2D.CMap2D()
         self.inc_grid_map.from_array(occupancy, origin, self.args.grid_resolution)
 
-        self.full_grid_map = CMap2D()
+        self.full_grid_map = CMap2D.CMap2D()
         self.full_grid_map.from_array(occupancy, origin, self.args.grid_resolution)
 
         # Store all depth points
@@ -158,7 +168,7 @@ class KeyFrameSelect:
             print(f"Remain Occupancy Ratio: {remain_occu_ratio:.5f}, Num of Select Cameras: {len(select_cam_id)}")
             if remain_occu_ratio > self.args.coverage_threshold or len(select_cam_id) > self.num_select_cam: break
 
-            random_cam_id = np.random.choice(all_cam_id, size=20, replace=False)
+            random_cam_id = np.random.choice(all_cam_id, size=min(20, int(len(self.poses) / self.sample_step)), replace=False)
             num_new_covered_list = []
             for cam_id in random_cam_id:
                 points_world = self.world_depth_points_dict[cam_id]
@@ -261,9 +271,12 @@ def main():
         for j in range(i+1, len(select_cam_id)):
             pose_i, pose_j = keyframe_select.poses[select_cam_id[i], 1:], keyframe_select.poses[select_cam_id[j], 1:]
             weight = check_connection(keyframe_select.full_grid_map, args.grid_resolution, pose_i, pose_j)
-            if weight:
+            if weight is not None:
                 edge_list = np.vstack((edge_list, np.array([i, j, weight]).reshape(1, 3)))
     np.savetxt(os.path.join(args.out_dir, 'edge_list.txt'), edge_list, fmt='%.5f')
+
+    plot_connected_cameras(keyframe_select.poses[select_cam_id, 1:], edge_list, title='Selected Camera Obs With Connection')
+    plt.savefig(os.path.join(args.out_dir, 'selected_camera_poses_with_connection.png'))
 
 if __name__ == "__main__":
     main()
