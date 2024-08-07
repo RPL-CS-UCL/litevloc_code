@@ -47,8 +47,7 @@ import pycpptools.src.python.utils_ros as pytool_ros
 import pycpptools.src.python.utils_sensor as pytool_sensor
 
 # This is to be able to use matplotlib also without a GUI
-if not hasattr(sys, "ps1"):
-	matplotlib.use("Agg")
+if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
 
 class LocPipeline:
 	def __init__(self, args, log_dir):
@@ -90,7 +89,6 @@ class LocPipeline:
 		logging.info(f"Loaded {self.image_graph} from {data_path}")
 
 		# Extract VPR descriptors for all nodes in the map
-		# Constant variables
 		self.DB_DESCRIPTORS_ID = np.array(self.image_graph.get_all_id())
 		self.DB_DESCRIPTORS = np.array([map_node.get_descriptor() for _, map_node in self.image_graph.nodes.items()], dtype="float32")
 		print(f"IDs: {self.DB_DESCRIPTORS_ID} extracted {self.DB_DESCRIPTORS.shape} VPR descriptors.")
@@ -135,11 +133,84 @@ class LocPipeline:
 			logging.error(f"Error in image matching: {e}")
 		return None
 
-	def publish_message(self):
-		header = Header()
-		header.stamp = rospy.Time.now()
-		header.frame_id = 'map'
+	def perform_global_loc(self):
+		gl_start_time = time.time()
+		vpr_dis, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
+		vpr_dis, vpr_pred = vpr_dis[0, :], vpr_pred[0, :]
+		print(f"Global localization time via. VPR: {time.time() - gl_start_time:.3f}s")
+		if len(vpr_pred) == 0:
+			print('No start node found, cannot determine the global position.')
+			return {'succ': False, 'map_id': None}
 
+		# Save VPR visualization for the top-k predictions
+		if self.args.num_preds_to_save != 0:
+			list_of_images_paths = [self.curr_obs_node.rgb_img_path]
+			for i in range(len(vpr_pred[:self.args.num_preds_to_save])):
+				map_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[vpr_pred[i]])
+				list_of_images_paths.append(map_node.rgb_img_path)
+			preds_correct = [None] * len(list_of_images_paths)
+			save_vpr_visualization(self.log_dir, 0, list_of_images_paths, preds_correct)
+		
+		return {'succ': True, 'map_id': self.DB_DESCRIPTORS_ID[vpr_pred[0]]}
+	
+	def perform_local_pos(self):
+		# select db candidate near the current frame
+		min_dis = 10.0
+		knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
+		knn_dis, knn_pred = knn_dis[0], knn_pred[0]
+		knn_pred, knn_dis = knn_pred[knn_dis < min_dis], knn_dis[knn_dis < min_dis]
+		db_select, db_id_select = self.DB_DESCRIPTORS[knn_pred, :], self.DB_DESCRIPTORS_ID[knn_pred]
+		print('Near Map ID and dis: ', db_id_select, knn_dis)
+		# find the most similar map node
+		vpr_dis, vpr_pred = self.perform_vpr(db_select, self.curr_obs_node.get_descriptor())
+		vpr_dis, vpr_pred = vpr_dis[0][:5], vpr_pred[0][:5]
+		while len(vpr_pred) > 0:
+			map_id = db_id_select[vpr_pred[0]]
+			im_start_time = time.time()
+			matcher_result = self.perform_image_matching(self.image_graph.get_node(map_id), self.curr_obs_node)
+			print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s")
+			# print(db_id_select[vpr_pred[0]], matcher_result["num_inliers"])
+			if matcher_result is None or matcher_result["num_inliers"] < 100:					
+				vpr_pred = np.delete(vpr_pred, 0)
+				continue
+			else:
+				self.ref_map_node = self.image_graph.get_node(map_id)
+				print(f'Found the reference map node: {self.ref_map_node.id}')
+				break
+		if len(vpr_pred) == 0: return {'succ': False, 'T_w_obs': None}
+		try:
+			T_mapnode_obs = None
+			if self.args.img_matcher == "mickey":
+				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
+				R, t = to_numpy(R), to_numpy(t)
+				T_mapnode_obs = np.eye(4)
+				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t
+				print(f'Mickey Solver:\n', T_mapnode_obs)
+			else:
+				depth_img0 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
+				mkpts0, mkpts1 = (
+					matcher_result["inliers0"],
+					matcher_result["inliers1"],
+				)					
+				R, t, inliers = self.pose_solver.estimate_pose(
+					mkpts0, mkpts1, 
+					self.curr_obs_node.K, self.ref_map_node.K, 
+					depth_img0, None)
+				T_mapnode_obs = np.eye(4)
+				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
+				print(f'{self.args.pose_solver}: Number of inliers: {inliers}')
+
+			if T_mapnode_obs is not None:
+				T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
+					self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
+				T_w_obs = T_w_mapnode @ T_mapnode_obs
+				return {'succ': True, 'T_w_obs': T_w_obs}
+		except Exception as e:
+			print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
+			return {'succ': False, 'T_w_obs': None}
+
+	def publish_message(self):
+		header = Header(stamp=rospy.Time.now(), frame_id='map')
 		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, 'map_graph')
 		self.br.sendTransform(tf_msg)
 		header.frame_id = 'map_graph'
@@ -148,15 +219,15 @@ class LocPipeline:
 		if self.curr_obs_node is not None:
 			header.frame_id = "map"
 			child_frame_id = "camera"
-			odom_msg = pytool_ros.ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, child_frame_id)
-			self.pub_odom.publish(odom_msg)
+			odom = pytool_ros.ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, child_frame_id)
+			self.pub_odom.publish(odom)
 
-			pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom_msg)
+			pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom)
 			self.path_msg.header = header
 			self.path_msg.poses.append(pose_msg)
 			self.pub_path.publish(self.path_msg)
 
-			tf_msg = pytool_ros.ros_msg.convert_odom_to_rostf(odom_msg)
+			tf_msg = pytool_ros.ros_msg.convert_odom_to_rostf(odom)
 			self.br.sendTransform(tf_msg)
 
 			if self.curr_obs_node.has_pose_gt:
@@ -172,151 +243,80 @@ class LocPipeline:
 				img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(rgb_img_merge, "rgb8", header, compressed=False)
 				self.pub_map_obs.publish(img_msg)
 
-	def run(self):
-		rospy.init_node('loc_pipeline_node', anonymous=True)
+def perform_localization(loc: LocPipeline, args):
+	"""Main loop for processing observations"""
+	obs_poses_gt = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'poses.txt'))
+	obs_cam_intrinsics = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'intrinsics.txt'))
 
-		"""Main loop for processing observations"""
-		obs_poses_gt = np.loadtxt(os.path.join(self.args.dataset_path, '../out_general', 'poses.txt'))
-		obs_cam_intrinsics = np.loadtxt(os.path.join(self.args.dataset_path, '../out_general', 'intrinsics.txt'))
+	rate = rospy.Rate(100)
+	for obs_id in range(0, len(obs_poses_gt), 30):
+		if rospy.is_shutdown(): break
 
-		rate = rospy.Rate(100)
-		for obs_id in range(100, len(obs_poses_gt), 10):
-			if rospy.is_shutdown(): break
+		print(f"Loading observation with id {obs_id}")
+		img_size = args.image_size
 
-			# Load observation data
-			print(f"Loading observation with id {obs_id}")
-			img_size = self.args.image_size
+		rgb_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.color.jpg')
+		rgb_img = load_rgb_image(rgb_img_path, img_size, normalized=False)
 
-			rgb_img_path = os.path.join(self.args.dataset_path, '../out_general/seq', f'{obs_id:06d}.color.jpg')
-			rgb_img = load_rgb_image(rgb_img_path, img_size, normalized=False)
+		depth_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
+		depth_img = load_depth_image(depth_img_path, img_size, depth_scale=args.depth_scale)
 
-			depth_img_path = os.path.join(self.args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
-			depth_img = load_depth_image(depth_img_path, img_size, depth_scale=self.args.depth_scale)
+		K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
+						obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
+						0, 0, 1], dtype=np.float32).reshape(3, 3)
+		raw_img_size = (obs_cam_intrinsics[obs_id, 4], obs_cam_intrinsics[obs_id, 5]) # width, height
+		if img_size is not None:
+			K = pytool_sensor.utils.correct_intrinsic_scale(K, img_size[0] / raw_img_size[0], img_size[1] / raw_img_size[1])
+		else:
+			img_size = raw_img_size
 
-			K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
-						  obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
-						  0, 0, 1], dtype=np.float32).reshape(3, 3)
-			raw_img_size = (obs_cam_intrinsics[obs_id, 4], obs_cam_intrinsics[obs_id, 5]) # width, height
-			if img_size is not None:
-				K = pytool_sensor.utils.correct_intrinsic_scale(K, img_size[0] / raw_img_size[0], img_size[1] / raw_img_size[1])
+		# Extract VPR descriptors
+		vpr_start_time = time.time()
+		with torch.no_grad():
+			desc = loc.vpr_model(rgb_img.unsqueeze(0).to(args.device)).cpu().numpy()
+		print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
+
+		# Create observation node
+		obs_node = ImageNode(obs_id, rgb_img, depth_img, desc,
+							0, np.zeros(3), np.array([0, 0, 0, 1]),
+							K, img_size,
+							rgb_img_path, depth_img_path)
+		obs_node.set_pose_gt(obs_poses_gt[obs_id, 1:4], obs_poses_gt[obs_id, 4:])
+		loc.curr_obs_node = obs_node
+
+		"""Perform global localization via. visual place recognition"""
+		if not loc.has_global_pos:
+			result = loc.perform_global_loc()
+			if result['succ']:
+				matched_map_id = result['map_id']
+				loc.has_global_pos = True
+				loc.global_pos_node = loc.image_graph.get_node(matched_map_id)
+				loc.curr_obs_node.set_pose(loc.global_pos_node.trans, loc.global_pos_node.quat)
+				loc.last_obs_node = None
 			else:
-				img_size = raw_img_size
+				print('Failed to determine the global position.')
+				continue
+		else:
+			init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
+			loc.curr_obs_node.set_pose(init_trans, init_quat)
 
-			# Extract VPR descriptors
-			vpr_start_time = time.time()
-			with torch.no_grad():
-				desc = self.vpr_model(rgb_img.unsqueeze(0).to(self.args.device)).cpu().numpy()
-			print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
-
-			# Create observation node
-			obs_node = ImageNode(obs_id, rgb_img, depth_img, desc,
-								 0, np.zeros(3), np.array([0, 0, 0, 1]),
-								 K, img_size,
-								 rgb_img_path, depth_img_path)
-			obs_node.set_pose_gt(obs_poses_gt[obs_id, 1:4], obs_poses_gt[obs_id, 4:])
-			self.curr_obs_node = obs_node
-
-			"""Perform global localization via. visual place recognition"""
-			if not self.has_global_pos:
-				gl_start_time = time.time()
-				vpr_dis, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
-				vpr_dis, vpr_pred = vpr_dis[0, :], vpr_pred[0, :]
-				print(f"Global localization time via. VPR: {time.time() - gl_start_time:.3f}s")
-				if len(vpr_pred) == 0:
-					print('No start node found, cannot determine the global position.')
-					continue
-
-				# Save VPR visualization for the top-k predictions
-				if self.args.num_preds_to_save != 0:
-					list_of_images_paths = [self.curr_obs_node.rgb_img_path]
-					for i in range(len(vpr_pred[:self.args.num_preds_to_save])):
-						map_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[vpr_pred[i]])
-						list_of_images_paths.append(map_node.rgb_img_path)
-					preds_correct = [None] * len(list_of_images_paths)
-					save_vpr_visualization(self.log_dir, 0, list_of_images_paths, preds_correct)				
-
-				self.has_global_pos = True
-				self.global_pos_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[vpr_pred[0]])
-				self.curr_obs_node.set_pose(self.global_pos_node.trans, self.global_pos_node.quat)
-				self.last_obs_node = None
+		"""Perform local localization via. image matching"""
+		if loc.has_global_pos:
+			result = loc.perform_local_pos()
+			if result['succ']:
+				T_w_obs = result['T_w_obs']
+				trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
+				loc.curr_obs_node.set_pose(trans, quat)
+				print(f'Groundtruth Poses: {loc.curr_obs_node.trans_gt.T}')
+				print(f'Estimated Poses: {trans.T}\n')
 			else:
-				init_trans, init_quat = self.last_obs_node.trans, self.last_obs_node.quat
-				self.curr_obs_node.set_pose(init_trans, init_quat)
+				print('Failed to determine the local position.')
+				continue
 
-			"""Perform local localization via. image matching"""
-			if self.has_global_pos:
-				# _, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
-				# knn_pred = knn_pred[0]
-				# if len(knn_pred) == 0: continue
-				# dis_TF_list = [pytool_math.tools_eigen.compute_relative_dis_TF(
-				# 	pytool_math.tools_eigen.convert_vec_to_matrix(self.curr_obs_node.trans, self.curr_obs_node.quat, 'xyzw'),
-				# 	pytool_math.tools_eigen.convert_vec_to_matrix(self.DB_POSES[knn_pred[i], :3], self.DB_POSES[knn_pred[i], 3:], 'xyzw')
-				# ) for i in range(len(knn_pred))]
-
-				#######################################################
-				# DEBUG(gogojjh): may fin dwrong reference node
-				#######################################################
-				min_dis = 10.0
-				knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
-				knn_dis, knn_pred = knn_dis[0], knn_pred[0]
-				knn_pred, knn_dis = knn_pred[knn_dis < min_dis], knn_dis[knn_dis < min_dis]
-				db_descriptors_select = self.DB_DESCRIPTORS[knn_pred, :]
-				db_descriptors_id_select = self.DB_DESCRIPTORS_ID[knn_pred]
-				print('db_descriptors_id_select: ', db_descriptors_id_select)
-				vpr_dis, vpr_pred = self.perform_vpr(db_descriptors_select, self.curr_obs_node.get_descriptor())
-				vpr_dis, vpr_pred = vpr_dis[0], vpr_pred[0]
-				while len(vpr_pred) > 0:
-					map_id = db_descriptors_id_select[vpr_pred[0]]
-					self.ref_map_node = self.image_graph.get_node(map_id)
-					print(f'Found the reference map node: {self.ref_map_node.id}')
-	
-					im_start_time = time.time()
-					matcher_result = self.perform_image_matching(self.ref_map_node, self.curr_obs_node)
-					print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s")
-	
-					if matcher_result is None or matcher_result["num_inliers"] < 100:					
-						vpr_pred = np.delete(vpr_pred, 0)
-						continue
-					else:
-						break
-				if len(vpr_pred) == 0: continue
-				try:
-					T_mapnode_obs = None
-					if self.args.img_matcher == "mickey":
-						R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
-						R, t = to_numpy(R), to_numpy(t)
-						T_mapnode_obs = np.eye(4)
-						T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t
-						print(f'Mickey Solver:\n', T_mapnode_obs)
-					else:
-						depth_img0 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
-						mkpts0, mkpts1 = (
-							matcher_result["inliers0"],
-							matcher_result["inliers1"],
-						)					
-						R, t, inliers = self.pose_solver.estimate_pose(
-							mkpts0, mkpts1, 
-							self.curr_obs_node.K, self.ref_map_node.K, 
-							depth_img0, None)
-						T_mapnode_obs = np.eye(4)
-						T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
-						print(f'{self.args.pose_solver}: Number of inliers: {inliers}\n', T_mapnode_obs)
-
-					if T_mapnode_obs is not None:
-						T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
-							self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
-						T_w_obs = T_w_mapnode @ T_mapnode_obs
-						trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
-						self.curr_obs_node.set_pose(trans, quat)
-						print(f'Groundtruth Poses: {self.curr_obs_node.trans_gt.T}')
-						print(f'Estimated Poses: {trans.T}\n')
-				except Exception as e:
-					print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
-
-			self.publish_message()
-			self.last_obs_node = self.curr_obs_node
-			rate.sleep()
-			# input()
+		loc.publish_message()
+		loc.last_obs_node = loc.curr_obs_node
+		rate.sleep()
+		input()
 
 if __name__ == '__main__':
 	args = parse_arguments()
@@ -326,4 +326,6 @@ if __name__ == '__main__':
 
 	loc_pipeline = LocPipeline(args, log_dir)
 	loc_pipeline.read_map_from_file()
-	loc_pipeline.run()
+
+	rospy.init_node('loc_pipeline_node', anonymous=True)
+	perform_localization(loc_pipeline, args)
