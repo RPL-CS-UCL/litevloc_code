@@ -54,19 +54,21 @@ class LocPipeline:
 		self.args = args
 		self.log_dir = log_dir
 		self.has_global_pos = False
-		self.has_local_position = False
 
+	def init_vpr_model(self):
 		self.vpr_model = initialize_vpr_model(self.args.vpr_method, self.args.vpr_backbone, self.args.vpr_descriptors_dimension, self.args.device)
 		logging.info(f"VPR model: {self.args.vpr_method}")
 
+	def init_img_matcher(self):
 		self.img_matcher = initialize_img_matcher(self.args.img_matcher, self.args.device, self.args.n_kpts)
 		logging.info(f"Image matcher: {self.args.img_matcher}")
 		
+	def init_pose_solver(self):
 		cfg.merge_from_file(self.args.config_pose_solver)
 		self.pose_solver = get_solver(self.args.pose_solver, cfg)
 		logging.info(f"Pose solver: {self.args.pose_solver}")
 
-	def setup_ros_publishers(self):
+	def setup_ros_objects(self):
 		self.pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
 		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
 		
@@ -329,9 +331,12 @@ if __name__ == '__main__':
 
 	# Initialize the localization pipeline
 	loc_pipeline = LocPipeline(args, log_dir)
+	loc_pipeline.init_vpr_model()
+	loc_pipeline.init_img_matcher()
+	loc_pipeline.init_pose_solver()
 	loc_pipeline.read_map_from_file()
 
 	rospy.init_node('loc_pipeline_node', anonymous=True)
-	loc_pipeline.setup_ros_publishers()
+	loc_pipeline.setup_ros_objects()
 
 	perform_localization(loc_pipeline, args)

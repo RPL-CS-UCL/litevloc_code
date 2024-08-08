@@ -13,24 +13,12 @@ class PointGraphLoader:
 	@staticmethod
 	def load_data(graph_path):
 		point_graph = PointGraph()
-		poses = np.loadtxt(os.path.join(graph_path, 'camera_pose_gt.txt'))
-		descs_path = os.path.join(graph_path, 'database_descriptors.npy')
-		if os.path.exists(descs_path):
-			descs = np.load(descs_path)
-		else:	
-			descs = None
-
+		poses = np.loadtxt(os.path.join(graph_path, 'poses.txt'))
 		for i in range(0, poses.shape[0]):
-			rgb_img_path = os.path.join(graph_path, 'rgb', f'{i:06}.png')
-			depth_img_path = os.path.join(graph_path, 'depth', f'{i:06}.png')
-
 			# Each row: time, tx, ty, tz, qx, qy, qz, qw
 			time, trans, quat = poses[i, 0], poses[i, 1:4], poses[i, 4:] 
-			node = PointNode(i, f'point node {i}', time, trans, quat, rgb_img_path, depth_img_path)
-			node.set_pose_gt(trans, quat)
-			if descs is not None:
-				node.set_descriptor(descs[i, :])
-				
+			node = PointNode(i, f'point node {i}', time, trans, quat, None, None)
+			node.set_pose_gt(trans, quat)				
 			point_graph.add_node(node)
 		point_graph.read_edge_list(os.path.join(graph_path, 'edge_list.txt'))
 		return point_graph
@@ -50,13 +38,13 @@ class TestPointGraph():
 
 		# Add nodes to the graph
 		graph.add_node(PointNode(1, "descriptor_1", 
-									 0, np.zeros((1, 3)), np.zeros((1, 4))))
+								0, np.zeros((1, 3)), np.zeros((1, 4))))
 		graph.add_node(PointNode(2, "descriptor_2", 
-									 0, np.zeros((1, 3)), np.zeros((1, 4))))
+								0, np.zeros((1, 3)), np.zeros((1, 4))))
 		graph.add_node(PointNode(3, "descriptor_3", 
-									 0, np.zeros((1, 3)), np.zeros((1, 4))))
+								0, np.zeros((1, 3)), np.zeros((1, 4))))
 		graph.add_node(PointNode(4, "descriptor_4", 
-									 0, np.zeros((1, 3)), np.zeros((1, 4))))
+								0, np.zeros((1, 3)), np.zeros((1, 4))))
 
 		# Add edges between the nodes with weights
 		graph.add_edge_undirected(graph.get_node(1), graph.get_node(2), 1.0)

@@ -56,7 +56,7 @@ def crop_points(points):
 
     """Simu Matterport3d"""
     max_depth = 7.0
-    points = points[(points[:, 1] > -0.5) & (points[:, 1] < 0.5)]
+    points = points[(points[:, 1] > -0.3) & (points[:, 1] < 0.3)]
     points = points[(points[:, 2] < max_depth)]
     points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.1]
     return points
@@ -79,7 +79,7 @@ def check_connection(grid_map, reso, pose_i, pose_j):
     # plt.show()
     # print(f"Path Length: {path_length}, Phy Length: {phy_length}")
     """"""
-    if ((path[-1] == goal).all()) and (path_length < 7.0) and (path_length <= phy_length * 1.4):
+    if ((path[-1] == goal).all()) and (path_length < 7.0) and (path_length <= phy_length * 1.5):
         return path_length
     else:
         return None

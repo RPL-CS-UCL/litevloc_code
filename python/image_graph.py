@@ -21,7 +21,8 @@ class ImageGraphLoader:
 		descs_path = os.path.join(graph_path, 'database_descriptors.npy')
 		if os.path.exists(descs_path):
 			descs = np.load(descs_path)
-		else:	
+		else:
+			logging.warning(f"Descriptors not found in {descs_path}")
 			descs = None
 
 		for i in range(poses.shape[0]):
