@@ -17,7 +17,7 @@ python camera_keyframe_select.py \
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_map/ \
---grid_resolution 0.1 --select_cam_ratio 0.003 --coverage_threshold 0.8
+--grid_resolution 0.1 --num_select_cam 0.003 --coverage_threshold 0.8
 """
 
 import os
@@ -56,7 +56,7 @@ def crop_points(points):
 
     """Simu Matterport3d"""
     max_depth = 7.0
-    points = points[(points[:, 1] > -1.1) & (points[:, 1] < 0.5)]
+    points = points[(points[:, 1] > -0.5) & (points[:, 1] < 0.5)]
     points = points[(points[:, 2] < max_depth)]
     points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.1]
     return points
@@ -79,7 +79,7 @@ def check_connection(grid_map, reso, pose_i, pose_j):
     # plt.show()
     # print(f"Path Length: {path_length}, Phy Length: {phy_length}")
     """"""
-    if ((path[-1] == goal).all()) and (path_length < 7.0) and (path_length <= phy_length * 1.3):
+    if ((path[-1] == goal).all()) and (path_length < 7.0) and (path_length <= phy_length * 1.4):
         return path_length
     else:
         return None
@@ -168,7 +168,7 @@ class KeyFrameSelect:
             print(f"Remain Occupancy Ratio: {remain_occu_ratio:.5f}, Num of Select Cameras: {len(select_cam_id)}")
             if remain_occu_ratio > self.args.coverage_threshold or len(select_cam_id) > self.num_select_cam: break
 
-            random_cam_id = np.random.choice(all_cam_id, size=min(20, int(len(self.poses) / self.sample_step)), replace=False)
+            random_cam_id = np.random.choice(all_cam_id, size=min(30, len(all_cam_id)), replace=False)
             num_new_covered_list = []
             for cam_id in random_cam_id:
                 points_world = self.world_depth_points_dict[cam_id]
@@ -205,44 +205,26 @@ def main():
 
     print('Building Full Occupancy Map ...')
     keyframe_select.build_occupancy_map()
-    if args.viz:
-        gridshow(keyframe_select.full_grid_map.occupancy(), extent=keyframe_select.full_grid_map.get_extent_xy())
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.title('Full Occupancy Map')
-        plt.show()
-    else:
-        gridshow(keyframe_select.full_grid_map.occupancy(), extent=keyframe_select.full_grid_map.get_extent_xy())
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.title('Full Occupancy Map')        
-        plt.savefig(os.path.join(args.out_dir, 'full_occupancy_map.png'))
 
     print('Selecting Keyframes ...')
     select_cam_id = keyframe_select.select_greedy()
-    if args.viz:
-        gridshow(keyframe_select.inc_grid_map.occupancy(), extent=keyframe_select.inc_grid_map.get_extent_xy())
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.title('Inc Occupancy Map From Selected Cameras')
-        plt.show()
-    else:
-        gridshow(keyframe_select.inc_grid_map.occupancy(), extent=keyframe_select.inc_grid_map.get_extent_xy())
-        plt.xlabel('X')
-        plt.ylabel('Y')
-        plt.title('Inc Occupancy Map From Selected Cameras')       
-        plt.savefig(os.path.join(args.out_dir, 'inc_occupancy_map.png'))        
 
-    print(f'Selected Cameras: ' + ' '.join([str(i) for i in select_cam_id]))
+    fig = plt.figure()
+    ax = fig.add_subplot(121)
+    gridshow(keyframe_select.full_grid_map.occupancy(), extent=keyframe_select.full_grid_map.get_extent_xy())
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    plt.title('Full Occupancy Map')
+    ax = fig.add_subplot(122)
+    gridshow(keyframe_select.inc_grid_map.occupancy(), extent=keyframe_select.inc_grid_map.get_extent_xy())
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    plt.title('Inc Occupancy Map')
     if args.viz:
-        plot_cameras(keyframe_select.poses[:, 1:], 10, title='Raw Camera Observations')
-        plot_cameras(keyframe_select.poses[select_cam_id, 1:], 1, title='Selected Camera Observations')
         plt.show()
     else:
-        plot_cameras(keyframe_select.poses[:, 1:], 10, title='Raw Camera Observations')
-        plt.savefig(os.path.join(args.out_dir, 'raw_camera_poses.png'))
-        plot_cameras(keyframe_select.poses[select_cam_id, 1:], 1, title='Selected Camera Observations')
-        plt.savefig(os.path.join(args.out_dir, 'selected_camera_poses.png'))
+        plt.savefig(os.path.join(args.out_dir, 'occupancy_map.png'))
+    print(f'Selected Cameras: ' + ' '.join([str(i) for i in select_cam_id]))
 
     """Save the selected keyframes"""
     new_cam_id = 0
@@ -274,9 +256,20 @@ def main():
             if weight is not None:
                 edge_list = np.vstack((edge_list, np.array([i, j, weight]).reshape(1, 3)))
     np.savetxt(os.path.join(args.out_dir, 'edge_list.txt'), edge_list, fmt='%.5f')
-
-    plot_connected_cameras(keyframe_select.poses[select_cam_id, 1:], edge_list, title='Selected Camera Obs With Connection')
-    plt.savefig(os.path.join(args.out_dir, 'selected_camera_poses_with_connection.png'))
+    
+    fig = plt.figure()
+    plot_cameras(keyframe_select.poses[:, 1:], 10, title='Raw Camera Observations', ax=fig.add_subplot(221))
+    plot_cameras(keyframe_select.poses[select_cam_id, 1:], 1, title='Selected Camera Observations', ax=fig.add_subplot(222))
+    plot_connected_cameras(keyframe_select.poses[select_cam_id, 1:], edge_list, title='Selected Camera Obs With Connection', ax=fig.add_subplot(223))
+    ax = fig.add_subplot(224)
+    gridshow(keyframe_select.full_grid_map.occupancy(), extent=keyframe_select.full_grid_map.get_extent_xy())
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    plt.title('Full Occupancy Map')    
+    if args.viz:
+        plt.show()
+    else:
+        plt.savefig(os.path.join(args.out_dir, 'camera_poses.png'))
 
 if __name__ == "__main__":
     main()
