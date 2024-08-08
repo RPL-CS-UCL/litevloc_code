@@ -54,6 +54,7 @@ class LocPipeline:
 		self.args = args
 		self.log_dir = log_dir
 		self.has_global_pos = False
+		self.last_obs_node = None
 
 	def init_vpr_model(self):
 		self.vpr_model = initialize_vpr_model(self.args.vpr_method, self.args.vpr_backbone, self.args.vpr_descriptors_dimension, self.args.device)
@@ -163,16 +164,17 @@ class LocPipeline:
 		knn_dis, knn_pred = knn_dis[0], knn_pred[0]
 		knn_pred, knn_dis = knn_pred[knn_dis < min_dis], knn_dis[knn_dis < min_dis]
 		db_select, db_id_select = self.DB_DESCRIPTORS[knn_pred, :], self.DB_DESCRIPTORS_ID[knn_pred]
-		logging.info('Near Map ID and dis: ', db_id_select, knn_dis)
+		print('Near Map ID and dis: ', db_id_select, knn_dis)
 		# find the most similar map node
 		vpr_dis, vpr_pred = self.perform_vpr(db_select, self.curr_obs_node.get_descriptor())
 		vpr_dis, vpr_pred = vpr_dis[0], vpr_pred[0]
-		while len(vpr_pred) > 0 and vpr_pred[0] > 0:
+		while True:
+			if len(vpr_pred) == 0 or vpr_pred[0] < 0: return {'succ': False, 'T_w_obs': None}
 			map_id = db_id_select[vpr_pred[0]]
 			im_start_time = time.time()
 			matcher_result = self.perform_image_matching(self.image_graph.get_node(map_id), self.curr_obs_node)
 			print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s")
-			# print(db_id_select[vpr_pred[0]], matcher_result["num_inliers"])
+			print(db_id_select[vpr_pred[0]], matcher_result["num_inliers"])
 			if matcher_result is None or matcher_result["num_inliers"] < 100:					
 				vpr_pred = np.delete(vpr_pred, 0)
 				continue
@@ -180,7 +182,6 @@ class LocPipeline:
 				self.ref_map_node = self.image_graph.get_node(map_id)
 				print(f'Found the reference map node: {self.ref_map_node.id}')
 				break
-		if len(vpr_pred) == 0: return {'succ': False, 'T_w_obs': None}
 		try:
 			T_mapnode_obs = None
 			if self.args.img_matcher == "mickey":
@@ -297,7 +298,6 @@ def perform_localization(loc: LocPipeline, args):
 				loc.has_global_pos = True
 				loc.global_pos_node = loc.image_graph.get_node(matched_map_id)
 				loc.curr_obs_node.set_pose(loc.global_pos_node.trans, loc.global_pos_node.quat)
-				loc.last_obs_node = None
 			else:
 				print('Failed to determine the global position.')
 				continue

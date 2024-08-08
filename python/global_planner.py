@@ -38,6 +38,7 @@ class GlobalPlanner:
 	def setup_ros_objects(self):
 		# ROS publisher
 		self.pub_shortest_path = rospy.Publisher('/graph/shortest_path', MarkerArray, queue_size=10)
+		# self.pub_waypoint = rospy.Publisher('/graph/waypoint', MarkerArray, queue_size=10)
 
 	def read_map_from_file(self):
 		data_path = self.args.dataset_path
@@ -48,6 +49,9 @@ class GlobalPlanner:
 		if self.planner_path:
 			header = Header(stamp=rospy.Time.now(), frame_id='map_graph')
 			pytool_ros.ros_vis.publish_shortest_path(self.planner_path, header, self.pub_shortest_path)
+
+			subgoal_node = self.planner_path[1]
+			# pytool_ros.ros_vis.publish_waypoint(subgoal_node, header, self.pub_shortest_path)
 
 def perform_planning(loc, gp, args):
 	start_node_id = 0

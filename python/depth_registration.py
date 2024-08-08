@@ -20,8 +20,8 @@ class DepthRegistration:
         self.depth_sub = Subscriber("/habitat_camera/depth/image", Image)
         self.info_sub = Subscriber("/habitat_camera/depth/camera_info", CameraInfo)
 
-        self.odom_pub = rospy.Publisher("/Odometry_depth_reg", Odometry, queue_size=10)
-        self.path_pub = rospy.Publisher("/path_depth_reg", Path, queue_size=10)
+        self.odom_pub = rospy.Publisher("/depth_reg/odometry", Odometry, queue_size=10)
+        self.path_pub = rospy.Publisher("/depth_reg/path", Path, queue_size=10)
 
         ats = ApproximateTimeSynchronizer([self.depth_sub, self.info_sub], queue_size=100, slop=0.1)
         ats.registerCallback(self.depth_image_callback)
