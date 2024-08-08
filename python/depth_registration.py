@@ -55,8 +55,7 @@ class DepthRegistration:
         self.last_depth_cloud = depth_cloud
 
         # Publish the current transformation as odometry
-        header = Header()
-        header.stamp = depth_msg.header.stamp
+        header = Header(stamp=depth_msg.header.stamp, frame_id='map')
         self.publish_odometry(self.T_w_cam, header)
 
         ##### DEBUG(gogojjh):
@@ -121,10 +120,9 @@ class DepthRegistration:
 
     def publish_odometry(self, transformation, header):
         # Create Odometry message
-        header.frame_id = "map"
         odom = Odometry()
         odom.header = header
-        odom.child_frame_id = 'rgbd'
+        odom.child_frame_id = 'camera'
 
         odom.pose.pose.position.x = transformation[0, 3]
         odom.pose.pose.position.y = transformation[1, 3]
