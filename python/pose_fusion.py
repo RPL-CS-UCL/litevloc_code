@@ -98,10 +98,10 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 				sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
 				pose_fusion.add_prior_factor(i, pose3, sigma)
 				pose_fusion.add_init_estimate(i, pose3)
-				start_time = time.time()
+				# start_time = time.time()
 				pose_fusion.perform_optimization()
 				current_pose = pose_fusion.current_estimate.atPose3(i)
-				print(f"Time taken for optimization: {time.time() - start_time:.6f}s at pose {i}")
+				# print(f"Time taken for optimization: {time.time() - start_time:.6f}s at pose {i}")
 				has_vloc = True
 				break
 		if not has_vloc:
@@ -124,30 +124,32 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 	print(f"RMSE: {np.sqrt(np.mean(np.square(residual_error))):.3f}")
 
 	# Visualization
-	import gtsam.utils.plot as gtsam_plot
-	import matplotlib.pyplot as plt
-	for i in range(len(odometry_poses)):
-		if current_estimate.exists(i):
-			marginal_covariance = pose_fusion.get_margin_covariance(i)
-			marginal_covariance = None
-			if marginal_covariance is not None:
-				gtsam_plot.plot_pose3(0, current_estimate.atPose3(i), 1, marginal_covariance)
-			else:
-				gtsam_plot.plot_pose3(0, current_estimate.atPose3(i), 1)
-	plt.title('Estimated poses')
-	plt.axis('equal')
+	if args.viz:
+		import gtsam.utils.plot as gtsam_plot
+		import matplotlib.pyplot as plt
+		for i in range(len(odometry_poses)):
+			if current_estimate.exists(i):
+				marginal_covariance = pose_fusion.get_margin_covariance(i)
+				# marginal_covariance = None
+				if marginal_covariance is not None:
+					gtsam_plot.plot_pose3(0, current_estimate.atPose3(i), 1, marginal_covariance)
+				else:
+					gtsam_plot.plot_pose3(0, current_estimate.atPose3(i), 1)
+		plt.title('Estimated poses')
+		plt.axis('equal')
 
-	for i in range(len(odometry_poses)):
-		if gt_estimate.exists(i):
-			gtsam_plot.plot_pose3(1, gt_estimate.atPose3(i), 1, marginal_covariance)
-	plt.title('GT poses')
-	plt.axis('equal')
+		for i in range(len(odometry_poses)):
+			if gt_estimate.exists(i):
+				gtsam_plot.plot_pose3(1, gt_estimate.atPose3(i), 1, marginal_covariance)
+		plt.title('GT poses')
+		plt.axis('equal')
 
-	plt.show()
+		plt.show()
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description="Pose Fusion", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-	parser.add_argument("--isam_params", action="store_true", help="use ISAM2 default setting")
+	parser.add_argument("--isam_params", action="store_true", help="use ISAM2 specific parameters setting")
+	parser.add_argument("--viz", action="store_true", help="visualize the result")
 	parser.add_argument("--data_path", type=str, default="/tmp/", help="path to data")
 	args = parser.parse_args()
 
