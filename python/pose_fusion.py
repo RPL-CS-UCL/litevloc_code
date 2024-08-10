@@ -53,7 +53,9 @@ class PoseFusion:
 	def add_init_estimate(self, key: int, pose: gtsam.Pose3):
 		if self.initail_estimate.exists(key):
 			self.initail_estimate.erase(key)
-		self.initail_estimate.insert(key, pose)
+			self.initail_estimate.insert(key, pose)
+		else:
+			self.initail_estimate.insert(key, pose)
 
 	def perform_optimization(self):
 		self.isam.update(self.graph, self.initail_estimate)
@@ -81,11 +83,8 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 	gt_poses = np.loadtxt(os.path.join(args.data_path, 'poses_gt.txt'))
 
 	# Simulate that only do pose fusion when global localization is available
-	start_time = vloc_poses[0, 0]
-	end_time = vloc_poses[-1, 0]
-	odometry_poses = odometry_poses[odometry_poses[:, 0] >= start_time, :]
+	end_time = vloc_poses[-1, 0] + 20
 	odometry_poses = odometry_poses[odometry_poses[:, 0] <= end_time, :]
-	gt_poses = gt_poses[gt_poses[:, 0] >= start_time, :]
 	gt_poses = gt_poses[gt_poses[:, 0] <= end_time, :]
 	print(f"Number of odometry poses: {len(odometry_poses)}")
 	print(f"Number of VLOC poses: {len(vloc_poses)}")
@@ -101,9 +100,13 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 			curr_odom = convert_vec_gtsam_pose3(odometry_poses[i, 1:4], odometry_poses[i, 4:])
 			sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
 			pose_fusion.add_odometry_factor(i - 1, prev_odom, i, curr_odom, sigma)
-			if init_system:
-				current_pose = current_pose * prev_odom.between(curr_odom)
-				pose_fusion.add_init_estimate(i, current_pose)
+			current_pose = current_pose * prev_odom.between(curr_odom)
+		# the odometry is aligned with the global frame
+		if init_system:
+			pose_fusion.add_init_estimate(i, current_pose)
+		else:
+			pose_fusion.add_init_estimate(i, gtsam.Pose3())
+
 		# Add prior factor
 		for j in range(len(vloc_poses)):
 			if abs(vloc_poses[j, 0] - odometry_poses[i, 0]) < 0.01: # VLOC pose is available
@@ -111,11 +114,10 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 				sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
 				pose_fusion.add_prior_factor(i, pose3, sigma)
 				pose_fusion.add_init_estimate(i, pose3)
-				# start_time = time.time()
+
 				pose_fusion.perform_optimization()
 				current_pose = pose_fusion.current_estimate.atPose3(i)
 				init_system = True
-				# print(f"Time taken for optimization: {time.time() - start_time:.6f}s at pose {i}")
 				break
 	result = pose_fusion.perform_optimization()
 	current_estimate = result['current_estimate']
@@ -141,7 +143,7 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 		for i in range(len(odometry_poses)):
 			if current_estimate.exists(i):
 				marginal_covariance = pose_fusion.get_margin_covariance(i)
-				# marginal_covariance = None
+				marginal_covariance = None
 				if marginal_covariance is not None:
 					gtsam_plot.plot_pose3(0, current_estimate.atPose3(i), 1, marginal_covariance)
 				else:
