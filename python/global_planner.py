@@ -66,7 +66,7 @@ def perform_planning(loc, gp, args):
 	with torch.no_grad():
 		desc = loc.vpr_model(goal_img.unsqueeze(0).to(args.device)).cpu().numpy()
 	obs_node = ImageNode(0, goal_img, None, desc, 
-						0, np.zeros(3), np.array([0, 0, 0, 1]), 
+						rospy.Time.now(), np.zeros(3), np.array([0, 0, 0, 1]), 
 						None, img_size, 
 						goal_img_path, None)
 	loc.curr_obs_node = obs_node

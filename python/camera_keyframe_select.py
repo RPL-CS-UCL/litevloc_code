@@ -90,7 +90,7 @@ class KeyFrameSelect:
 
         # Load the dataset         
         path_pose = os.path.join(args.path_dataset, 'poses.txt')
-        self.poses = np.loadtxt(path_pose) # tx, ty, tz, qx, qy, qz, qw
+        self.poses = np.loadtxt(path_pose) # time, tx, ty, tz, qx, qy, qz, qw
         path_intrinsics = os.path.join(args.path_dataset, 'intrinsics.txt')
         intrinsics = np.loadtxt(path_intrinsics)[0, :] # fx, fy, cx, cy, width, height
         self.img_size = (int(intrinsics[4]), int(intrinsics[5])) # width, height

@@ -22,7 +22,7 @@ class ImageGraphLoader:
 		if os.path.exists(descs_path):
 			descs = np.load(descs_path)
 		else:
-			logging.warning(f"Descriptors not found in {descs_path}")
+			print(f"Descriptors not found in {descs_path}")
 			descs = None
 
 		for i in range(poses.shape[0]):

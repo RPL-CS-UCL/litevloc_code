@@ -55,24 +55,33 @@ import PIL
 if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
 
 rgb_depth_queue = queue.Queue()
+lock = threading.Lock()
 
 def rgb_depth_image_callback(rgb_img_msg, depth_img_msg, camera_info_msg):
-	rgb_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(rgb_img_msg)
-	depth_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(depth_img_msg)
-	if depth_img_msg.encoding == "mono16": depth_img *= 0.001
-	K = np.array(camera_info_msg.K).reshape((3, 3))
-	img_size = (camera_info_msg.width, camera_info_msg.height)
-	rgb_depth_queue.put((rgb_img, depth_img, K, img_size))
+	lock.acquire()
+	rgb_depth_queue.put((rgb_img_msg, depth_img_msg, camera_info_msg))
+	# Keep the queue size to be small for processing the newest data
+	while rgb_depth_queue.qsize() > 2:
+		rgb_depth_queue.get()
+	lock.release()
 
 def perform_localization(loc: LocPipeline, args):
 	obs_id = 0
 	while not rospy.is_shutdown():
 		if not rgb_depth_queue.empty():
+			lock.acquire()
+			rgb_img_msg, depth_img_msg, camera_info_msg = rgb_depth_queue.get()
+			lock.release()
+			rgb_img_time = rgb_img_msg.header.stamp.to_sec()
+			rgb_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(rgb_img_msg)
+			depth_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(depth_img_msg)
+			if depth_img_msg.encoding == "mono16": depth_img *= 0.001
+			raw_K = np.array(camera_info_msg.K).reshape((3, 3))
+			raw_img_size = (camera_info_msg.width, camera_info_msg.height)
+
 			img_size = args.image_size
-			rgb_img, depth_img, raw_K, raw_img_size = rgb_depth_queue.get()
 			rgb_img_tensor = rgb_image_to_tensor(rgb_img, img_size, normalized=False)
 			depth_img_tensor = depth_image_to_tensor(depth_img, img_size, depth_scale=1.0)
-
 			if img_size is not None:
 				K = pytool_sensor.utils.correct_intrinsic_scale(
 					raw_K, 
@@ -89,7 +98,7 @@ def perform_localization(loc: LocPipeline, args):
 			print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
 			
 			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, desc,
-								 0, np.zeros(3), np.array([0, 0, 0, 1]),
+								 rgb_img_time, np.zeros(3), np.array([0, 0, 0, 1]),
 								 K, img_size, '', '')
 			loc.curr_obs_node = obs_node
 
