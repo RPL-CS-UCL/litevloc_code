@@ -1,13 +1,27 @@
+"""
+Usage:
+python pose_fusion.py \
+--data_path /Rocket_ssd/dataset/data_topo_loc/17DRP5sb8fy/
+"""
+
 import os
+
 import gtsam
+import time
+import argparse
 import numpy as np
 import rospy
-
 from nav_msgs.msg import Odometry, Path
-import argparse
-import time
 
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
+
+def parse_arguments():
+	parser = argparse.ArgumentParser(description="Pose Fusion", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	parser.add_argument("--isam_params", action="store_true", help="use ISAM2 specific parameters setting")
+	parser.add_argument("--viz", action="store_true", help="visualize the result")
+	parser.add_argument("--data_path", type=str, default="/tmp/", help="path to data")
+	args = parser.parse_args()
+	return args	
 
 class PoseFusion:
 	def __init__(self, args):
@@ -37,6 +51,8 @@ class PoseFusion:
 		self.graph.add(gtsam.BetweenFactorPose3(prev_key, curr_key, delta_pose, odometry_cov))
 
 	def add_init_estimate(self, key: int, pose: gtsam.Pose3):
+		if self.initail_estimate.exists(key):
+			self.initail_estimate.erase(key)
 		self.initail_estimate.insert(key, pose)
 
 	def perform_optimization(self):
@@ -58,11 +74,6 @@ class PoseFusion:
 		self.pub_path = rospy.Publisher('/pose_fusion/path', Path, queue_size=10)
 		self.path_msg = Path()
 
-	def publish_message(self):
-		# Publish odometry results
-		# TODO: Implement publishing logic
-		pass
-
 def perform_pose_fusion(pose_fusion: PoseFusion, args):
 	# Read data from file
 	odometry_poses = np.loadtxt(os.path.join(args.data_path, 'poses_vo.txt'))
@@ -82,6 +93,7 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 
 	# Perform pose fusion
 	current_pose = gtsam.Pose3()
+	init_system = False
 	for i in range(len(odometry_poses)):
 		# Add odometry factor
 		if i > 0:
@@ -89,9 +101,10 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 			curr_odom = convert_vec_gtsam_pose3(odometry_poses[i, 1:4], odometry_poses[i, 4:])
 			sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
 			pose_fusion.add_odometry_factor(i - 1, prev_odom, i, curr_odom, sigma)
-			current_pose = current_pose * prev_odom.between(curr_odom)
+			if init_system:
+				current_pose = current_pose * prev_odom.between(curr_odom)
+				pose_fusion.add_init_estimate(i, current_pose)
 		# Add prior factor
-		has_vloc = False
 		for j in range(len(vloc_poses)):
 			if abs(vloc_poses[j, 0] - odometry_poses[i, 0]) < 0.01: # VLOC pose is available
 				pose3 = convert_vec_gtsam_pose3(vloc_poses[j, 1:4], vloc_poses[j, 4:])
@@ -101,11 +114,9 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 				# start_time = time.time()
 				pose_fusion.perform_optimization()
 				current_pose = pose_fusion.current_estimate.atPose3(i)
+				init_system = True
 				# print(f"Time taken for optimization: {time.time() - start_time:.6f}s at pose {i}")
-				has_vloc = True
 				break
-		if not has_vloc:
-			pose_fusion.add_init_estimate(i, current_pose)
 	result = pose_fusion.perform_optimization()
 	current_estimate = result['current_estimate']
 
@@ -147,11 +158,7 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 		plt.show()
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser(description="Pose Fusion", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-	parser.add_argument("--isam_params", action="store_true", help="use ISAM2 specific parameters setting")
-	parser.add_argument("--viz", action="store_true", help="visualize the result")
-	parser.add_argument("--data_path", type=str, default="/tmp/", help="path to data")
-	args = parser.parse_args()
+	args = parse_arguments()
 
 	rospy.init_node('pose_fusion', anonymous=True)
 	pose_fusion = PoseFusion(args)

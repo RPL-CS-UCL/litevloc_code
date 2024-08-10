@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """
 Usage: 
 python loc_pipeline.py \
@@ -61,8 +59,7 @@ def rgb_depth_image_callback(rgb_img_msg, depth_img_msg, camera_info_msg):
 	lock.acquire()
 	rgb_depth_queue.put((rgb_img_msg, depth_img_msg, camera_info_msg))
 	# Keep the queue size to be small for processing the newest data
-	while rgb_depth_queue.qsize() > 2:
-		rgb_depth_queue.get()
+	while rgb_depth_queue.qsize() > 2: rgb_depth_queue.get()
 	lock.release()
 
 def perform_localization(loc: LocPipeline, args):
