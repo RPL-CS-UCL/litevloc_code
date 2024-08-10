@@ -10,28 +10,30 @@ import time
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
 
 class PoseFusion:
-	def __init__(self):
+	def __init__(self, args):
 		"""Initialize gtsam factor graph and isam"""
 		self.graph = gtsam.NonlinearFactorGraph()
 		self.initail_estimate = gtsam.Values()
 		self.current_estimate = gtsam.Values()
 
-		# parameters = gtsam.ISAM2Params()
-		# parameters.setRelinearizeThreshold(0.3)
-		# parameters.relinearizeSkip = 5
-		self.isam = gtsam.ISAM2()
+		if args.isam_params:
+			params = gtsam.ISAM2Params()
+			params.setRelinearizeThreshold(0.1)
+			params.relinearizeSkip = 3
+			self.isam = gtsam.ISAM2(params)
+		else:
+			self.isam = gtsam.ISAM2()
 
-	def add_prior_factor(self, key: int, pose: gtsam.Pose3):
-		sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
+	def add_prior_factor(self, key: int, pose: gtsam.Pose3, sigma: np.ndarray):
 		prior_cov = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
 		self.graph.add(gtsam.PriorFactorPose3(key, pose, prior_cov))
 
 	def add_odometry_factor(self, 
 							prev_key: int, prev_pose: gtsam.Pose3, 
-							curr_key: int, curr_pose: gtsam.Pose3):
-		delta_pose = prev_pose.between(curr_pose)
-		sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
+							curr_key: int, curr_pose: gtsam.Pose3, 
+							sigma: np.ndarray):
 		odometry_cov = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
+		delta_pose = prev_pose.between(curr_pose)
 		self.graph.add(gtsam.BetweenFactorPose3(prev_key, curr_key, delta_pose, odometry_cov))
 
 	def add_init_estimate(self, key: int, pose: gtsam.Pose3):
@@ -70,10 +72,10 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 	# Simulate that only do pose fusion when global localization is available
 	start_time = vloc_poses[0, 0]
 	end_time = vloc_poses[-1, 0]
-	odometry_poses = odometry_poses[odometry_poses[:, 0] >= start_time]
-	odometry_poses = odometry_poses[odometry_poses[:, 0] <= end_time]
-	gt_poses = gt_poses[gt_poses[:, 0] >= start_time]
-	gt_poses = gt_poses[gt_poses[:, 0] <= end_time]
+	odometry_poses = odometry_poses[odometry_poses[:, 0] >= start_time, :]
+	odometry_poses = odometry_poses[odometry_poses[:, 0] <= end_time, :]
+	gt_poses = gt_poses[gt_poses[:, 0] >= start_time, :]
+	gt_poses = gt_poses[gt_poses[:, 0] <= end_time, :]
 	print(f"Number of odometry poses: {len(odometry_poses)}")
 	print(f"Number of VLOC poses: {len(vloc_poses)}")
 	print(f"Number of ground truth poses: {len(gt_poses)}")
@@ -85,14 +87,16 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 		if i > 0:
 			prev_odom = convert_vec_gtsam_pose3(odometry_poses[i-1, 1:4], odometry_poses[i-1, 4:])
 			curr_odom = convert_vec_gtsam_pose3(odometry_poses[i, 1:4], odometry_poses[i, 4:])
-			pose_fusion.add_odometry_factor(i - 1, prev_odom, i, curr_odom)
+			sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
+			pose_fusion.add_odometry_factor(i - 1, prev_odom, i, curr_odom, sigma)
 			current_pose = current_pose * prev_odom.between(curr_odom)
 		# Add prior factor
 		has_vloc = False
 		for j in range(len(vloc_poses)):
 			if abs(vloc_poses[j, 0] - odometry_poses[i, 0]) < 0.01: # VLOC pose is available
 				pose3 = convert_vec_gtsam_pose3(vloc_poses[j, 1:4], vloc_poses[j, 4:])
-				pose_fusion.add_prior_factor(i, pose3)
+				sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
+				pose_fusion.add_prior_factor(i, pose3, sigma)
 				pose_fusion.add_init_estimate(i, pose3)
 				start_time = time.time()
 				pose_fusion.perform_optimization()
@@ -143,11 +147,12 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description="Pose Fusion", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	parser.add_argument("--isam_params", action="store_true", help="use ISAM2 default setting")
 	parser.add_argument("--data_path", type=str, default="/tmp/", help="path to data")
 	args = parser.parse_args()
 
 	rospy.init_node('pose_fusion', anonymous=True)
-	pose_fusion = PoseFusion()
+	pose_fusion = PoseFusion(args)
 	pose_fusion.setup_ros_objects()
 
 	perform_pose_fusion(pose_fusion, args)
