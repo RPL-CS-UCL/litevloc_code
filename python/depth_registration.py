@@ -15,7 +15,7 @@ class DepthRegistration:
     def __init__(self):
         self.last_depth_cloud = None
         self.T_w_cam = np.eye(4)
-        self.radius = 0.05
+        self.radius = 0.1
         
         self.depth_sub = Subscriber("/habitat_camera/depth/image", Image)
         self.info_sub = Subscriber("/habitat_camera/depth/camera_info", CameraInfo)

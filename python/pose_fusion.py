@@ -30,7 +30,7 @@ class PoseFusion:
 							prev_key: int, prev_pose: gtsam.Pose3, 
 							curr_key: int, curr_pose: gtsam.Pose3):
 		delta_pose = prev_pose.between(curr_pose)
-		sigma = np.array([np.deg2rad(5.), np.deg2rad(5.), np.deg2rad(5.), 0.05, 0.05, 0.01])
+		sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
 		odometry_cov = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
 		self.graph.add(gtsam.BetweenFactorPose3(prev_key, curr_key, delta_pose, odometry_cov))
 
@@ -61,75 +61,82 @@ class PoseFusion:
 		# TODO: Implement publishing logic
 		pass
 
-def perform_pose_fusion(pf: PoseFusion, args):
+def perform_pose_fusion(pose_fusion: PoseFusion, args):
 	# Read data from file
-	poses_odom = np.loadtxt(os.path.join(args.data_path, 'poses_vo.txt'))
-	poses_vloc = np.loadtxt(os.path.join(args.data_path, 'poses_vloc.txt'))
-	poses_gt = np.loadtxt(os.path.join(args.data_path, 'poses_gt.txt'))
+	odometry_poses = np.loadtxt(os.path.join(args.data_path, 'poses_vo.txt'))
+	vloc_poses = np.loadtxt(os.path.join(args.data_path, 'poses_vloc.txt'))
+	gt_poses = np.loadtxt(os.path.join(args.data_path, 'poses_gt.txt'))
 
 	# Simulate that only do pose fusion when global localization is available
-	start_time = poses_vloc[0, 0]
-	poses_odom = poses_odom[poses_odom[:, 0] >= start_time]
-	poses_vloc = poses_vloc[poses_vloc[:, 0] >= start_time]
-	poses_gt = poses_gt[poses_gt[:, 0] >= start_time]
-	print(f"Number of odometry poses: {len(poses_odom)}")
-	print(f"Number of VLOC poses: {len(poses_vloc)}")
-	print(f"Number of ground truth poses: {len(poses_gt)}")
+	start_time = vloc_poses[0, 0]
+	end_time = vloc_poses[-1, 0]
+	odometry_poses = odometry_poses[odometry_poses[:, 0] >= start_time]
+	odometry_poses = odometry_poses[odometry_poses[:, 0] <= end_time]
+	gt_poses = gt_poses[gt_poses[:, 0] >= start_time]
+	gt_poses = gt_poses[gt_poses[:, 0] <= end_time]
+	print(f"Number of odometry poses: {len(odometry_poses)}")
+	print(f"Number of VLOC poses: {len(vloc_poses)}")
+	print(f"Number of ground truth poses: {len(gt_poses)}")
 
 	# Perform pose fusion
-	for i in range(len(poses_odom)):
+	current_pose = gtsam.Pose3()
+	for i in range(len(odometry_poses)):
 		# Add odometry factor
 		if i > 0:
-			prev_pose = convert_vec_gtsam_pose3(poses_odom[i-1, 1:4], poses_odom[i-1, 4:])
-			curr_pose = convert_vec_gtsam_pose3(poses_odom[i, 1:4], poses_odom[i, 4:])
-			pf.add_odometry_factor(i - 1, prev_pose, i, curr_pose)
+			prev_odom = convert_vec_gtsam_pose3(odometry_poses[i-1, 1:4], odometry_poses[i-1, 4:])
+			curr_odom = convert_vec_gtsam_pose3(odometry_poses[i, 1:4], odometry_poses[i, 4:])
+			pose_fusion.add_odometry_factor(i - 1, prev_odom, i, curr_odom)
+			current_pose = current_pose * prev_odom.between(curr_odom)
 		# Add prior factor
 		has_vloc = False
-		for j in range(len(poses_vloc)):
-			if abs(poses_vloc[j, 0] - poses_odom[i, 0]) < 0.01: # VLOC pose is available
-				pose3 = convert_vec_gtsam_pose3(poses_vloc[j, 1:4], poses_vloc[j, 4:])
-				pf.add_prior_factor(i, pose3)
-				pf.add_init_estimate(i, pose3)
+		for j in range(len(vloc_poses)):
+			if abs(vloc_poses[j, 0] - odometry_poses[i, 0]) < 0.01: # VLOC pose is available
+				pose3 = convert_vec_gtsam_pose3(vloc_poses[j, 1:4], vloc_poses[j, 4:])
+				pose_fusion.add_prior_factor(i, pose3)
+				pose_fusion.add_init_estimate(i, pose3)
 				start_time = time.time()
-				pf.perform_optimization()
-				print(f"Time taken for optimization: {time.time() - start_time:.6f} at pose {i}")
+				pose_fusion.perform_optimization()
+				current_pose = pose_fusion.current_estimate.atPose3(i)
+				print(f"Time taken for optimization: {time.time() - start_time:.6f}s at pose {i}")
 				has_vloc = True
 				break
 		if not has_vloc:
-			pf.add_init_estimate(i, gtsam.Pose3())
-	result = pf.perform_optimization()
-	curr_est = result['current_estimate']
+			pose_fusion.add_init_estimate(i, current_pose)
+	result = pose_fusion.perform_optimization()
+	current_estimate = result['current_estimate']
 
 	# Evaluation
-	gt_est = gtsam.Values()
-	for i in range(len(poses_odom)):
-		for j in range(len(poses_gt)):
-			if abs(poses_gt[j, 0] - poses_odom[i, 0]) < 0.01:
-				gt_est.insert(i, convert_vec_gtsam_pose3(poses_gt[j, 1:4], poses_gt[j, 4:]))
+	gt_estimate = gtsam.Values()
+	for i in range(len(odometry_poses)):
+		for j in range(len(gt_poses)):
+			if abs(gt_poses[j, 0] - odometry_poses[i, 0]) < 0.01:
+				gt_estimate.insert(i, convert_vec_gtsam_pose3(gt_poses[j, 1:4], gt_poses[j, 4:]))
 				break
 
-	res_error = []
-	for i in range(len(poses_odom)):
-		if gt_est.exists(i) and curr_est.exists(i):
-			res_error.append(np.linalg.norm(curr_est.atPose3(i).translation() - gt_est.atPose3(i).translation()))
-	print(f"RMSE: {np.sqrt(np.mean(np.square(res_error))):.3f}")
+	residual_error = []
+	for i in range(len(odometry_poses)):
+		if gt_estimate.exists(i) and current_estimate.exists(i):
+			residual_error.append(np.linalg.norm(current_estimate.atPose3(i).translation() - gt_estimate.atPose3(i).translation()))
+	print(f"RMSE: {np.sqrt(np.mean(np.square(residual_error))):.3f}")
 
 	# Visualization
 	import gtsam.utils.plot as gtsam_plot
 	import matplotlib.pyplot as plt
-	for i in range(len(poses_odom)):
-		if curr_est.exists(i):
-			marginal_cov = pf.get_margin_covariance(i)
-			marginal_cov = None
-			if marginal_cov is not None:
-				gtsam_plot.plot_pose3(0, curr_est.atPose3(i), 1, marginal_cov)
+	for i in range(len(odometry_poses)):
+		if current_estimate.exists(i):
+			marginal_covariance = pose_fusion.get_margin_covariance(i)
+			marginal_covariance = None
+			if marginal_covariance is not None:
+				gtsam_plot.plot_pose3(0, current_estimate.atPose3(i), 1, marginal_covariance)
 			else:
-				gtsam_plot.plot_pose3(0, curr_est.atPose3(i), 1)
+				gtsam_plot.plot_pose3(0, current_estimate.atPose3(i), 1)
+	plt.title('Estimated poses')
 	plt.axis('equal')
 
-	for i in range(len(poses_odom)):
-		if gt_est.exists(i):
-			gtsam_plot.plot_pose3(1, gt_est.atPose3(i), 1, marginal_cov)
+	for i in range(len(odometry_poses)):
+		if gt_estimate.exists(i):
+			gtsam_plot.plot_pose3(1, gt_estimate.atPose3(i), 1, marginal_covariance)
+	plt.title('GT poses')
 	plt.axis('equal')
 
 	plt.show()
