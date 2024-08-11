@@ -12,6 +12,7 @@ import argparse
 import numpy as np
 import rospy
 from nav_msgs.msg import Odometry, Path
+import tf2_ros
 
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
 
@@ -71,10 +72,11 @@ class PoseFusion:
 		else:
 			return None
 
-	def setup_ros_objects(self):
+	def initalize_ros(self):
 		self.pub_odom = rospy.Publisher('/pose_fusion/odometry', Odometry, queue_size=10)
 		self.pub_path = rospy.Publisher('/pose_fusion/path', Path, queue_size=10)
 		self.path_msg = Path()
+		self.br = tf2_ros.TransformBroadcaster()
 
 def perform_pose_fusion(pose_fusion: PoseFusion, args):
 	# Read data from file
@@ -164,6 +166,6 @@ if __name__ == '__main__':
 
 	rospy.init_node('pose_fusion', anonymous=True)
 	pose_fusion = PoseFusion(args)
-	pose_fusion.setup_ros_objects()
+	pose_fusion.initalize_ros()
 
 	perform_pose_fusion(pose_fusion, args)

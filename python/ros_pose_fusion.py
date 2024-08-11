@@ -1,37 +1,63 @@
 #! /opt/conda/envs/topo_loc/bin/python
 
+# ROS
 import rospy
+from std_msgs.msg import Header
+from nav_msgs.msg import Odometry
+import tf2_ros
+
 import queue
 import gtsam
 import numpy as np
 import threading
-from std_msgs.msg import Header
-from nav_msgs.msg import Odometry
 
 from pose_fusion import parse_arguments, PoseFusion
-
 from pycpptools.src.python.utils_algorithm.stamped_poses import StampedPoses
-from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
+from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3, convert_matrix_to_vec
 from pycpptools.src.python.utils_ros import ros_msg
 
+# Threading
 lock_odom_global = threading.Lock()
-
 odom_global_queue = queue.Queue()
-poses_local = StampedPoses()
 
+# Pose buffer
+poses_local = StampedPoses()
 curr_stamped_pose = (0, gtsam.Pose3())
 marginal_cov = np.eye(6, 6)
 init_system = False
 
+# The transformation between the local sensor (provide local odometry) and the global sensor (provide global odometry)
+T_gsensor_lsensor = np.eye(4, 4)
+frame_id_lsensor, frame_id_gsensor = None, None
+frame_id_map = 'map'
+init_extrinsics = False
+
+tf_buffer, listener = None, None
+
 def odom_local_callback(odom_msg):
+	global frame_id_lsensor, frame_id_gsensor, T_gsensor_lsensor, init_extrinsics
+	frame_id_lsensor = odom_msg.child_frame_id
+	if frame_id_gsensor is None: return
+	if not init_extrinsics:
+		try:
+			transform = tf_buffer.lookup_transform(frame_id_gsensor, frame_id_lsensor, rospy.Time())
+			T_gsensor_lsensor = ros_msg.convert_rostf_to_matrix(transform)
+			init_extrinsics = True
+		except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+			rospy.logwarn("Transform not available")
+			return
+
 	global odom_global_queue, poses_local
 	global curr_stamped_pose, marginal_cov, init_system
-
 	"""Process local odometry"""
-	curr_time = odom_msg.header.stamp.to_sec()
-	trans, quat = ros_msg.convert_rosodom_to_vec(odom_msg)
+	# Transform the frame_id of local odometry to the global sensor
+	# e.g., local sensor (imu) -> global sensor (camera) for robots
+	T_wlsensor_lsensor = ros_msg.convert_rosodom_to_matrix(odom_msg)
+	T_wgsensor_gsensor = T_gsensor_lsensor @ T_wlsensor_lsensor @ np.linalg.inv(T_gsensor_lsensor)
+	trans, quat = convert_matrix_to_vec(T_wgsensor_gsensor)
 	curr_pose_local = convert_vec_gtsam_pose3(trans, quat)
 	curr_idx = len(poses_local)
+	curr_time = odom_msg.header.stamp.to_sec()
 	# Add odometry factor
 	if len(poses_local) > 0:
 		prev_idx = len(poses_local) - 1
@@ -75,6 +101,7 @@ def odom_local_callback(odom_msg):
 		curr_stamped_pose = (curr_time, pose_fusion.current_estimate.atPose3(curr_idx))
 		marginal_cov = pose_fusion.get_margin_covariance(curr_idx)
 		if not init_system:
+			# The system is initialized after the first global odometry
 			init_system = True
 			print("System initialized")
 
@@ -84,8 +111,8 @@ def odom_local_callback(odom_msg):
 		trans = curr_stamped_pose[1].translation()
 		quat = curr_stamped_pose[1].rotation().toQuaternion().coeffs() # xyzw
 		print(f"Current pose at time {curr_time}: {trans}")
-		header = Header(stamp=rospy.Time.from_sec(curr_stamped_pose[0]), frame_id='map')
-		fusion_odom = ros_msg.convert_vec_to_rosodom(trans, quat, header, 'camera')
+		header = Header(stamp=rospy.Time.from_sec(curr_stamped_pose[0]), frame_id=frame_id_map)
+		fusion_odom = ros_msg.convert_vec_to_rosodom(trans, quat, header, child_frame_id=frame_id_gsensor)
 		fusion_odom.pose.covariance = list(marginal_cov.flatten())
 		pose_fusion.pub_odom.publish(fusion_odom)
 		# Publish the path
@@ -93,9 +120,14 @@ def odom_local_callback(odom_msg):
 		pose_fusion.path_msg.header = header
 		pose_fusion.path_msg.poses.append(pose_msg)
 		pose_fusion.pub_path.publish(pose_fusion.path_msg)
+		# Publish the tf
+		tf_msg = ros_msg.convert_odom_to_rostf(fusion_odom)
+		pose_fusion.br.sendTransform(tf_msg)
 
 def odom_global_callback(odom_msg):
-	print("----------------- Global odometry callback")
+	global frame_id_gsensor
+	frame_id_gsensor = odom_msg.child_frame_id
+
 	lock_odom_global.acquire()
 	odom_global_queue.put(odom_msg)
 	while odom_global_queue.qsize() > 100: odom_global_queue.get()
@@ -104,14 +136,20 @@ def odom_global_callback(odom_msg):
 if __name__ == '__main__':
 	args = parse_arguments()
 
-	rospy.init_node('ros_pose_fusion', anonymous=True)
+	rospy.init_node('ros_pose_fusion', anonymous=False)
+	tf_buffer = tf2_ros.Buffer()
+	listener = tf2_ros.TransformListener(tf_buffer)
+
 	pose_fusion = PoseFusion(args)
-	pose_fusion.setup_ros_objects()
+	pose_fusion.initalize_ros()
 	
 	# Subscribe different sources of odometry
 	# 1. local odometry
 	# 2, global odometry
-	odom_local = rospy.Subscriber('/depth_reg/odometry', Odometry, odom_local_callback)
-	odom_global = rospy.Subscriber('/vloc/odometry', Odometry, odom_global_callback)
+	odom_local = rospy.Subscriber('/local/odometry', Odometry, odom_local_callback)
+	odom_global = rospy.Subscriber('/global/odometry', Odometry, odom_global_callback)
+
+	frame_id_map = rospy.get_param('~frame_id_map', 'map')
+	print(f"Frame id map: {frame_id_map}")
 
 	rospy.spin()

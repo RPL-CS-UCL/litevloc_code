@@ -15,45 +15,34 @@ rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc
 /vloc/odom /vloc/path /vloc/path_gt /vloc/image_map_obs
 """
 
+# General
 import os
 import sys
+
+# ROS
+import rospy
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Image, CameraInfo
+import message_filters
 
 import pathlib
 import numpy as np
 import torch
 import time
-import rospy
-from std_msgs.msg import Header
-from nav_msgs.msg import Odometry, Path
-from sensor_msgs.msg import Image, CompressedImage, CameraInfo
-from geometry_msgs.msg import PoseArray
-from visualization_msgs.msg import MarkerArray
-import tf2_ros
-import message_filters
+import queue
+import threading
 
-from matching.utils import to_numpy
-from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search
-from utils.utils_vpr_method import save_visualization as save_vpr_visualization
-from utils.utils_image_matching_method import initialize_img_matcher
-from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
 from utils.utils_image import rgb_image_to_tensor, depth_image_to_tensor
 from utils.utils_pipeline import *
-from utils.pose_solver import get_solver
-from utils.pose_solver_default import cfg
-from image_graph import ImageGraphLoader as GraphLoader
 from image_node import ImageNode
+from loc_pipeline import LocPipeline
 
 import pycpptools.src.python.utils_math as pytool_math
 import pycpptools.src.python.utils_ros as pytool_ros
 import pycpptools.src.python.utils_sensor as pytool_sensor
 import pycpptools.src.python.utils_algorithm as pytool_algo
 
-from loc_pipeline import LocPipeline
-import queue
-import threading
-import PIL
-
-if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
+# if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
 
 fused_poses = pytool_algo.stpose.StampedPoses()
 rgb_depth_queue = queue.Queue()
@@ -80,6 +69,7 @@ def perform_localization(loc: LocPipeline, args):
 			lock.acquire()
 			rgb_img_msg, depth_img_msg, camera_info_msg = rgb_depth_queue.get()
 			lock.release()
+			loc.child_frame_id = rgb_img_msg.header.frame_id
 			rgb_img_time = rgb_img_msg.header.stamp.to_sec()
 			rgb_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(rgb_img_msg)
 			depth_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(depth_img_msg)
@@ -165,8 +155,8 @@ if __name__ == '__main__':
 	loc_pipeline.init_pose_solver()
 	loc_pipeline.read_map_from_file()
 
-	rospy.init_node('ros_loc_pipeline_simu', anonymous=True)
-	loc_pipeline.setup_ros_objects()
+	rospy.init_node('ros_loc_pipeline_simu', anonymous=False)
+	loc_pipeline.initalize_ros()
 
 	# Subscribe to RGB, depth images, and odometry
 	rgb_sub = message_filters.Subscriber('/habitat_camera/color/image', Image)

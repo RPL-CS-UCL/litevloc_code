@@ -55,6 +55,8 @@ class LocPipeline:
 		self.log_dir = log_dir
 		self.has_global_pos = False
 		self.last_obs_node = None
+		self.frame_id_map = 'vloc_map'
+		self.frame_id_camera = 'habitat_camera'
 
 	def init_vpr_model(self):
 		self.vpr_model = initialize_vpr_model(self.args.vpr_method, self.args.vpr_backbone, self.args.vpr_descriptors_dimension, self.args.device)
@@ -69,7 +71,7 @@ class LocPipeline:
 		self.pose_solver = get_solver(self.args.pose_solver, cfg)
 		logging.info(f"Pose solver: {self.args.pose_solver}")
 
-	def setup_ros_objects(self):
+	def initalize_ros(self):
 		self.pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
 		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
 		
@@ -236,26 +238,22 @@ class LocPipeline:
 			return {'succ': False, 'T_w_obs': None}
 
 	def publish_message(self):
-		header = Header(stamp=rospy.Time.now(), frame_id='map')
-		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, 'map_graph')
+		header = Header(stamp=rospy.Time.now(), frame_id=self.frame_id_map)
+		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, f"{self.frame_id_map}_graph")
 		self.br.sendTransform(tf_msg)
-		header.frame_id = 'map_graph'
+		header = Header(stamp=rospy.Time.now(), frame_id=f"{self.frame_id_map}_graph")
 		pytool_ros.ros_vis.publish_graph(self.image_graph, header, self.pub_graph, self.pub_graph_poses)
 
 		if self.curr_obs_node is not None:
-			header.stamp = rospy.Time.from_sec(self.curr_obs_node.time)
-			header.frame_id = "map"
-			child_frame_id = "camera"
-			odom = pytool_ros.ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, child_frame_id)
+			header = Header(stamp=rospy.Time.from_sec(self.curr_obs_node.time), frame_id=self.frame_id_map)
+			
+			odom = pytool_ros.ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, self.child_frame_id)
 			self.pub_odom.publish(odom)
 
 			pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom)
 			self.path_msg.header = header
 			self.path_msg.poses.append(pose_msg)
 			self.pub_path.publish(self.path_msg)
-
-			tf_msg = pytool_ros.ros_msg.convert_odom_to_rostf(odom)
-			self.br.sendTransform(tf_msg)
 
 			if self.curr_obs_node.has_pose_gt:
 				pose_msg = pytool_ros.ros_msg.convert_vec_to_rospose(self.curr_obs_node.trans_gt, self.curr_obs_node.quat_gt, header)
@@ -361,6 +359,6 @@ if __name__ == '__main__':
 	loc_pipeline.read_map_from_file()
 
 	rospy.init_node('loc_pipeline_node', anonymous=True)
-	loc_pipeline.setup_ros_objects()
+	loc_pipeline.initalize_ros()
 
 	perform_localization(loc_pipeline, args)

@@ -35,7 +35,7 @@ class GlobalPlanner:
 		self.plan_goal_node = None
 		self.planner_path = []
 
-	def setup_ros_objects(self):
+	def initalize_ros(self):
 		# ROS publisher
 		self.pub_shortest_path = rospy.Publisher('/graph/shortest_path', MarkerArray, queue_size=10)
 		# self.pub_waypoint = rospy.Publisher('/graph/waypoint', MarkerArray, queue_size=10)
@@ -120,7 +120,7 @@ if __name__ == '__main__':
 	global_planner.read_map_from_file()
 	
 	rospy.init_node('global_planner', anonymous=True)
-	loc_pipeline.setup_ros_objects()
-	global_planner.setup_ros_objects()
+	loc_pipeline.initalize_ros()
+	global_planner.initalize_ros()
 	
 	perform_planning(loc_pipeline, global_planner, args)

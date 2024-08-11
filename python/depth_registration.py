@@ -19,16 +19,17 @@ class DepthRegistration:
         self.T_w_cam = np.eye(4)
         self.radius = 0.1
         
-        self.depth_sub = Subscriber("/habitat_camera/depth/image", Image)
-        self.info_sub = Subscriber("/habitat_camera/depth/camera_info", CameraInfo)
-
-        self.odom_pub = rospy.Publisher("/depth_reg/odometry", Odometry, queue_size=10)
-        self.path_pub = rospy.Publisher("/depth_reg/path", Path, queue_size=10)
-
+    def initialize_ros(self):
+        self.depth_sub = Subscriber("/depth/image", Image)
+        self.info_sub = Subscriber("/depth/camera_info", CameraInfo)
         ats = ApproximateTimeSynchronizer([self.depth_sub, self.info_sub], queue_size=100, slop=0.1)
         ats.registerCallback(self.depth_image_callback)
 
+        self.odom_pub = rospy.Publisher("/depth_reg/odometry", Odometry, queue_size=10)
+        self.path_pub = rospy.Publisher("/depth_reg/path", Path, queue_size=10)
         self.path = Path()
+
+        self.frame_id_map, self.frame_id_sensor = 'map', 'camera'
 
     def depth_image_callback(self, depth_msg, info_msg):
         bridge = CvBridge()
@@ -57,7 +58,8 @@ class DepthRegistration:
         self.last_depth_cloud = depth_cloud
 
         # Publish the current transformation as odometry
-        header = Header(stamp=depth_msg.header.stamp, frame_id='map')
+        self.frame_id_sensor = depth_msg.header.frame_id
+        header = Header(stamp=depth_msg.header.stamp, frame_id=self.frame_id_map)
         self.publish_odometry(self.T_w_cam, header)
 
         ##### DEBUG(gogojjh):
@@ -124,8 +126,7 @@ class DepthRegistration:
         # Create Odometry message
         odom = Odometry()
         odom.header = header
-        odom.child_frame_id = 'camera'
-
+        odom.child_frame_id = self.frame_id_sensor
         odom.pose.pose.position.x = transformation[0, 3]
         odom.pose.pose.position.y = transformation[1, 3]
         odom.pose.pose.position.z = transformation[2, 3]
@@ -146,4 +147,6 @@ class DepthRegistration:
 if __name__ == '__main__':
     rospy.init_node('depth_registration', anonymous=True)
     depth_registration = DepthRegistration()
+    depth_registration.initialize_ros()
+    depth_registration.frame_id_map = rospy.get_param('~frame_id_map', 'map')
     rospy.spin()
