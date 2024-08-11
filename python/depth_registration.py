@@ -18,11 +18,12 @@ class DepthRegistration:
         self.last_depth_cloud = None
         self.T_w_cam = np.eye(4)
         self.radius = 0.1
+        self.depth_range = (0.1, 7.0)
         
     def initialize_ros(self):
         self.depth_sub = Subscriber("/depth/image", Image)
         self.info_sub = Subscriber("/depth/camera_info", CameraInfo)
-        ats = ApproximateTimeSynchronizer([self.depth_sub, self.info_sub], queue_size=100, slop=0.1)
+        ats = ApproximateTimeSynchronizer([self.depth_sub, self.info_sub], queue_size=10, slop=0.1)
         ats.registerCallback(self.depth_image_callback)
 
         self.odom_pub = rospy.Publisher("/depth_reg/odometry", Odometry, queue_size=10)
@@ -41,6 +42,8 @@ class DepthRegistration:
         K = np.array(info_msg.K).reshape((3, 3))
         image_shape = (info_msg.width, info_msg.height)
 
+        depth_img[depth_img < self.depth_range[0]] = 0
+        depth_img[depth_img > self.depth_range[1]] = 0
         depth_points = self.depth_image_to_point_cloud(depth_img, K, image_shape)
         depth_cloud_raw = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(depth_points))
         depth_cloud = depth_cloud_raw.voxel_down_sample(self.radius)
@@ -94,7 +97,8 @@ class DepthRegistration:
         z = depth_image
         x = (j - intrinsics[0, 2]) * z / intrinsics[0, 0]
         y = (i - intrinsics[1, 2]) * z / intrinsics[1, 1]
-        points = np.stack((x, y, z), axis=-1).reshape(-1, 3)
+        valid_mask = z > 1e-6
+        points = np.stack((x[valid_mask], y[valid_mask], z[valid_mask]), axis=-1).reshape(-1, 3)
         return points
 
     def estimate_pose_icp(self, source, target, current_transformation):
@@ -149,4 +153,7 @@ if __name__ == '__main__':
     depth_registration = DepthRegistration()
     depth_registration.initialize_ros()
     depth_registration.frame_id_map = rospy.get_param('~frame_id_map', 'map')
+    depth_registration.radius = rospy.get_param('~voxel_radius', 0.1)
+    depth_registration.depth_range = (rospy.get_param('~min_depth', 0.1), 
+                                      rospy.get_param('~max_depth', 7.0))
     rospy.spin()
