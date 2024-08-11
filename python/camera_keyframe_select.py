@@ -17,16 +17,18 @@ python camera_keyframe_select.py \
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_map/ \
---grid_resolution 0.1 --num_select_cam 0.003 --coverage_threshold 0.8
+--grid_resolution 1.0 --num_select_cam 70 --coverage_threshold 0.8
 """
 
 import os
 import sys
+
 import numpy as np
 import argparse
 import CMap2D
 from map2d import gridshow
 import matplotlib.pyplot as plt
+import copy
 
 from PIL import Image
 import open3d as o3d
@@ -34,7 +36,6 @@ import open3d as o3d
 from pycpptools.src.python.utils_sensor.tools_depth_image import depth_image_to_point_cloud, transform_point_cloud
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix
 from pycpptools.src.python.utils_visualization.tools_vis_camera import plot_cameras, plot_connected_cameras
-from pycpptools.src.python.utils_sensor.camera_pinhole import CameraPinhole
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Select a fixed number of camera keyframes to maximize region coverage.")
@@ -47,18 +48,19 @@ def parse_arguments():
     parser.add_argument('--debug', action='store_true', help="Debug mode")
     return parser.parse_args()
 
-def crop_points(points):
-    """Real Anymal"""
-    # max_depth = 8.0
-    # points = points[(points[:, 1] > -2.0) & (points[:, 1] < -0.5)]
-    # points = points[(points[:, 2] < max_depth)]
-    # points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.5]    
-
-    """Simu Matterport3d"""
-    max_depth = 7.0
-    points = points[(points[:, 1] > -0.3) & (points[:, 1] < 0.3)]
-    points = points[(points[:, 2] < max_depth)]
-    points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.1]
+def crop_points(points, args):
+    if 'matterport3d' in args.path_dataset:
+        """Simu Matterport3d"""
+        max_depth = 7.0
+        points = points[(points[:, 1] > -0.3) & (points[:, 1] < 0.3)]
+        points = points[(points[:, 2] < max_depth)]
+        points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.1]
+    else:
+        """Real Anymal"""
+        max_depth = 8.0
+        points = points[(points[:, 1] > -2.0) & (points[:, 1] < -1.0)]
+        points = points[(points[:, 2] < max_depth)]
+        points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.5]    
     return points
 
 def check_connection(grid_map, reso, pose_i, pose_j):
@@ -79,7 +81,7 @@ def check_connection(grid_map, reso, pose_i, pose_j):
     # plt.show()
     # print(f"Path Length: {path_length}, Phy Length: {phy_length}")
     """"""
-    if ((path[-1] == goal).all()) and (path_length < 7.0) and (path_length <= phy_length * 1.5):
+    if ((path[-1] == goal).all()) and (path_length < 10.0) and (path_length <= phy_length * 2.0):
         return path_length
     else:
         return None
@@ -97,12 +99,14 @@ class KeyFrameSelect:
         self.K = np.array([[intrinsics[0], 0, intrinsics[2]], [0, intrinsics[1], intrinsics[3]], [0, 0, 1]])
         self.num_select_cam = self.args.num_select_cam
 
-        # """Real Anymal"""
-        # self.sample_step = 10
-        # self.start_indice = 12100
-        """Simu Matterport3d"""
-        self.sample_step = 5
-        self.start_indice = 0
+        if 'matterport3d' in args.path_dataset:
+            """Simu Matterport3d"""
+            self.sample_step = 5
+            self.start_indice = 0
+        else:
+            """Real Anymal"""
+            self.sample_step = 10
+            self.start_indice = 12100
 
         # Create a grid map
         min_x, max_x = np.min(self.poses[:, 1]) - 1, np.max(self.poses[:, 1]) + 1
@@ -130,18 +134,18 @@ class KeyFrameSelect:
             path_depth = os.path.join(self.args.path_dataset, f'seq/{indice:06d}.depth.png')
             depth_img = np.array(Image.open(path_depth), dtype=np.float32) / 1000.0
             points = depth_image_to_point_cloud(depth_img, self.K, self.img_size)
-            points = crop_points(points)
+            points = crop_points(points, self.args)
 
             trans, quat = pose[1:4], pose[4:]
             T_w_cam = convert_vec_to_matrix(trans, quat)
             points_world = transform_point_cloud(points, T_w_cam)
             depth_cloud = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points_world))
-            depth_cloud = depth_cloud.voxel_down_sample(voxel_size=0.02)
+            depth_cloud = depth_cloud.voxel_down_sample(voxel_size=self.args.grid_resolution / 5)
             self.world_depth_points_dict[indice] = np.asarray(depth_cloud.points)
 
     def build_occupancy_map(self):
         for cam_id, points in self.world_depth_points_dict.items():
-            self.update_covered_space(self.full_grid_map, points, 1.0)
+            self.update_covered_space(self.full_grid_map, points, 0.2)
 
     def get_num_occupancy(self, grid_map):
         return np.sum(grid_map.occupancy() >= 0.999)
@@ -157,7 +161,7 @@ class KeyFrameSelect:
     def update_covered_space(self, grid_map, points, value):
         points_ij = grid_map.xy_to_ij(points[:, :2], clip_if_outside=True).astype(int)
         for point_ij in points_ij:
-            grid_map._occupancy[point_ij[0], point_ij[1]] = value
+            grid_map._occupancy[point_ij[0], point_ij[1]] = min(grid_map._occupancy[point_ij[0], point_ij[1]] + value, 1.0)
 
     def select_greedy(self):
         select_cam_id = []
@@ -168,7 +172,7 @@ class KeyFrameSelect:
             print(f"Remain Occupancy Ratio: {remain_occu_ratio:.5f}, Num of Select Cameras: {len(select_cam_id)}")
             if remain_occu_ratio > self.args.coverage_threshold or len(select_cam_id) > self.num_select_cam: break
 
-            random_cam_id = np.random.choice(all_cam_id, size=min(30, len(all_cam_id)), replace=False)
+            random_cam_id = np.random.choice(all_cam_id, size=min(20, len(all_cam_id)), replace=False)
             num_new_covered_list = []
             for cam_id in random_cam_id:
                 points_world = self.world_depth_points_dict[cam_id]
@@ -178,7 +182,7 @@ class KeyFrameSelect:
             optimal_cam_id = random_cam_id[np.argmax(num_new_covered_list)]
             select_cam_id.append(optimal_cam_id)
             all_cam_id.remove(optimal_cam_id)
-            self.update_covered_space(self.inc_grid_map, self.world_depth_points_dict[optimal_cam_id], 1.0)
+            self.update_covered_space(self.inc_grid_map, self.world_depth_points_dict[optimal_cam_id], 0.2)
 
             if self.args.debug and self.args.viz:
                 print(f"Optimal Camera ID: {optimal_cam_id}, Num of New Covered: {np.max(num_new_covered_list)}")
@@ -249,10 +253,14 @@ def main():
 
     """Create edge list"""
     edge_list = np.empty((0, 3), dtype=np.float32)
+    dij_map = copy.copy(keyframe_select.full_grid_map)
+    valid_ij = np.where(dij_map.occupancy() < 0.999)
+    for va in valid_ij:
+        dij_map._occupancy[va[0], va[1]] = 0.0
     for i in range(len(select_cam_id)):
         for j in range(i+1, len(select_cam_id)):
             pose_i, pose_j = keyframe_select.poses[select_cam_id[i], 1:], keyframe_select.poses[select_cam_id[j], 1:]
-            weight = check_connection(keyframe_select.full_grid_map, args.grid_resolution, pose_i, pose_j)
+            weight = check_connection(dij_map, args.grid_resolution, pose_i, pose_j)
             if weight is not None:
                 edge_list = np.vstack((edge_list, np.array([i, j, weight]).reshape(1, 3)))
     np.savetxt(os.path.join(args.out_dir, 'edge_list.txt'), edge_list, fmt='%.5f')
