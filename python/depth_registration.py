@@ -1,3 +1,5 @@
+#! /opt/conda/envs/topo_loc/bin/python
+
 import rospy
 from sensor_msgs.msg import Image, CameraInfo
 from std_msgs.msg import Header

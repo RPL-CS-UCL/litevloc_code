@@ -20,7 +20,7 @@ def parse_arguments():
 	parser.add_argument("--isam_params", action="store_true", help="use ISAM2 specific parameters setting")
 	parser.add_argument("--viz", action="store_true", help="visualize the result")
 	parser.add_argument("--data_path", type=str, default="/tmp/", help="path to data")
-	args = parser.parse_args()
+	args, unknown = parser.parse_known_args()
 	return args	
 
 class PoseFusion:

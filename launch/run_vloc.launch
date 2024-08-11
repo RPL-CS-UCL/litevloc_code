@@ -1,0 +1,16 @@
+<launch>
+  <arg name="project_directory" default="/Titan/code/robohike_ws/src/topo_loc" />
+
+  <node name="ros_loc_pipeline_simu" pkg="topo_loc" type="ros_loc_pipeline_simu.py" output="screen"
+      args="--dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map/ 
+            --device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 
+            --img_matcher master --pose_solver pnp 
+            --config_pose_solver $(arg project_directory)/python/config/dataset/matterport3d.yaml --no_viz" >
+  </node>
+
+  <node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="screen">
+  </node>
+
+  <node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="screen">
+  </node>
+</launch>

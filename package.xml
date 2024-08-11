@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>topo_loc</name>
+  <version>0.0.0</version>
+  <description>visual localization project</description>
+
+  <maintainer email="jiaojh1994@gmail.com">Jianhao Jiao</maintainer>
+  <author email="jiaojh1994@gmail.com">Jianhao Jiao</author>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>catkin_simple</buildtool_depend>
+
+</package>
