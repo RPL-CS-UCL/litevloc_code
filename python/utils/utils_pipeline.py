@@ -59,13 +59,9 @@ def parse_arguments():
 											help="Resizing shape for images (HxW). If a single int is passed, set the"
 											"smallest edge of all images to this value, while keeping aspect ratio")
 	parser.add_argument("--no_viz", action="store_true", help="pass --no_viz to avoid saving visualizations")
-	# parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
-	# parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
 	parser.add_argument("--unit_type", action="store_true", help="depth images are encoded to uint16 (True) or float32 (False)")
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='0.001 or 1')
-	# parser.add_argument('--min_depth_pro', type=float, default=0.1, help='pixels are processed only if depth > min_depth_pro')
-	# parser.add_argument('--max_depth_pro', type=float, default=5.5, help='pixels are processed only if depth < min_depth_pro')  
-
+	parser.add_argument("--ros_rgb_img_type", type=str, default='raw', help="raw or compressed")
 	"""
 	Parameters for VPR methods
 	"""

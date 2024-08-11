@@ -58,7 +58,7 @@ def crop_points(points, args):
     else:
         """Real Anymal"""
         max_depth = 8.0
-        points = points[(points[:, 1] > -2.0) & (points[:, 1] < -1.0)]
+        points = points[(points[:, 1] > -1.5) & (points[:, 1] < -0.7)]
         points = points[(points[:, 2] < max_depth)]
         points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.5]    
     return points
@@ -81,7 +81,7 @@ def check_connection(grid_map, reso, pose_i, pose_j):
     # plt.show()
     # print(f"Path Length: {path_length}, Phy Length: {phy_length}")
     """"""
-    if ((path[-1] == goal).all()) and (path_length < 10.0) and (path_length <= phy_length * 2.0):
+    if ((path[-1] == goal).all()) and (path_length < 20.0) and (path_length <= phy_length * 2.0):
         return path_length
     else:
         return None
@@ -145,7 +145,7 @@ class KeyFrameSelect:
 
     def build_occupancy_map(self):
         for cam_id, points in self.world_depth_points_dict.items():
-            self.update_covered_space(self.full_grid_map, points, 0.2)
+            self.update_covered_space(self.full_grid_map, points, 0.05)
 
     def get_num_occupancy(self, grid_map):
         return np.sum(grid_map.occupancy() >= 0.999)

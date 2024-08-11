@@ -22,7 +22,7 @@ import sys
 # ROS
 import rospy
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo
 import message_filters
 
 import pathlib
@@ -64,6 +64,7 @@ def odom_callback(odom_msg):
 
 def perform_localization(loc: LocPipeline, args):
 	obs_id = 0
+	min_depth, max_depth = 0.1, 15.0
 	while not rospy.is_shutdown():
 		if not rgb_depth_queue.empty():
 			lock.acquire()
@@ -74,6 +75,7 @@ def perform_localization(loc: LocPipeline, args):
 			rgb_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(rgb_img_msg)
 			depth_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(depth_img_msg)
 			if depth_img_msg.encoding == "mono16": depth_img *= 0.001
+			depth_img[(depth_img < min_depth) | (depth_img > max_depth)] = 0.0
 			raw_K = np.array(camera_info_msg.K).reshape((3, 3))
 			raw_img_size = (camera_info_msg.width, camera_info_msg.height)
 
@@ -159,16 +161,18 @@ if __name__ == '__main__':
 	loc_pipeline.initalize_ros()
 
 	# Subscribe to RGB, depth images, and odometry
-	rgb_sub = message_filters.Subscriber('/habitat_camera/color/image', Image)
-	depth_sub = message_filters.Subscriber('/habitat_camera/depth/image', Image)
-	camera_info_sub = message_filters.Subscriber('/habitat_camera/color/camera_info', CameraInfo)
-
-	# Subscribe to fusion odometry
-	fusion_odom_sub = rospy.Subscriber('/pose_fusion/odometry', Odometry, odom_callback)
-
+	if args.ros_rgb_img_type == 'raw':
+		rgb_sub = message_filters.Subscriber('/color/image', Image)
+	else:
+		rgb_sub = message_filters.Subscriber('/color/image', CompressedImage)
+	depth_sub = message_filters.Subscriber('/depth/image', Image)
+	camera_info_sub = message_filters.Subscriber('/color/camera_info', CameraInfo)
 	# Synchronize the topics
 	ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub, camera_info_sub], queue_size=10, slop=0.1)
 	ts.registerCallback(rgb_depth_image_callback)
+
+	# Subscribe to fusion odometry
+	fusion_odom_sub = rospy.Subscriber('/pose_fusion/odometry', Odometry, odom_callback)
 
 	# Start the localization thread
 	localization_thread = threading.Thread(target=perform_localization, args=(loc_pipeline, args, ))

@@ -42,6 +42,7 @@ def odom_local_callback(odom_msg):
 		try:
 			transform = tf_buffer.lookup_transform(frame_id_gsensor, frame_id_lsensor, rospy.Time())
 			T_gsensor_lsensor = ros_msg.convert_rostf_to_matrix(transform)
+			# print(T_gsensor_lsensor)
 			init_extrinsics = True
 		except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
 			rospy.logwarn("Transform not available")

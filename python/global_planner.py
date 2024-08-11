@@ -3,7 +3,8 @@ Usage:
 python global_planner.py \
 --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
 --image_size 288 512 --device=cuda \
---vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 
+--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors \
+--num_preds_to_save 3 
 """
 
 import os
@@ -38,7 +39,9 @@ class GlobalPlanner:
 	def initalize_ros(self):
 		# ROS publisher
 		self.pub_shortest_path = rospy.Publisher('/graph/shortest_path', MarkerArray, queue_size=10)
+		# TODO(gogojjh):
 		# self.pub_waypoint = rospy.Publisher('/graph/waypoint', MarkerArray, queue_size=10)
+		self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
 
 	def read_map_from_file(self):
 		data_path = self.args.dataset_path
@@ -50,7 +53,7 @@ class GlobalPlanner:
 			header = Header(stamp=rospy.Time.now(), frame_id='map_graph')
 			pytool_ros.ros_vis.publish_shortest_path(self.planner_path, header, self.pub_shortest_path)
 
-			subgoal_node = self.planner_path[1]
+			# subgoal_node = self.planner_path[1]
 			# pytool_ros.ros_vis.publish_waypoint(subgoal_node, header, self.pub_shortest_path)
 
 def perform_planning(loc, gp, args):
@@ -61,7 +64,7 @@ def perform_planning(loc, gp, args):
 		return
 
 	img_size = args.image_size
-	goal_img_path = os.path.join(args.dataset_path, 'goal_image_0.jpg')
+	goal_img_path = os.path.join(args.dataset_path, 'goal_image_2.jpg')
 	goal_img = load_rgb_image(goal_img_path, img_size)
 	with torch.no_grad():
 		desc = loc.vpr_model(goal_img.unsqueeze(0).to(args.device)).cpu().numpy()

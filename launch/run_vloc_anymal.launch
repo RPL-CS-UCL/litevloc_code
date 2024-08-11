@@ -9,8 +9,12 @@
 	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 
-					--img_matcher master --pose_solver pnp 
-					--config_pose_solver $(arg project_directory)/python/config/dataset/ucl_campus.yaml --no_viz" >
+					--img_matcher master --pose_solver pnp
+					--config_pose_solver $(arg project_directory)/python/config/dataset/ucl_campus.yaml --no_viz
+					--ros_rgb_img_type compressed" >
+		<remap from="/color/image" to="/zed2/zed_node/left/image_rect_color/compressed" />
+		<remap from="/depth/image" to="/zed2/zed_node/depth/depth_registered" />
+		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />					
 	</node>
 
 	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="screen">
