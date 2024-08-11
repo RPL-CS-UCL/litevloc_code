@@ -44,6 +44,7 @@ from image_node import ImageNode
 import pycpptools.src.python.utils_math as pytool_math
 import pycpptools.src.python.utils_ros as pytool_ros
 import pycpptools.src.python.utils_sensor as pytool_sensor
+import pycpptools.src.python.utils_algorithm as pytool_algo
 
 from loc_pipeline import LocPipeline
 import queue
@@ -52,6 +53,7 @@ import PIL
 
 if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
 
+fused_poses = pytool_algo.stpose.StampedPoses()
 rgb_depth_queue = queue.Queue()
 lock = threading.Lock()
 
@@ -59,8 +61,15 @@ def rgb_depth_image_callback(rgb_img_msg, depth_img_msg, camera_info_msg):
 	lock.acquire()
 	rgb_depth_queue.put((rgb_img_msg, depth_img_msg, camera_info_msg))
 	# Keep the queue size to be small for processing the newest data
-	while rgb_depth_queue.qsize() > 2: rgb_depth_queue.get()
+	while rgb_depth_queue.qsize() > 1: rgb_depth_queue.get()
 	lock.release()
+
+def odom_callback(odom_msg):
+	time = odom_msg.header.stamp.to_sec()
+	trans, quat = pytool_ros.ros_msg.convert_rosodom_to_vec(odom_msg)
+	T = pytool_math.tools_eigen.convert_vec_to_matrix(trans, quat)
+	fused_poses.add(time, T)
+	print(f"Size of fused poses: {len(fused_poses)}")
 
 def perform_localization(loc: LocPipeline, args):
 	obs_id = 0
@@ -89,6 +98,7 @@ def perform_localization(loc: LocPipeline, args):
 				img_size = raw_img_size
 
 			"""Process the current observation"""
+			# TODO(gogojjh):
 			vpr_start_time = time.time()
 			with torch.no_grad():
 				desc = loc.vpr_model(rgb_img_tensor.unsqueeze(0).to(args.device)).cpu().numpy()
@@ -114,7 +124,13 @@ def perform_localization(loc: LocPipeline, args):
 					print('Failed to determine the global position.')
 					continue
 			else:
-				init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
+				# Initialize the current transformation using the historical fused poses
+				idx_closest, stamped_pose_closest = fused_poses.find_closest(obs_node.time)
+				if idx_closest is None:
+					init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
+				else:
+					# print("Given initial pose: ", stamped_pose_closest[1])
+					init_trans, init_quat = pytool_math.tools_eigen.convert_matrix_to_vec(stamped_pose_closest[1])
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
 
 			"""Perform local localization via. image matching"""
@@ -155,8 +171,8 @@ if __name__ == '__main__':
 	depth_sub = message_filters.Subscriber('/habitat_camera/depth/image', Image)
 	camera_info_sub = message_filters.Subscriber('/habitat_camera/color/camera_info', CameraInfo)
 
-	# TODO(gogojjh):
-	# odom_sub = rospy.Subscriber('/prior_odometry', Odometry, odom_callback)
+	# Subscribe to fusion odometry
+	fusion_odom_sub = rospy.Subscriber('/pose_fusion/odometry', Odometry, odom_callback)
 
 	# Synchronize the topics
 	ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub, camera_info_sub], queue_size=10, slop=0.1)

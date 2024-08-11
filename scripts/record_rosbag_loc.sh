@@ -1,7 +1,6 @@
-rosbag record -o /Rocket_ssd/dataset/data_topo_loc/vloc \
-  /habitat_camera/color/camera_info /habitat_camera/depth/camera_info \
-  /habitat_camera/color/image /habitat_camera/depth/image \
-  /habitat_camera/odometry \
+rosbag record -o /Rocket_ssd/dataset/data_topo_loc/loc_fusion \
   /graph /graph/poses \
   /vloc/odometry /vloc/path /vloc/path_gt /vloc/image_map_obs \
+  /pose_fusion/odometry /pose_fusion/path \
+  /depth_reg/odometry /depth_reg/path \
   /tf /tf_static

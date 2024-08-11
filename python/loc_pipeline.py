@@ -159,7 +159,7 @@ class LocPipeline:
 	
 	def perform_local_pos(self):
 		# Option 1: Select keyframe using distance and angle threshold
-		min_dis = 10.0
+		min_dis = 7.5
 		knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[10])
 		knn_dis, knn_pred = knn_dis[0], knn_pred[0]
 		knn_dis, knn_pred = knn_dis[knn_dis < min_dis], knn_pred[knn_dis < min_dis]
