@@ -56,8 +56,7 @@ class LocPipeline:
 		self.log_dir = log_dir
 		self.has_global_pos = False
 		self.last_obs_node = None
-		self.frame_id_map = 'vloc_map'
-		self.frame_id_camera = 'habitat_camera'
+		self.frame_id_map = 'map'
 
 	def init_vpr_model(self):
 		self.vpr_model = initialize_vpr_model(self.args.vpr_method, self.args.vpr_backbone, self.args.vpr_descriptors_dimension, self.args.device)
@@ -381,5 +380,6 @@ if __name__ == '__main__':
 
 	rospy.init_node('loc_pipeline_node', anonymous=True)
 	loc_pipeline.initalize_ros()
+	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'map')
 
 	perform_localization(loc_pipeline, args)

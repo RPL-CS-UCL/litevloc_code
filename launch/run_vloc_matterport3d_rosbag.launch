@@ -14,6 +14,7 @@
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/color/camera_info" to="/habitat_camera/color/camera_info" />
+		<param name="frame_id_map" value="vloc_map" />
 	</node>
 
 	<node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="log">
@@ -31,6 +32,6 @@
   <!-- Static TF -->
   <!-- Option 1: x y z yaw pitch roll (radians) frame_id child_frame_id period_in_ms -->
   <!-- Option 2: x y z qx qy qz qw frame_id child_frame_id period_in_ms -->
-  <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" />
+  <!-- <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" /> -->
 
 </launch>

@@ -106,7 +106,6 @@ def odom_local_callback(odom_msg):
 			print("System initialized")
 
 	if init_system:
-		# Print the current pose
 		# Publish the odometry
 		trans = curr_stamped_pose[1].translation()
 		quat = curr_stamped_pose[1].rotation().toQuaternion().coeffs() # xyzw
@@ -120,22 +119,6 @@ def odom_local_callback(odom_msg):
 		pose_fusion.path_msg.header = header
 		pose_fusion.path_msg.poses.append(pose_msg)
 		pose_fusion.pub_path.publish(pose_fusion.path_msg)
-		# Publish the tf
-		tf_msg = ros_msg.convert_odom_to_rostf(fusion_odom)
-		pose_fusion.br.sendTransform(tf_msg)
-		
-		############ NOTE(gogojjh): for test
-		T_w_cam = convert_vec_to_matrix(trans, quat)
-		trans = np.array([0.0, 0.0, 0.5])
-		quat = np.array([-0.5, 0.5, -0.5, 0.5])
-		T_vehicle_cam = convert_vec_to_matrix(trans, quat) 
-		T_w_vehicle = T_w_cam @ np.linalg.inv(T_vehicle_cam)
-		header = Header(stamp=rospy.Time.from_sec(curr_stamped_pose[0]), frame_id=frame_id_map)
-		trans, quat = convert_matrix_to_vec(T_w_vehicle)
-		fusion_odom = ros_msg.convert_vec_to_rosodom(trans, quat, header, child_frame_id='vehicle')
-		fusion_odom.pose.covariance = list(marginal_cov.flatten())
-		pose_fusion.pub_odom_vehicle.publish(fusion_odom)
-		############
 
 def odom_global_callback(odom_msg):
 	global frame_id_gsensor

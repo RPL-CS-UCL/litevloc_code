@@ -160,6 +160,7 @@ if __name__ == '__main__':
 
 	rospy.init_node('ros_loc_pipeline_simu', anonymous=False)
 	loc_pipeline.initalize_ros()
+	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'map')
 
 	# Subscribe to RGB, depth images, and odometry
 	if args.ros_rgb_img_type == 'raw':
