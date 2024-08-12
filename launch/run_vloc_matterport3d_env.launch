@@ -6,14 +6,19 @@
 	<param name="use_sim_time" value="true" />
 
 	<!-- Launch Environment -->
-	<arg name="environment_proj_directory" default="/Titan/code/robohike_ws/src/benchmark_visual_nav"/>
-  <arg name="environment_directory" default="/Titan/dataset/data_benchmark_visual_nav/matterport/$(arg env_id)"/>
+	<arg name="environment_proj_directory" default="$(find benchmark_visual_nav)"/>
+  <arg name="environment_directory" default="$(find benchmark_visual_nav)/data/matterport/$(arg env_id)"/>
 	<arg name="useLocalPlanner" default="false" />
 	<include file="$(arg environment_proj_directory)/environment/launch/matterport/system_$(arg env_id).launch" >
 		<arg name="project_directory" value="$(arg environment_proj_directory)" />
 		<arg name="environment_directory" value="$(arg environment_directory)" />
 		<arg name="gazebo_gui" value="false" />
-		<arg name="odomTopic" value="/vloc/state_estimation" />
+		<group if="$(arg useLocalPlanner)">
+			<arg name="odomTopic" value="/state_estimation" />
+		</group>
+		<group unless="$(arg useLocalPlanner)">
+			<arg name="odomTopic" value="/vloc/state_estimation" />
+		</group>
 		<arg name="useLocalPlanner" value="$(arg useLocalPlanner)" />
 	</include>
 
@@ -42,7 +47,7 @@
 		<param name="frame_id_map" value="vloc_map" />
 	</node>
 
-	<node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="log">
+	<node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="screen">
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/depth/camera_info" to="/habitat_camera/depth/camera_info" />
 		<param name="frame_id_map" value="vloc_map" />
