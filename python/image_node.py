@@ -32,6 +32,7 @@ class ImageNode(BaseNode):
 
 		# Matched keypoints
 		self.mkpts = None
+		self.inliers = None
 
 	def set_descriptor(self, global_descriptor):
 		self.global_descriptor = global_descriptor
@@ -39,8 +40,9 @@ class ImageNode(BaseNode):
 	def get_descriptor(self):
 		return self.global_descriptor
 	
-	def set_matched_kpts(self, mkpts):
+	def set_matched_kpts(self, mkpts, num_inliers):
 		self.mkpts = mkpts
+		self.inliers = num_inliers
 	
 	def get_matched_kpts(self):
-		return self.mkpts
+		return self.mkpts, self.inliers

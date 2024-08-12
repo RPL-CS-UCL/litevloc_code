@@ -162,8 +162,8 @@ class LocPipeline:
 	
 	def perform_local_pos(self):
 		# Option 1: Select keyframe using distance and angle threshold
-		min_dis = 15.0
-		knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[10])
+		min_dis = 10.0
+		knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
 		knn_dis, knn_pred = knn_dis[0], knn_pred[0]
 		knn_dis, knn_pred = knn_dis[knn_dis < min_dis], knn_pred[knn_dis < min_dis]
 		while True:
@@ -234,8 +234,8 @@ class LocPipeline:
 				T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
 					self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
 				T_w_obs = T_w_mapnode @ T_mapnode_obs
-				self.ref_map_node.set_matched_kpts(mkpts1)
-				self.curr_obs_node.set_matched_kpts(mkpts0)
+				self.ref_map_node.set_matched_kpts(mkpts1, inliers)
+				self.curr_obs_node.set_matched_kpts(mkpts0, inliers)
 				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': inliers}
 		except Exception as e:
 			print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
@@ -269,8 +269,8 @@ class LocPipeline:
 				n_viz = 10 # visualize n_viz matched keypoints
 				rgb_img_ref = (np.transpose(to_numpy(self.ref_map_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
 				rgb_img_obs = (np.transpose(to_numpy(self.curr_obs_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
-				mkpts_map = self.ref_map_node.get_matched_kpts()
-				mkpts_obs = self.curr_obs_node.get_matched_kpts()
+				mkpts_map, num_inliers = self.ref_map_node.get_matched_kpts()
+				mkpts_obs, _ = self.curr_obs_node.get_matched_kpts()
 				step_size = max(1, len(mkpts_map) // n_viz)
 				rgb_img_ref_bgr = cv2.cvtColor(rgb_img_ref, cv2.COLOR_RGB2BGR)
 				rgb_img_obs_bgr = cv2.cvtColor(rgb_img_obs, cv2.COLOR_RGB2BGR)
@@ -282,7 +282,7 @@ class LocPipeline:
 					cv2.circle(rgb_img_ref_bgr, (int(x0), int(y0)), 3, (0, 255, 0), -1)
 					cv2.circle(rgb_img_obs_bgr, (int(x1), int(y1)), 3, (0, 255, 0), -1)
 					cv2.line(merged_img, (int(x0), int(y0)), (int(x1) + rgb_img_ref.shape[1], int(y1)), (0, 255, 0), 2)	
-				text = f'Matched kpts: {len(mkpts_map)}'
+				text = f'Matched inliers kpts: {num_inliers}'
 				text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)[0]
 				text_x = (merged_img.shape[1] - text_size[0])
 				text_y = (merged_img.shape[0] - text_size[1])

@@ -1,16 +1,29 @@
 <launch>
-	<!-- Base Parameters -->
-	<arg name="project_directory" default="/Titan/code/robohike_ws/src/topo_loc" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map/" />
 
+	<!-- Base Parameters -->
+	<arg name="env_id" default="17DRP5sb8fy" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/out_$(arg env_id)/out_map/" />
 	<param name="use_sim_time" value="true" />
+
+	<!-- Launch Environment -->
+	<arg name="environment_proj_directory" default="/Titan/code/robohike_ws/src/benchmark_visual_nav"/>
+  <arg name="environment_directory" default="/Titan/dataset/data_benchmark_visual_nav/matterport/$(arg env_id)"/>
+	<arg name="useLocalPlanner" default="false" />
+	<arg name="odomTopic" default="/pose_fusion/odometry" />
+	<include file="$(arg environment_proj_directory)/environment/launch/matterport/system_$(arg env_id).launch" >
+		<arg name="project_directory" value="$(arg environment_proj_directory)" />
+		<arg name="environment_directory" value="$(arg environment_directory)" />
+		<arg name="gazebo_gui" value="false" />
+		<arg name="odomTopic" value="/pose_fusion/odometry_vehicle" />
+		<arg name="useLocalPlanner" value="$(arg useLocalPlanner)" />
+	</include>
 
 	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 
 					--img_matcher master --pose_solver pnp 
-					--config_pose_solver $(arg project_directory)/python/config/dataset/matterport3d.yaml --viz
+					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
 					--ros_rgb_img_type raw" >
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
@@ -21,6 +34,8 @@
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/depth/camera_info" to="/habitat_camera/depth/camera_info" />
 		<param name="frame_id_map" value="vloc_map" />
+		<param name="min_depth" value="0.001" />
+		<param name="max_depth" value="10.0" />
 	</node>
 
 	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="screen">

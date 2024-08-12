@@ -1,0 +1,36 @@
+<launch>
+	<!-- Base Parameters -->
+	<arg name="env_id" default="17DRP5sb8fy" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/out_$(arg env_id)/out_map/" />
+	<param name="use_sim_time" value="true" />
+
+	<!-- Localization -->
+	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
+		args="--dataset_path $(arg map_path)
+					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 
+					--img_matcher master --pose_solver pnp 
+					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
+					--ros_rgb_img_type raw" >
+		<remap from="/color/image" to="/habitat_camera/color/image" />
+		<remap from="/depth/image" to="/habitat_camera/depth/image" />
+		<remap from="/color/camera_info" to="/habitat_camera/color/camera_info" />
+	</node>
+
+	<node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="log">
+		<remap from="/depth/image" to="/habitat_camera/depth/image" />
+		<remap from="/depth/camera_info" to="/habitat_camera/depth/camera_info" />
+		<param name="frame_id_map" value="vloc_map" />
+	</node>
+
+	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="screen">
+		<remap from="/local/odometry" to="/depth_reg/odometry" />
+		<remap from="/global/odometry" to="/vloc/odometry" />
+		<param name="frame_id_map" value="vloc_map" />
+	</node>
+
+  <!-- Static TF -->
+  <!-- Option 1: x y z yaw pitch roll (radians) frame_id child_frame_id period_in_ms -->
+  <!-- Option 2: x y z qx qy qz qw frame_id child_frame_id period_in_ms -->
+  <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" />
+
+</launch>

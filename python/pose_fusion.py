@@ -74,6 +74,7 @@ class PoseFusion:
 
 	def initalize_ros(self):
 		self.pub_odom = rospy.Publisher('/pose_fusion/odometry', Odometry, queue_size=10)
+		self.pub_odom_vehicle = rospy.Publisher('/pose_fusion/odometry_vehicle', Odometry, queue_size=10)
 		self.pub_path = rospy.Publisher('/pose_fusion/path', Path, queue_size=10)
 		self.path_msg = Path()
 		self.br = tf2_ros.TransformBroadcaster()
