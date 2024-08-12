@@ -30,8 +30,17 @@ class ImageNode(BaseNode):
 		# Next node using in the shortest path
 		self.next_node = None
 
+		# Matched keypoints
+		self.mkpts = None
+
 	def set_descriptor(self, global_descriptor):
 		self.global_descriptor = global_descriptor
 
 	def get_descriptor(self):
 		return self.global_descriptor
+	
+	def set_matched_kpts(self, mkpts):
+		self.mkpts = mkpts
+	
+	def get_matched_kpts(self):
+		return self.mkpts

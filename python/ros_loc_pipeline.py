@@ -8,7 +8,7 @@ python loc_pipeline.py \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
 --img_matcher master --save_img_matcher \
 --pose_solver pnp --config_pose_solver config/dataset/matterport3d.yaml \
---no_viz
+--viz
 
 Usage: 
 rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc.bag \
@@ -60,7 +60,6 @@ def odom_callback(odom_msg):
 	trans, quat = pytool_ros.ros_msg.convert_rosodom_to_vec(odom_msg)
 	T = pytool_math.tools_eigen.convert_vec_to_matrix(trans, quat)
 	fused_poses.add(time, T)
-	print(f"Size of fused poses: {len(fused_poses)}")
 
 def perform_localization(loc: LocPipeline, args):
 	obs_id = 0

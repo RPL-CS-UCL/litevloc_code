@@ -8,7 +8,7 @@ python loc_pipeline.py \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
 --img_matcher master --save_img_matcher \
 --pose_solver pnp --config_pose_solver config/dataset/matterport3d.yaml \
---no_viz
+--viz
 
 Usage: 
 rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc.bag \
@@ -22,6 +22,7 @@ import pathlib
 import numpy as np
 import torch
 import time
+import cv2
 import rospy
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry, Path
@@ -208,7 +209,12 @@ class LocPipeline:
 		# 		break
 		try:
 			T_mapnode_obs = None
+			mkpts0, mkpts1 = (
+				matcher_result["inliers0"],
+				matcher_result["inliers1"],
+			)					
 			if self.args.img_matcher == "mickey":
+				inliers = num_inliers
 				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
 				R, t = to_numpy(R), to_numpy(t)
 				T_mapnode_obs = np.eye(4)
@@ -216,10 +222,6 @@ class LocPipeline:
 				print(f'Mickey Solver:\n', T_mapnode_obs)
 			else:
 				depth_img0 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
-				mkpts0, mkpts1 = (
-					matcher_result["inliers0"],
-					matcher_result["inliers1"],
-				)					
 				R, t, inliers = self.pose_solver.estimate_pose(
 					mkpts0, mkpts1, 
 					self.curr_obs_node.K, self.ref_map_node.K, 
@@ -232,10 +234,12 @@ class LocPipeline:
 				T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
 					self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
 				T_w_obs = T_w_mapnode @ T_mapnode_obs
-				return {'succ': True, 'T_w_obs': T_w_obs}
+				self.ref_map_node.set_matched_kpts(mkpts1)
+				self.curr_obs_node.set_matched_kpts(mkpts0)
+				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': inliers}
 		except Exception as e:
 			print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
-			return {'succ': False, 'T_w_obs': None}
+			return {'succ': False, 'T_w_obs': None, 'solver_inliers': inliers}
 
 	def publish_message(self):
 		header = Header(stamp=rospy.Time.now(), frame_id=self.frame_id_map)
@@ -261,11 +265,24 @@ class LocPipeline:
 				self.path_gt_msg.poses.append(pose_msg)
 				self.pub_path_gt.publish(self.path_gt_msg)
 
-			if self.ref_map_node is not None:
-				rgb_img_map_node = (np.transpose(to_numpy(self.ref_map_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
+			if self.ref_map_node is not None and self.args.viz:
+				n_viz = 10 # visualize n_viz matched keypoints
+				rgb_img_ref = (np.transpose(to_numpy(self.ref_map_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
 				rgb_img_obs = (np.transpose(to_numpy(self.curr_obs_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
-				rgb_img_merge = np.hstack((rgb_img_map_node, rgb_img_obs))
-				img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(rgb_img_merge, "rgb8", header, compressed=False)
+				mkpts_map = self.ref_map_node.get_matched_kpts()
+				mkpts_obs = self.curr_obs_node.get_matched_kpts()
+				step_size = max(1, len(mkpts_map) // n_viz)
+				rgb_img_ref_bgr = cv2.cvtColor(rgb_img_ref, cv2.COLOR_RGB2BGR)
+				rgb_img_obs_bgr = cv2.cvtColor(rgb_img_obs, cv2.COLOR_RGB2BGR)
+				merged_img = np.hstack((rgb_img_ref_bgr, rgb_img_obs_bgr))
+				# Loop through matched keypoints, draw circles and lines
+				for i in range(0, len(mkpts_map), step_size):
+					x0, y0 = mkpts_map[i]
+					x1, y1 = mkpts_obs[i]
+					cv2.circle(rgb_img_ref_bgr, (int(x0), int(y0)), 3, (0, 255, 0), -1)
+					cv2.circle(rgb_img_obs_bgr, (int(x1), int(y1)), 3, (0, 255, 0), -1)
+					cv2.line(merged_img, (int(x0), int(y0)), (int(x1) + rgb_img_ref.shape[1], int(y1)), (0, 255, 0), 2)	
+				img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(merged_img, "bgr8", header, compressed=False)
 				self.pub_map_obs.publish(img_msg)
 
 def perform_localization(loc: LocPipeline, args):
@@ -343,7 +360,6 @@ def perform_localization(loc: LocPipeline, args):
 		loc.publish_message()
 		loc.last_obs_node = loc.curr_obs_node
 		time.sleep(0.01)
-		input()
 
 if __name__ == '__main__':
 	args = parse_arguments()
