@@ -42,7 +42,6 @@ def odom_local_callback(odom_msg):
 		try:
 			transform = tf_buffer.lookup_transform(frame_id_gsensor, frame_id_lsensor, rospy.Time())
 			T_gsensor_lsensor = ros_msg.convert_rostf_to_matrix(transform)
-			# print(T_gsensor_lsensor)
 			init_extrinsics = True
 		except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
 			rospy.logwarn("Transform not available")
@@ -93,7 +92,7 @@ def odom_local_callback(odom_msg):
 			# print(f"Closest pose to global odometry at time {pose_time:.05f} is {idx_closest}")
 
 			# Add prior factor
-			sigma = np.array([np.deg2rad(5.), np.deg2rad(5.), np.deg2rad(5.), 0.1, 0.1, 0.1])
+			sigma = np.array([np.deg2rad(10.0), np.deg2rad(10.0), np.deg2rad(10.0), 1.0, 1.0, 1.0])
 			pose_fusion.add_prior_factor(idx_closest, pose3, sigma)
 		
 		# Perform the isam2 optimization 

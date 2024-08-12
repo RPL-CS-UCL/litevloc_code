@@ -14,9 +14,10 @@
 					--ros_rgb_img_type compressed" >
 		<remap from="/color/image" to="/zed2/zed_node/left/image_rect_color/compressed" />
 		<remap from="/depth/image" to="/zed2/zed_node/depth/depth_registered" />
-		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />					
+		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />
 	</node>
 
+	<!-- Pose Fusion: base - zed2_left_camera_optical_frame -->
 	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="screen">
 		<remap from="/local/odometry" to="/state_estimator/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />

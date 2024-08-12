@@ -137,6 +137,8 @@ def perform_localization(loc: LocPipeline, args):
 					loc.curr_obs_node.set_pose(trans, quat)
 					print(f'Estimated Poses: {trans.T}\n')
 				else:
+					if loc.last_obs_node is None:
+						loc.has_global_pos = False
 					print('Failed to determine the local position.')
 					continue                
 

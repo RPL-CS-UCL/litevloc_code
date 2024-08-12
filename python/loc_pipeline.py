@@ -162,7 +162,7 @@ class LocPipeline:
 	
 	def perform_local_pos(self):
 		# Option 1: Select keyframe using distance and angle threshold
-		min_dis = 7.5
+		min_dis = 15.0
 		knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[10])
 		knn_dis, knn_pred = knn_dis[0], knn_pred[0]
 		knn_dis, knn_pred = knn_dis[knn_dis < min_dis], knn_pred[knn_dis < min_dis]
@@ -282,6 +282,11 @@ class LocPipeline:
 					cv2.circle(rgb_img_ref_bgr, (int(x0), int(y0)), 3, (0, 255, 0), -1)
 					cv2.circle(rgb_img_obs_bgr, (int(x1), int(y1)), 3, (0, 255, 0), -1)
 					cv2.line(merged_img, (int(x0), int(y0)), (int(x1) + rgb_img_ref.shape[1], int(y1)), (0, 255, 0), 2)	
+				text = f'Matched kpts: {len(mkpts_map)}'
+				text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)[0]
+				text_x = (merged_img.shape[1] - text_size[0])
+				text_y = (merged_img.shape[0] - text_size[1])
+				cv2.putText(merged_img, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3, cv2.LINE_AA)
 				img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(merged_img, "bgr8", header, compressed=False)
 				self.pub_map_obs.publish(img_msg)
 
