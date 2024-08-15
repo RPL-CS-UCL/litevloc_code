@@ -190,55 +190,6 @@ class LocPipeline:
 					self.ref_map_node = sorted_nodes[0]
 					print(f'Found the reference map node: {self.ref_map_node.id}')
 					break
-
-		# Option 1: Select keyframe using distance and angle threshold
-		# min_dis = 10.0
-		# knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[3])
-		# knn_dis, knn_pred = knn_dis[0], knn_pred[0]
-		# knn_dis, knn_pred = knn_dis[knn_dis < min_dis], knn_pred[knn_dis < min_dis]
-		# while True:
-		# 	if len(knn_pred) == 0: return {'succ': False, 'T_w_obs': None}
-		# 	# T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(self.DB_POSES[knn_pred[0], :3], self.DB_POSES[knn_pred[0], 3:], 'xyzw')
-		# 	# T_w_obs = pytool_math.tools_eigen.convert_vec_to_matrix(self.curr_obs.trans, self.curr_obs.quat, 'xyzw')
-		# 	# dis_trans, dis_angle = pytool_math.tools_eigen.compute_distance_TF(T_w_mapnode, T_w_obs)
-		# 	map_id = self.DB_DESCRIPTORS_ID[knn_pred[0]]
-		# 	im_start_time = time.time()
-		# 	matcher_result = self.perform_image_matching(self.image_graph.get_node(map_id), self.curr_obs_node)
-		# 	num_inliers = matcher_result["num_inliers"]
-		# 	print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s with {num_inliers} inliers")
-		# 	if matcher_result is None or num_inliers < 200:
-		# 		knn_pred = np.delete(knn_pred, 0)
-		# 		continue
-		# 	else:
-		# 		self.ref_map_node = self.image_graph.get_node(map_id)
-		# 		print(f'Found the reference map node: {self.ref_map_node.id}')
-		# 		break
-
-		# Option 2: Select keyframe using PR
-		# min_dis = 10.0
-		# knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
-		# knn_dis, knn_pred = knn_dis[0], knn_pred[0]
-		# knn_pred, knn_dis = knn_pred[knn_dis < min_dis], knn_dis[knn_dis < min_dis]
-		# db_select, db_id_select = self.DB_DESCRIPTORS[knn_pred, :], self.DB_DESCRIPTORS_ID[knn_pred]
-		# print('Near Map ID and dis: ', db_id_select, knn_dis)
-		# # find the most similar map node
-		# vpr_dis, vpr_pred = self.perform_vpr(db_select, self.curr_obs_node.get_descriptor())
-		# vpr_dis, vpr_pred = vpr_dis[0], vpr_pred[0]
-		# while True:
-		# 	if len(vpr_pred) == 0 or vpr_pred[0] < 0: return {'succ': False, 'T_w_obs': None}
-		# 	map_id = db_id_select[vpr_pred[0]]
-		# 	im_start_time = time.time()
-		# 	matcher_result = self.perform_image_matching(self.image_graph.get_node(map_id), self.curr_obs_node)
-		# 	print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s")
-		# 	print(db_id_select[vpr_pred[0]], matcher_result["num_inliers"])
-		# 	if matcher_result is None or matcher_result["num_inliers"] < 100:
-		# 		vpr_pred = np.delete(vpr_pred, 0)
-		# 		continue
-		# 	else:
-		# 		self.ref_map_node = self.image_graph.get_node(map_id)
-		# 		print(f'Found the reference map node: {self.ref_map_node.id}')
-		# 		break
-
 		try:
 			T_mapnode_obs = None
 			mkpts0, mkpts1 = (matcher_result["inliers0"], matcher_result["inliers1"])
