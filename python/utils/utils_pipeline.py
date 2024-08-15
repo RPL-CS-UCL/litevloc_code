@@ -62,6 +62,7 @@ def parse_arguments():
 	parser.add_argument("--unit_type", action="store_true", help="depth images are encoded to uint16 (True) or float32 (False)")
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='0.001 or 1')
 	parser.add_argument("--ros_rgb_img_type", type=str, default='raw', help="raw or compressed")
+	parser.add_argument("--global_pos_threshold", type=float, default=20.0, help="Distance threshold to actively global localization")
 	"""
 	Parameters for VPR methods
 	"""

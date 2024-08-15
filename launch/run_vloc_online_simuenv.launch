@@ -13,13 +13,14 @@
 			<arg name="project_directory" value="$(find benchmark_visual_nav)" />
 			<arg name="environment_directory" value="$(find benchmark_visual_nav)/data/matterport/$(arg env_id)" />
 			<arg name="gazebo_gui" value="false" />
+			<arg name="useLocalPlanner" value="$(arg useLocalPlanner)" />
+			
 			<group if="$(arg useLocalPlanner)">
 				<arg name="odomTopic" value="/state_estimation" />
 			</group>
 			<group unless="$(arg useLocalPlanner)">
 				<arg name="odomTopic" value="/vloc/state_estimation" />
 			</group>
-			<arg name="useLocalPlanner" value="$(arg useLocalPlanner)" />
 		</include>
 	</group>
 
@@ -42,7 +43,8 @@
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 
 					--img_matcher master --pose_solver pnp 
 					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
-					--ros_rgb_img_type raw" >
+					--ros_rgb_img_type raw
+					--global_pos_threshold 20.0" >
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/color/camera_info" to="/habitat_camera/color/camera_info" />

@@ -55,7 +55,6 @@ class LocPipeline:
 		self.args = args
 		self.log_dir = log_dir
 		self.has_global_pos = False
-		self.last_obs_node = None
 		self.frame_id_map = 'map'
 
 	def init_vpr_model(self):
@@ -160,28 +159,61 @@ class LocPipeline:
 		return {'succ': True, 'map_id': self.DB_DESCRIPTORS_ID[vpr_pred[0]]}
 	
 	def perform_local_pos(self):
+		# Option 0: Select keyframe using covisibility graph
+		# 1. check if the current observation is already matched with the last reference map node
+		im_start_time = time.time()
+		matcher_result = self.perform_image_matching(self.ref_map_node, self.curr_obs_node)
+		num_inliers = matcher_result["num_inliers"]
+		print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s with {num_inliers} inliers")
+		# 2. if the number of inliers is less than 200, search new keyframes from the covisibility of the last reference map node
+		if matcher_result is None or num_inliers < 200:
+			all_nodes = [nei_node for nei_node, _ in self.ref_map_node.edges]
+			all_dis = []
+			alpha = 0.3
+			for node in all_nodes:
+				dis_trans, dis_angle = self.curr_obs_node.compute_distance(node)
+				dis = alpha * min(dis_trans / 5.0, 1.0) + (1 - alpha) * min(dis_angle / 360.0, 1.0)
+				all_dis.append(dis)
+			sorted_nodes = [all_nodes[i] for i in np.argsort(all_dis)[:3]]
+			print(f'Failed to localize the current observation with the reference map node {self.ref_map_node.id}')
+			print(f'Sorted {len(sorted_nodes)} neighbors of the map node {self.ref_map_node.id}')
+			print([node.id for node in sorted_nodes])
+			while True:
+				if len(sorted_nodes) == 0: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
+				im_start_time = time.time()
+				matcher_result = self.perform_image_matching(sorted_nodes[0], self.curr_obs_node)
+				num_inliers = matcher_result["num_inliers"]
+				if matcher_result is None or num_inliers < 200:
+					sorted_nodes = np.delete(sorted_nodes, 0)
+					continue
+				else:
+					self.ref_map_node = sorted_nodes[0]
+					print(f'Found the reference map node: {self.ref_map_node.id}')
+					break
+
 		# Option 1: Select keyframe using distance and angle threshold
-		min_dis = 10.0
-		knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
-		knn_dis, knn_pred = knn_dis[0], knn_pred[0]
-		knn_dis, knn_pred = knn_dis[knn_dis < min_dis], knn_pred[knn_dis < min_dis]
-		while True:
-			if len(knn_pred) == 0: return {'succ': False, 'T_w_obs': None}
-			# T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(self.DB_POSES[knn_pred[0], :3], self.DB_POSES[knn_pred[0], 3:], 'xyzw')
-			# T_w_obs = pytool_math.tools_eigen.convert_vec_to_matrix(self.curr_obs.trans, self.curr_obs.quat, 'xyzw')
-			# dis_trans, dis_angle = pytool_math.tools_eigen.compute_distance_TF(T_w_mapnode, T_w_obs)
-			map_id = self.DB_DESCRIPTORS_ID[knn_pred[0]]
-			im_start_time = time.time()
-			matcher_result = self.perform_image_matching(self.image_graph.get_node(map_id), self.curr_obs_node)
-			num_inliers = matcher_result["num_inliers"]
-			print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s with {num_inliers} inliers")
-			if matcher_result is None or num_inliers < 300:
-				knn_pred = np.delete(knn_pred, 0)
-				continue
-			else:
-				self.ref_map_node = self.image_graph.get_node(map_id)
-				print(f'Found the reference map node: {self.ref_map_node.id}')
-				break
+		# min_dis = 10.0
+		# knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[3])
+		# knn_dis, knn_pred = knn_dis[0], knn_pred[0]
+		# knn_dis, knn_pred = knn_dis[knn_dis < min_dis], knn_pred[knn_dis < min_dis]
+		# while True:
+		# 	if len(knn_pred) == 0: return {'succ': False, 'T_w_obs': None}
+		# 	# T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(self.DB_POSES[knn_pred[0], :3], self.DB_POSES[knn_pred[0], 3:], 'xyzw')
+		# 	# T_w_obs = pytool_math.tools_eigen.convert_vec_to_matrix(self.curr_obs.trans, self.curr_obs.quat, 'xyzw')
+		# 	# dis_trans, dis_angle = pytool_math.tools_eigen.compute_distance_TF(T_w_mapnode, T_w_obs)
+		# 	map_id = self.DB_DESCRIPTORS_ID[knn_pred[0]]
+		# 	im_start_time = time.time()
+		# 	matcher_result = self.perform_image_matching(self.image_graph.get_node(map_id), self.curr_obs_node)
+		# 	num_inliers = matcher_result["num_inliers"]
+		# 	print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s with {num_inliers} inliers")
+		# 	if matcher_result is None or num_inliers < 200:
+		# 		knn_pred = np.delete(knn_pred, 0)
+		# 		continue
+		# 	else:
+		# 		self.ref_map_node = self.image_graph.get_node(map_id)
+		# 		print(f'Found the reference map node: {self.ref_map_node.id}')
+		# 		break
+
 		# Option 2: Select keyframe using PR
 		# min_dis = 10.0
 		# knn_dis, knn_pred = perform_knn_search(self.DB_POSES[:, :3], self.curr_obs_node.trans.reshape(1, -1), 3, recall_values=[5])
@@ -206,12 +238,10 @@ class LocPipeline:
 		# 		self.ref_map_node = self.image_graph.get_node(map_id)
 		# 		print(f'Found the reference map node: {self.ref_map_node.id}')
 		# 		break
+
 		try:
 			T_mapnode_obs = None
-			mkpts0, mkpts1 = (
-				matcher_result["inliers0"],
-				matcher_result["inliers1"],
-			)
+			mkpts0, mkpts1 = (matcher_result["inliers0"], matcher_result["inliers1"])
 			mkpts0_raw = mkpts0 * [self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0], 
 								   self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]]
 			mkpts1_raw = mkpts1 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
@@ -298,8 +328,9 @@ def perform_localization(loc: LocPipeline, args):
 	obs_poses_gt = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'poses.txt'))
 	obs_cam_intrinsics = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'intrinsics.txt'))
 	resize = args.image_size
+	loc.last_obs_node = None
 
-	for obs_id in range(0, len(obs_poses_gt), 10):
+	for obs_id in range(0, len(obs_poses_gt), 30):
 		if rospy.is_shutdown(): break
 		print(f"Loading observation with id {obs_id}")
 
@@ -324,7 +355,7 @@ def perform_localization(loc: LocPipeline, args):
 
 		# Create observation node
 		obs_node = ImageNode(obs_id, rgb_img, depth_img, desc,
-							 obs_poses_gt[obs_id, 0],
+							 rospy.Time.now().to_sec(),
 							 np.zeros(3), np.array([0, 0, 0, 1]),
 							 K, img_size,
 							 rgb_img_path, depth_img_path)
@@ -338,8 +369,8 @@ def perform_localization(loc: LocPipeline, args):
 			if result['succ']:
 				matched_map_id = result['map_id']
 				loc.has_global_pos = True
-				loc.global_pos_node = loc.image_graph.get_node(matched_map_id)
-				loc.curr_obs_node.set_pose(loc.global_pos_node.trans, loc.global_pos_node.quat)
+				loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
+				loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
 			else:
 				print('Failed to determine the global position.')
 				continue
@@ -361,8 +392,10 @@ def perform_localization(loc: LocPipeline, args):
 				continue
 
 		loc.publish_message()
+		# Set as the initial guess of the next observation
 		loc.last_obs_node = loc.curr_obs_node
 		time.sleep(0.01)
+		input()
 
 if __name__ == '__main__':
 	args = parse_arguments()

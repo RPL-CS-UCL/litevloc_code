@@ -67,6 +67,7 @@ def perform_localization(loc: LocPipeline, args):
 	resize = args.image_size
 	while not rospy.is_shutdown():
 		if not rgb_depth_queue.empty():
+			"""Get the latest RGB, depth images, and camera info"""
 			lock.acquire()
 			rgb_img_msg, depth_img_msg, camera_info_msg = rgb_depth_queue.get()
 			lock.release()
@@ -106,21 +107,29 @@ def perform_localization(loc: LocPipeline, args):
 				if result['succ']:
 					matched_map_id = result['map_id']
 					loc.has_global_pos = True
-					loc.global_pos_node = loc.image_graph.get_node(matched_map_id)
-					loc.curr_obs_node.set_pose(loc.global_pos_node.trans, loc.global_pos_node.quat)
-					loc.last_obs_node = None
+					loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
+					loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
 				else:
 					print('Failed to determine the global position.')
 					continue
 			else:
 				# Initialize the current transformation using the historical fused poses
 				idx_closest, stamped_pose_closest = fused_poses.find_closest(obs_node.time)
+				# No fused poses available
 				if idx_closest is None:
-					init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
+					init_trans, init_quat = loc.ref_map_node.trans, loc.ref_map_node.quat
+				# Use the closest fused pose as the initial guess
 				else:
-					# print("Given initial pose: ", stamped_pose_closest[1])
 					init_trans, init_quat = pytool_math.tools_eigen.convert_matrix_to_vec(stamped_pose_closest[1])
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
+				
+				dis_trans, _ = pytool_math.tools_eigen.compute_relative_dis(init_trans, init_quat, loc.ref_map_node.trans, loc.ref_map_node.quat)
+				if dis_trans > loc.args.global_pos_threshold:
+					print('Too far distance from the ref_map_node. Losing Visual tracking')
+					print('Reset the global position.')
+					loc.has_global_pos = False
+					loc.ref_map_node = None
+					continue
 
 			"""Perform local localization via. image matching"""
 			if loc.has_global_pos:
@@ -133,13 +142,9 @@ def perform_localization(loc: LocPipeline, args):
 					loc.curr_obs_node.set_pose(trans, quat)
 					print(f'Estimated Poses: {trans.T}\n')
 				else:
-					if loc.last_obs_node is None:
-						loc.has_global_pos = False
 					print('Failed to determine the local position.')
-					continue                
-
+					continue
 			loc.publish_message()
-			loc.last_obs_node = loc.curr_obs_node
 
 if __name__ == '__main__':
 	args = parse_arguments()
