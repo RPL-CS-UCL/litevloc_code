@@ -16,6 +16,7 @@ import time
 import rospy
 from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
+from nav_msgs.msg import Odometry
 
 from point_graph import PointGraphLoader as GraphLoader
 from image_node import ImageNode
@@ -41,7 +42,7 @@ class GlobalPlanner:
 		self.pub_shortest_path = rospy.Publisher('/graph/shortest_path', MarkerArray, queue_size=10)
 		# TODO(gogojjh):
 		# self.pub_waypoint = rospy.Publisher('/graph/waypoint', MarkerArray, queue_size=10)
-		self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
+		# self.odom_sub = rospy.Subscriber('/odom', Odometry, self.odom_callback)
 
 	def read_map_from_file(self):
 		data_path = self.args.dataset_path
@@ -64,12 +65,12 @@ def perform_planning(loc, gp, args):
 		return
 
 	img_size = args.image_size
-	goal_img_path = os.path.join(args.dataset_path, 'goal_image_2.jpg')
+	goal_img_path = os.path.join(args.dataset_path, 'goal_image_0.jpg')
 	goal_img = load_rgb_image(goal_img_path, img_size)
 	with torch.no_grad():
 		desc = loc.vpr_model(goal_img.unsqueeze(0).to(args.device)).cpu().numpy()
 	obs_node = ImageNode(0, goal_img, None, desc, 
-						rospy.Time.now(), np.zeros(3), np.array([0, 0, 0, 1]), 
+						rospy.Time.now().to_sec(), np.zeros(3), np.array([0, 0, 0, 1]), 
 						None, img_size, 
 						goal_img_path, None)
 	loc.curr_obs_node = obs_node

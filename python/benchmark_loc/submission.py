@@ -1,7 +1,7 @@
 # [Computation]:
 # python submission.py --config ../config/dataset/mapfree.yaml --models master --pose_solver essentialmatrixmetricmean --out_dir /Titan/dataset/data_mapfree/results --split val
 # [Evaluation] (in mickey folder):
-# python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetricmean/submission.zip --split val --log error
+# python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetricmean/submission.zip --dataset_path /Titan/dataset/data_mapfree --split val --log error
 
 import os
 import sys
@@ -29,6 +29,8 @@ from config.default import cfg
 from lib.datasets.datamodules import DataModule
 from lib.utils.data import data_to_model_device
 
+from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
+
 @dataclass
 class Pose:
     image_name: str
@@ -53,6 +55,7 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
     running_time = []
     for data in tqdm(loader):
         try:
+            # NOTE(gogojjh): rgb images are resize, depth images are not resized
             data = data_to_model_device(data, matcher)
             rgb_img0, rgb_img1 = data['image0'], data['image1']
             rgb_img0 = rgb_img0.squeeze(0)
@@ -82,17 +85,22 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 depth_img1 = to_numpy(data['depth1'].squeeze(0))
                 K0 = to_numpy(K0.squeeze(0))
                 K1 = to_numpy(K1.squeeze(0))
+                ori_w, ori_h = depth_img0.shape[1], depth_img0.shape[0]
+                K0_raw = correct_intrinsic_scale(K0, ori_w / rgb_img0.shape[2], ori_h / rgb_img0.shape[1])
+                K1_raw = correct_intrinsic_scale(K1, ori_w / rgb_img1.shape[2], ori_h / rgb_img1.shape[1])
+                mkpts0_raw = mkpts0 * [ori_w / rgb_img0.shape[2], ori_h / rgb_img0.shape[1]]
+                mkpts1_raw = mkpts1 * [ori_w / rgb_img1.shape[2], ori_h / rgb_img1.shape[1]]
                 """Definition of solver output"""
-                # R10 (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate kpts0 to kpts1.
-                # t10 (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate kpts0 to kpts1.
+                # R (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate kpts0 to kpts1.
+                # t (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate kpts0 to kpts1.
                 # inliers_solver (int): Number of inliers used in the final pose estimation.
-                R, t, inliers_solver = solver.estimate_pose(mkpts0, mkpts1, K0, K1, depth_img0, depth_img1)
+                R, t, inliers_solver = solver.estimate_pose(mkpts0_raw, mkpts1_raw, K0_raw, K1_raw, depth_img0, depth_img1)
             solver_time = time.time() - start_time           
             running_time.append(matching_time + solver_time)
 
             """Save Results"""
-            scene = data['scene_id'][0]
             query_img = data['pair_names'][1][0]
+            scene = data['scene_id'][0]
             if np.isnan(R).any() or np.isnan(t).any() or np.isinf(t).any():
                 raise ValueError("Estimated pose is NaN or infinite.")
 

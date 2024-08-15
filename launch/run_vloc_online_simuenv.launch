@@ -3,24 +3,25 @@
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
 	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/out_$(arg env_id)/out_map/" />
+	<arg name="setup_simu_env" default="true" />
 	<param name="use_sim_time" value="true" />
 
 	<!-- Launch Environment -->
-	<arg name="environment_proj_directory" default="$(find benchmark_visual_nav)"/>
-  <arg name="environment_directory" default="$(find benchmark_visual_nav)/data/matterport/$(arg env_id)"/>
-	<arg name="useLocalPlanner" default="false" />
-	<include file="$(arg environment_proj_directory)/environment/launch/matterport/system_$(arg env_id).launch" >
-		<arg name="project_directory" value="$(arg environment_proj_directory)" />
-		<arg name="environment_directory" value="$(arg environment_directory)" />
-		<arg name="gazebo_gui" value="false" />
-		<group if="$(arg useLocalPlanner)">
-			<arg name="odomTopic" value="/state_estimation" />
-		</group>
-		<group unless="$(arg useLocalPlanner)">
-			<arg name="odomTopic" value="/vloc/state_estimation" />
-		</group>
-		<arg name="useLocalPlanner" value="$(arg useLocalPlanner)" />
-	</include>
+	<group if="$(arg setup_simu_env)">
+		<arg name="useLocalPlanner" default="false" />
+		<include file="$(find benchmark_visual_nav)/environment/launch/matterport/system_$(arg env_id).launch" >
+			<arg name="project_directory" value="$(find benchmark_visual_nav)" />
+			<arg name="environment_directory" value="$(find benchmark_visual_nav)/data/matterport/$(arg env_id)" />
+			<arg name="gazebo_gui" value="false" />
+			<group if="$(arg useLocalPlanner)">
+				<arg name="odomTopic" value="/state_estimation" />
+			</group>
+			<group unless="$(arg useLocalPlanner)">
+				<arg name="odomTopic" value="/vloc/state_estimation" />
+			</group>
+			<arg name="useLocalPlanner" value="$(arg useLocalPlanner)" />
+		</include>
+	</group>
 
   <!-- Navigation Interface -->
 	<!-- Transform the frame_id of localization odometry to robot -->
@@ -37,6 +38,7 @@
 	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
+					--image_size 512 288
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 
 					--img_matcher master --pose_solver pnp 
 					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
@@ -47,7 +49,7 @@
 		<param name="frame_id_map" value="vloc_map" />
 	</node>
 
-	<node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="screen">
+	<node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="log">
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/depth/camera_info" to="/habitat_camera/depth/camera_info" />
 		<param name="frame_id_map" value="vloc_map" />
@@ -55,7 +57,7 @@
 		<param name="max_depth" value="10.0" />
 	</node>
 
-	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="screen">
+	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log">
 		<remap from="/local/odometry" to="/depth_reg/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
 		<param name="frame_id_map" value="vloc_map" />
@@ -65,5 +67,8 @@
   <!-- Option 1: x y z yaw pitch roll (radians) frame_id child_frame_id period_in_ms -->
   <!-- Option 2: x y z qx qy qz qw frame_id child_frame_id period_in_ms -->
   <!-- <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" /> -->
+	
+	<!-- RVIZ -->
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find topo_loc)/rviz_cfg/topo_graph_matterport3d.rviz" required="false" />
 
 </launch>

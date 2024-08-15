@@ -1,0 +1,28 @@
+<launch>
+
+	<!-- Base Parameters -->
+	<arg name="env_id" default="17DRP5sb8fy" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/out_$(arg env_id)/out_map/" />
+	<param name="use_sim_time" value="false" />
+
+	<!-- Localization -->
+	<node name="loc_pipeline" pkg="topo_loc" type="loc_pipeline.py" output="screen"
+		args="--dataset_path $(arg map_path)
+					--image_size 512 288 --device=cuda
+					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3
+					--img_matcher master --save_img_matcher
+					--pose_solver pnp --config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml
+					--viz" >
+		<param name="frame_id_map" value="vloc_map" />
+		<param name="child_frame_id" value="habitat_camera" />
+	</node>
+
+  <!-- Static TF -->
+  <!-- Option 1: x y z yaw pitch roll (radians) frame_id child_frame_id period_in_ms -->
+  <!-- Option 2: x y z qx qy qz qw frame_id child_frame_id period_in_ms -->
+  <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" />
+	
+	<!-- RVIZ -->
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find topo_loc)/rviz_cfg/topo_graph_matterport3d.rviz" required="false" />
+
+</launch>

@@ -34,6 +34,10 @@ init_extrinsics = False
 
 tf_buffer, listener = None, None
 
+# Odometry covariance
+SIGMA_ODOMETRY = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
+SIGMA_PRIOR = np.array([np.deg2rad(5.0), np.deg2rad(5.0), np.deg2rad(5.0), 0.5, 0.5, 0.5])
+
 def odom_local_callback(odom_msg):
 	global frame_id_lsensor, frame_id_gsensor, T_gsensor_lsensor, init_extrinsics
 	frame_id_lsensor = odom_msg.child_frame_id
@@ -62,7 +66,7 @@ def odom_local_callback(odom_msg):
 	if len(poses_local) > 0:
 		prev_idx = len(poses_local) - 1
 		_, stamped_prev_pose_local = poses_local.get_item(prev_idx)
-		sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
+		sigma = SIGMA_ODOMETRY
 		pose_fusion.add_odometry_factor(prev_idx, stamped_prev_pose_local[1], curr_idx, curr_pose_local, sigma)
 		# Update the current pose
 		curr_stamped_pose = (curr_time, 
@@ -92,7 +96,7 @@ def odom_local_callback(odom_msg):
 			# print(f"Closest pose to global odometry at time {pose_time:.05f} is {idx_closest}")
 
 			# Add prior factor
-			sigma = np.array([np.deg2rad(10.0), np.deg2rad(10.0), np.deg2rad(10.0), 1.0, 1.0, 1.0])
+			sigma = SIGMA_PRIOR
 			pose_fusion.add_prior_factor(idx_closest, pose3, sigma)
 		
 		# Perform the isam2 optimization 

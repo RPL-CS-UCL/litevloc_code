@@ -64,6 +64,7 @@ def odom_callback(odom_msg):
 def perform_localization(loc: LocPipeline, args):
 	obs_id = 0
 	min_depth, max_depth = 0.1, 15.0
+	resize = args.image_size
 	while not rospy.is_shutdown():
 		if not rgb_depth_queue.empty():
 			lock.acquire()
@@ -75,23 +76,16 @@ def perform_localization(loc: LocPipeline, args):
 			depth_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(depth_img_msg)
 			if depth_img_msg.encoding == "mono16": depth_img *= 0.001
 			depth_img[(depth_img < min_depth) | (depth_img > max_depth)] = 0.0
+			# To tensor
+			rgb_img_tensor = rgb_image_to_tensor(rgb_img, resize, normalized=False)
+			depth_img_tensor = depth_image_to_tensor(depth_img, depth_scale=1.0)
+			# Intrinsic matrix
 			raw_K = np.array(camera_info_msg.K).reshape((3, 3))
 			raw_img_size = (camera_info_msg.width, camera_info_msg.height)
-
-			img_size = args.image_size
-			rgb_img_tensor = rgb_image_to_tensor(rgb_img, img_size, normalized=False)
-			depth_img_tensor = depth_image_to_tensor(depth_img, img_size, depth_scale=1.0)
-			if img_size is not None:
-				K = pytool_sensor.utils.correct_intrinsic_scale(
-					raw_K, 
-					img_size[0] / raw_img_size[0], 
-					img_size[1] / raw_img_size[1])
-			else:
-				K = raw_K
-				img_size = raw_img_size
+			K = pytool_sensor.utils.correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
+			img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
 
 			"""Process the current observation"""
-			# TODO(gogojjh):
 			vpr_start_time = time.time()
 			with torch.no_grad():
 				desc = loc.vpr_model(rgb_img_tensor.unsqueeze(0).to(args.device)).cpu().numpy()
@@ -99,7 +93,9 @@ def perform_localization(loc: LocPipeline, args):
 			
 			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, desc,
 								 rgb_img_time, np.zeros(3), np.array([0, 0, 0, 1]),
-								 K, img_size, '', '')
+								 K, img_size, 
+								 '', '')
+			obs_node.set_raw_intrinsics(raw_K, raw_img_size)
 			loc.curr_obs_node = obs_node
 
 			"""Perform global localization via. visual place recognition"""

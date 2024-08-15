@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#! /opt/conda/envs/topo_loc/bin/python
 
 """
 Usage: 
@@ -211,7 +211,11 @@ class LocPipeline:
 			mkpts0, mkpts1 = (
 				matcher_result["inliers0"],
 				matcher_result["inliers1"],
-			)					
+			)
+			mkpts0_raw = mkpts0 * [self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0], 
+								   self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]]
+			mkpts1_raw = mkpts1 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
+								   self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]]
 			if self.args.img_matcher == "mickey":
 				inliers = num_inliers
 				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
@@ -222,8 +226,8 @@ class LocPipeline:
 			else:
 				depth_img0 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
 				R, t, inliers = self.pose_solver.estimate_pose(
-					mkpts0, mkpts1, 
-					self.curr_obs_node.K, self.ref_map_node.K, 
+					mkpts0_raw, mkpts1_raw,
+					self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
 					depth_img0, None)
 				T_mapnode_obs = np.eye(4)
 				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
@@ -293,30 +297,17 @@ def perform_localization(loc: LocPipeline, args):
 	"""Main loop for processing observations"""
 	obs_poses_gt = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'poses.txt'))
 	obs_cam_intrinsics = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'intrinsics.txt'))
-	img_size = args.image_size
+	resize = args.image_size
 
-	for obs_id in range(0, len(obs_poses_gt), 30):
+	for obs_id in range(0, len(obs_poses_gt), 10):
 		if rospy.is_shutdown(): break
 		print(f"Loading observation with id {obs_id}")
 
 		rgb_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.color.jpg')
-		rgb_img = load_rgb_image(rgb_img_path, img_size, normalized=False)
+		rgb_img = load_rgb_image(rgb_img_path, resize, normalized=False)
 
 		depth_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
-		depth_img = load_depth_image(depth_img_path, img_size, depth_scale=args.depth_scale)
-
-		raw_K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
-						  obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
-						  0, 0, 1], dtype=np.float32).reshape(3, 3)
-		raw_img_size = (obs_cam_intrinsics[obs_id, 4], obs_cam_intrinsics[obs_id, 5]) # width, height
-		if img_size is not None:
-			K = pytool_sensor.utils.correct_intrinsic_scale(
-				raw_K, 
-				img_size[0] / raw_img_size[0], 
-				img_size[1] / raw_img_size[1])
-		else:
-			K = raw_K
-			img_size = raw_img_size
+		depth_img = load_depth_image(depth_img_path, depth_scale=args.depth_scale)
 
 		# Extract VPR descriptors
 		vpr_start_time = time.time()
@@ -324,12 +315,20 @@ def perform_localization(loc: LocPipeline, args):
 			desc = loc.vpr_model(rgb_img.unsqueeze(0).to(args.device)).cpu().numpy()
 		print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
 
+		raw_K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
+						  obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
+						  0, 0, 1], dtype=np.float32).reshape(3, 3)
+		raw_img_size = (int(obs_cam_intrinsics[obs_id, 4]), int(obs_cam_intrinsics[obs_id, 5])) # width, height
+		K = pytool_sensor.utils.correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
+		img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
+
 		# Create observation node
 		obs_node = ImageNode(obs_id, rgb_img, depth_img, desc,
-							rospy.Time.from_sec(obs_poses_gt[obs_id, 0]), 
-							np.zeros(3), np.array([0, 0, 0, 1]),
-							K, img_size,
-							rgb_img_path, depth_img_path)
+							 obs_poses_gt[obs_id, 0],
+							 np.zeros(3), np.array([0, 0, 0, 1]),
+							 K, img_size,
+							 rgb_img_path, depth_img_path)
+		obs_node.set_raw_intrinsics(raw_K, raw_img_size)
 		obs_node.set_pose_gt(obs_poses_gt[obs_id, 1:4], obs_poses_gt[obs_id, 4:])
 		loc.curr_obs_node = obs_node
 
@@ -381,5 +380,6 @@ if __name__ == '__main__':
 	rospy.init_node('loc_pipeline_node', anonymous=True)
 	loc_pipeline.initalize_ros()
 	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'map')
+	loc_pipeline.child_frame_id = rospy.get_param('~child_frame_id', 'camera')
 
 	perform_localization(loc_pipeline, args)

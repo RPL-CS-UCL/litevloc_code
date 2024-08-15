@@ -122,11 +122,9 @@ def rgb(ftensor, true_shape=None):
 def compute_scale_factor(A, B, delta=0.1):
     """
     Compute the scale factor s using the provided equation with a robust M-estimator, remove outliers
-
     Args:
                     A (np.ndarray): Reference matrix (depth_image1).
                     B (np.ndarray): Matrix to be scaled (depth_image2).
-
     Returns:
                     float: Computed scale factor.
     """
@@ -134,11 +132,9 @@ def compute_scale_factor(A, B, delta=0.1):
     def huber_loss(residual, delta):
         """
         Huber loss function.
-
         Args:
                         residual (np.ndarray): Residuals.
                         delta (float): Delta parameter for Huber loss.
-
         Returns:
                         float: Huber loss value.
         """
@@ -151,10 +147,8 @@ def compute_scale_factor(A, B, delta=0.1):
     def objective_function(s):
         """
         Objective function to minimize.
-
         Args:
                         s (float): Scale factor.
-
         Returns:
                         float: Sum of Huber loss for residuals.
         """
@@ -169,11 +163,9 @@ def compute_residual_matrix(A, B, s):
     def huber_loss(residual, delta=1.0):
         """
         Huber loss function.
-
         Args:
                         residual (np.ndarray): Residuals.
                         delta (float): Delta parameter for Huber loss.
-
         Returns:
                         float: Huber loss value.
         """

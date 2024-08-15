@@ -163,11 +163,11 @@ def main(args):
     image0 = load_rgb_image(args.path_rgb_img0, resize=image_size)
     image1 = load_rgb_image(args.path_rgb_img1, resize=image_size)
     if args.path_depth_img0 is not None:
-        depth0 = load_depth_image(args.path_depth_img0, resize=image_size, depth_scale=0.001)
+        depth0 = load_depth_image(args.path_depth_img0, depth_scale=0.001)
     else:
         depth0 = None
     if args.path_depth_img1 is not None:
-        depth1 = load_depth_image(args.path_depth_img1, resize=image_size, depth_scale=0.001)
+        depth1 = load_depth_image(args.path_depth_img1, depth_scale=0.001)
     else:
         depth1 = None
     print(image0.shape, image1.shape, depth0.shape, depth1.shape)

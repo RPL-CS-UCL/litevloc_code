@@ -56,8 +56,8 @@ def parse_arguments():
 	"""
 	parser.add_argument("--dataset_path", type=str, default="matterport3d", help="path to dataset_path")
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
-											help="Resizing shape for images (HxW). If a single int is passed, set the"
-											"smallest edge of all images to this value, while keeping aspect ratio")
+										help="Resizing shape for images (WxH). If a single int is passed, set the"
+										"smallest edge of all images to this value, while keeping aspect ratio")
 	parser.add_argument("--viz", action="store_true", help="pass --viz for visualization of immidiate results")
 	parser.add_argument("--unit_type", action="store_true", help="depth images are encoded to uint16 (True) or float32 (False)")
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='0.001 or 1')

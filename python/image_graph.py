@@ -13,7 +13,7 @@ class ImageGraphLoader:
 		pass
 
 	@staticmethod
-	def load_data(graph_path, img_size, depth_scale, normalized=False):
+	def load_data(graph_path, resize, depth_scale, normalized=False):
 		image_graph = ImageGraph()
 		
 		poses = np.loadtxt(os.path.join(graph_path, 'poses.txt'))
@@ -27,11 +27,11 @@ class ImageGraphLoader:
 
 		for i in range(poses.shape[0]):
 			rgb_img_path = os.path.join(graph_path, 'seq', f'{i:06}.color.jpg')
-			rgb_image = load_rgb_image(rgb_img_path, img_size, normalized=normalized)
+			rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
 			
 			depth_img_path = os.path.join(graph_path, 'seq', f'{i:06}.depth.png')
 			if os.path.exists(depth_img_path):
-				depth_image = load_depth_image(depth_img_path, img_size, depth_scale=depth_scale)
+				depth_image = load_depth_image(depth_img_path, depth_scale=depth_scale)
 			else:
 				depth_image = None
 
@@ -39,23 +39,21 @@ class ImageGraphLoader:
 			time, trans, quat = poses[i, 0], poses[i, 1:4], poses[i, 4:]
 
 			# Each row: fx fy cx cy width height
-			K = np.array([intrinsics[i, 0], 0, intrinsics[i, 2], 
-						  0, intrinsics[i, 1], intrinsics[i, 3], 
-						  0, 0, 1], dtype=np.float32).reshape(3, 3)
-			raw_img_size = (intrinsics[i, 4], intrinsics[i, 5]) # width, height
-			if img_size is not None:
-				K = correct_intrinsic_scale(K, img_size[0] / raw_img_size[0], img_size[1] / raw_img_size[1])
-				node = ImageNode(i, rgb_image, depth_image, f'image node {i}', 
-								 time, trans, quat, 
-								 K, img_size,
-								 rgb_img_path, depth_img_path)
-			else:
-				node = ImageNode(i, rgb_image, depth_image, f'image node {i}', 
-								 time, trans, quat, 
-								 K, raw_img_size,
-								 rgb_img_path, depth_img_path)
-
+			raw_K = np.array([intrinsics[i, 0], 0, intrinsics[i, 2], 
+						      0, intrinsics[i, 1], intrinsics[i, 3], 
+						      0, 0, 1], dtype=np.float32).reshape(3, 3)
+			raw_img_size = (int(intrinsics[i, 4]), int(intrinsics[i, 5])) # width, height
+			K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
+			img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
+			
+			# Create observation node
+			node = ImageNode(i, rgb_image, depth_image, f'image node {i}', 
+							 time, trans, quat, 
+							 K, img_size,
+							 rgb_img_path, depth_img_path)
+			node.set_raw_intrinsics(raw_K, raw_img_size)
 			node.set_pose_gt(trans, quat)
+
 			if descs is not None:
 				node.set_descriptor(descs[i, :])
 

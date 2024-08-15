@@ -3,10 +3,10 @@ import os
 from pycpptools.src.python.utils_algorithm.base_node import BaseNode
 
 class ImageNode(BaseNode):
-	def __init__(self, id, 
-				rgb_image, depth_image, global_descriptor, 
-				time, trans, quat, K, img_size,
-				rgb_img_path, depth_img_path):
+	def __init__(self, id: int, 
+				 rgb_image, depth_image, global_descriptor, 
+				 time: float, trans, quat, K, img_size,
+				 rgb_img_path, depth_img_path):
 		super().__init__(id, trans, quat)
 
 		# RGB and depth images
@@ -27,6 +27,9 @@ class ImageNode(BaseNode):
 		self.K = K
 		self.img_size = img_size # width, height
 
+		self.raw_K = K
+		self.raw_img_size = img_size
+
 		# Next node using in the shortest path
 		self.next_node = None
 
@@ -46,3 +49,7 @@ class ImageNode(BaseNode):
 	
 	def get_matched_kpts(self):
 		return self.mkpts, self.inliers
+
+	def set_raw_intrinsics(self, raw_K, raw_img_size):
+		self.raw_K = raw_K
+		self.raw_img_size = raw_img_size

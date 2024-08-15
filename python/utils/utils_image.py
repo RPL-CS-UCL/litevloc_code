@@ -9,7 +9,6 @@ import logging
 def load_rgb_image(
     path: Union[str, Path],
     resize: Union[int, Tuple] = None,
-    rot_angle: float = 0,
     normalized: bool = False,
 ) -> torch.Tensor:
     if isinstance(resize, int):
@@ -21,7 +20,8 @@ def load_rgb_image(
             tfm.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         )
     if resize is not None:
-        transformations.append(tfm.Resize(size=resize, antialias=True))
+        new_size = (resize[1], resize[0]) # width, height
+        transformations.append(tfm.Resize(size=new_size, antialias=True))
     transform = tfm.Compose(transformations)
 
     # Load image and apply transformation
@@ -36,16 +36,10 @@ def load_rgb_image(
 
 def load_depth_image(
     path: Union[str, Path],
-    resize: Union[int, Tuple] = None,
-    rot_angle: float = 0,
     depth_scale=0.001,
 ) -> torch.Tensor:
-    if isinstance(resize, int):
-        resize = (resize, resize)
-    # Set up transformations: - Convert to tensor, - Resize
+    # Set up transformations: - Convert to tensor
     transformations = [tfm.ToTensor()]
-    if resize is not None:
-        transformations.append(tfm.Resize(size=resize, antialias=True))
     transform = tfm.Compose(transformations)
 
     # Load image and apply transformation
@@ -60,7 +54,6 @@ def load_depth_image(
 def rgb_image_to_tensor(
     rgb_img: np.ndarray,
     resize: Union[int, Tuple] = None,
-    rot_angle: float = 0,
     normalized: bool = False,
 ) -> torch.Tensor:
     if isinstance(resize, int):
@@ -72,7 +65,8 @@ def rgb_image_to_tensor(
             tfm.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         )
     if resize is not None:
-        transformations.append(tfm.Resize(size=resize, antialias=True))
+        new_size = (resize[1], resize[0]) # width, height
+        transformations.append(tfm.Resize(size=new_size, antialias=True))
     transform = tfm.Compose(transformations)
 
     # Load image and apply transformation
@@ -87,16 +81,10 @@ def rgb_image_to_tensor(
 
 def depth_image_to_tensor(
     depth_img: np.ndarray,
-    resize: Union[int, Tuple] = None,
-    rot_angle: float = 0,
     depth_scale=0.001,
 ) -> torch.Tensor:
-    if isinstance(resize, int):
-        resize = (resize, resize)
-    # Set up transformations: - Convert to tensor, - Resize
+    # Set up transformations: - Convert to tensor
     transformations = [tfm.ToTensor()]
-    if resize is not None:
-        transformations.append(tfm.Resize(size=resize, antialias=True))
     transform = tfm.Compose(transformations)
 
     # Load image and apply transformation

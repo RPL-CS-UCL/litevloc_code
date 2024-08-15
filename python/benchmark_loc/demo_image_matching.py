@@ -20,7 +20,7 @@ from matching import available_models, get_matcher
 from matching.utils import to_numpy, get_image_pairs_paths
 
 from utils.utils_image_matching_method import *
-from utils.utils_image import load_rgb_image, load_depth_image
+from utils.utils_image import load_rgb_image
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):
