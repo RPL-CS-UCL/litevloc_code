@@ -172,7 +172,6 @@ class LocPipeline:
 			print([node.id for node in sorted_nodes])
 			while True:
 				if len(sorted_nodes) == 0: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
-				im_start_time = time.time()
 				matcher_result = self.perform_image_matching(sorted_nodes[0], self.curr_obs_node)
 				if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
 					sorted_nodes = np.delete(sorted_nodes, 0)
@@ -189,7 +188,7 @@ class LocPipeline:
 			mkpts1_raw = mkpts1 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
 								   self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]]
 			if self.args.img_matcher == "mickey":
-				inliers = num_inliers
+				inliers = matcher_result["num_inliers"]
 				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
 				R, t = to_numpy(R), to_numpy(t)
 				T_mapnode_obs = np.eye(4)

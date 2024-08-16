@@ -54,7 +54,7 @@
 					--img_matcher master --pose_solver pnp 
 					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
 					--ros_rgb_img_type raw
-					--global_pos_threshold 20.0
+					--global_pos_threshold 10.0
 					--min_inliers_threshold 200" >
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
