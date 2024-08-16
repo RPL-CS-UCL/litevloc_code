@@ -8,13 +8,13 @@ DATASET:
   SCENES: [s00000_sample]
   ESTIMATED_DEPTH: zed   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
-  HEIGHT: 160             # RGB Images are resized
+  HEIGHT: 288             # RGB Images are resized
   WIDTH: 512
   MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!
 PNP:
-  RANSAC_ITER: 1000
+  RANSAC_ITER: 2000
   REPROJECTION_INLIER_THRESHOLD: 3 # pixel
   CONFIDENCE: 0.9999
 EMAT_RANSAC:

@@ -51,7 +51,6 @@ lock = threading.Lock()
 def rgb_depth_image_callback(rgb_img_msg, depth_img_msg, camera_info_msg):
 	lock.acquire()
 	rgb_depth_queue.put((rgb_img_msg, depth_img_msg, camera_info_msg))
-	# Keep the queue size to be small for processing the newest data
 	while rgb_depth_queue.qsize() > 1: rgb_depth_queue.get()
 	lock.release()
 
@@ -65,6 +64,7 @@ def perform_localization(loc: LocPipeline, args):
 	obs_id = 0
 	min_depth, max_depth = 0.1, 15.0
 	resize = args.image_size
+	r = rospy.Rate(loc.main_freq)
 	while not rospy.is_shutdown():
 		if not rgb_depth_queue.empty():
 			"""Get the latest RGB, depth images, and camera info"""
@@ -144,6 +144,7 @@ def perform_localization(loc: LocPipeline, args):
 					print('Failed to determine the local position.')
 					continue
 			loc.publish_message()
+			r.sleep()
 
 if __name__ == '__main__':
 	args = parse_arguments()
@@ -161,6 +162,7 @@ if __name__ == '__main__':
 	rospy.init_node('ros_loc_pipeline_simu', anonymous=False)
 	loc_pipeline.initalize_ros()
 	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'map')
+	loc_pipeline.main_freq = rospy.get_param('~main_freq', 1)
 
 	# Subscribe to RGB, depth images, and odometry
 	if args.ros_rgb_img_type == 'raw':
@@ -169,7 +171,6 @@ if __name__ == '__main__':
 		rgb_sub = message_filters.Subscriber('/color/image', CompressedImage)
 	depth_sub = message_filters.Subscriber('/depth/image', Image)
 	camera_info_sub = message_filters.Subscriber('/color/camera_info', CameraInfo)
-	# Synchronize the topics
 	ts = message_filters.ApproximateTimeSynchronizer([rgb_sub, depth_sub, camera_info_sub], queue_size=10, slop=0.1)
 	ts.registerCallback(rgb_depth_image_callback)
 

@@ -36,7 +36,7 @@ tf_buffer, listener = None, None
 
 # Odometry covariance
 SIGMA_ODOMETRY = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
-SIGMA_PRIOR = np.array([np.deg2rad(5.0), np.deg2rad(5.0), np.deg2rad(5.0), 0.5, 0.5, 0.5])
+SIGMA_PRIOR = np.array([np.deg2rad(10.0), np.deg2rad(10.0), np.deg2rad(10.0), 1.0, 1.0, 1.0])
 
 def odom_local_callback(odom_msg):
 	global frame_id_lsensor, frame_id_gsensor, T_gsensor_lsensor, init_extrinsics

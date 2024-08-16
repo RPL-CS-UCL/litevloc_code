@@ -27,7 +27,7 @@
   <!-- Navigation Interface -->
 	<!-- Transform the frame_id of localization odometry to robot -->
 	<!-- Publish: /vloc/state_estimation, /vloc/state_estimation_path -->
-  <node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="screen">
+  <node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="log">
 		<remap from="/Odometry" to="/pose_fusion/odometry" />
     <param name="loc_world_frame_id" value="vloc_map" />
     <param name="loc_sensor_frame_id" value="habitat_camera" />
@@ -35,6 +35,16 @@
     <param name="sensor_frame_id" value="habitat_camera" />
     <param name="base_frame_id" value="vehicle" /> <!-- robot_id -->
   </node>
+
+	<!-- Planning -->
+	<node name="ros_global_planner" pkg="topo_loc" type="ros_global_planner.py" output="screen"
+		args="--dataset_path $(arg map_path) \
+					--image_size 512 288 --device=cuda \
+					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512" >
+		<param name="frame_id_map" value="vloc_map" />
+		<param name="main_freq" value="1" />
+		<param name="conv_dist" value="0.5" />
+	</node>
 
 	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
@@ -58,6 +68,7 @@
 		<param name="frame_id_map" value="vloc_map" />
 		<param name="min_depth" value="0.001" />
 		<param name="max_depth" value="10.0" />
+		<param name="voxel_radius" value="0.1" />
 	</node>
 
 	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log">
