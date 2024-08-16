@@ -39,13 +39,13 @@
 	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
-					--image_size 512 160
+					--image_size 512 288
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 
 					--img_matcher master --pose_solver pnp 
 					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
 					--ros_rgb_img_type raw
 					--global_pos_threshold 20.0
-					--min_inliers_threshold 150" >
+					--min_inliers_threshold 200" >
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/color/camera_info" to="/habitat_camera/color/camera_info" />

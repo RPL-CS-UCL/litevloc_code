@@ -116,7 +116,6 @@ class LocPipeline:
 
 	def perform_image_matching(self, map_node, obs_node):
 		try:
-			# obs_node.rgb_image has depth
 			matcher_result = self.img_matcher(obs_node.rgb_image, map_node.rgb_image)
 
 			"""Save matching results"""
@@ -158,9 +157,8 @@ class LocPipeline:
 		# Option 0: Select keyframe using covisibility graph
 		# 1. check if the current observation is already matched with the last reference map node
 		matcher_result = self.perform_image_matching(self.ref_map_node, self.curr_obs_node)
-		num_inliers = matcher_result["num_inliers"]
 		# 2. if the number of inliers is less than 200, search new keyframes from the covisibility of the last reference map node
-		if matcher_result is None or num_inliers < self.args.min_inliers_threshold:
+		if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
 			all_nodes = [nei_node for nei_node, _ in self.ref_map_node.edges]
 			all_dis = []
 			alpha = 0.3
@@ -176,8 +174,7 @@ class LocPipeline:
 				if len(sorted_nodes) == 0: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 				im_start_time = time.time()
 				matcher_result = self.perform_image_matching(sorted_nodes[0], self.curr_obs_node)
-				num_inliers = matcher_result["num_inliers"]
-				if matcher_result is None or num_inliers < self.args.min_inliers_threshold:
+				if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
 					sorted_nodes = np.delete(sorted_nodes, 0)
 					continue
 				else:

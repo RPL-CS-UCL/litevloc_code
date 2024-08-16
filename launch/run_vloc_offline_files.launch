@@ -8,12 +8,13 @@
 	<!-- Localization -->
 	<node name="loc_pipeline" pkg="topo_loc" type="loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
-					--image_size 512 256 --device=cuda
+					--image_size 512 288 --device=cuda
 					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3
 					--img_matcher master --save_img_matcher
 					--pose_solver pnp --config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml
 					--viz
-					--global_pos_threshold 20.0" >
+					--global_pos_threshold 20.0
+					--min_inliers_threshold 200" >
 		<param name="frame_id_map" value="vloc_map" />
 		<param name="child_frame_id" value="habitat_camera" />
 	</node>
