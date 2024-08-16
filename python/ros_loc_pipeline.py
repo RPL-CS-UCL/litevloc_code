@@ -85,14 +85,8 @@ def perform_localization(loc: LocPipeline, args):
 			raw_img_size = (camera_info_msg.width, camera_info_msg.height)
 			K = pytool_sensor.utils.correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
 			img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
-
-			"""Process the current observation"""
-			vpr_start_time = time.time()
-			with torch.no_grad():
-				desc = loc.vpr_model(rgb_img_tensor.unsqueeze(0).to(args.device)).cpu().numpy()
-			print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
-			
-			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, desc,
+			# Create observation node
+			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, None,
 								 rgb_img_time, np.zeros(3), np.array([0, 0, 0, 1]),
 								 K, img_size, 
 								 '', '')
@@ -102,8 +96,13 @@ def perform_localization(loc: LocPipeline, args):
 			"""Perform global localization via. visual place recognition"""
 			if not loc.has_global_pos:
 				loc_start_time = time.time()
+				if loc.curr_obs_node.get_descriptor() is None:
+					with torch.no_grad():
+						desc = loc.vpr_model(loc.curr_obs_node.rgb_image.unsqueeze(0).to(args.device)).cpu().numpy()
+					loc.curr_obs_node.set_descriptor(desc)
 				result = loc.perform_global_loc(save=False)
 				print(f"Global localization cost: {time.time() - loc_start_time:.3f}s")
+
 				if result['succ']:
 					matched_map_id = result['map_id']
 					loc.has_global_pos = True
@@ -114,7 +113,7 @@ def perform_localization(loc: LocPipeline, args):
 					continue
 			else:
 				# Initialize the current transformation using the historical fused poses
-				idx_closest, stamped_pose_closest = fused_poses.find_closest(obs_node.time)
+				idx_closest, stamped_pose_closest = fused_poses.find_closest(loc.curr_obs_node.time)
 				# No fused poses available
 				if idx_closest is None:
 					init_trans, init_quat = loc.ref_map_node.trans, loc.ref_map_node.quat
@@ -134,7 +133,7 @@ def perform_localization(loc: LocPipeline, args):
 			"""Perform local localization via. image matching"""
 			if loc.has_global_pos:
 				loc_start_time = time.time()
-				result = loc.perform_local_pos()
+				result = loc.perform_local_loc()
 				print(f"Local localization cost: {time.time() - loc_start_time:.3f}s")
 				if result['succ']:
 					T_w_obs = result['T_w_obs']

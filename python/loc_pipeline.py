@@ -118,17 +118,17 @@ class LocPipeline:
 		try:
 			# obs_node.rgb_image has depth
 			matcher_result = self.img_matcher(obs_node.rgb_image, map_node.rgb_image)
-			num_inliers, H, mkpts0, mkpts1 = (
-				matcher_result["num_inliers"],
-				matcher_result["H"],
-				matcher_result["inliers0"],
-				matcher_result["inliers1"],
-			)
-			out_str = f"Paths: map_id ({map_node.id}), obs_id ({obs_node.id}). "
-			out_str += f"Found {num_inliers} inliers after RANSAC. "
 
 			"""Save matching results"""
 			if self.args.save_img_matcher:
+				num_inliers, H, mkpts0, mkpts1 = (
+					matcher_result["num_inliers"],
+					matcher_result["H"],
+					matcher_result["inliers0"],
+					matcher_result["inliers1"],
+				)
+				# out_str = f"Paths: map_id ({map_node.id}), obs_id ({obs_node.id}). "
+				# out_str += f"Found {num_inliers} inliers after RANSAC. "
 				save_img_matcher_visualization(
 					obs_node.rgb_image, map_node.rgb_image,
 					mkpts0, mkpts1, self.log_dir, obs_node.id, n_viz=100)
@@ -139,14 +139,11 @@ class LocPipeline:
 		return None
 
 	def perform_global_loc(self, save=False):
-		gl_start_time = time.time()
 		vpr_dis, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
 		vpr_dis, vpr_pred = vpr_dis[0, :], vpr_pred[0, :]
-		print(f"Global localization time via. VPR: {time.time() - gl_start_time:.3f}s")
 		if len(vpr_pred) == 0:
 			print('No start node found, cannot determine the global position.')
 			return {'succ': False, 'map_id': None}
-
 		# Save VPR visualization for the top-k predictions
 		if save:
 			list_of_images_paths = [self.curr_obs_node.rgb_img_path]
@@ -155,18 +152,15 @@ class LocPipeline:
 				list_of_images_paths.append(map_node.rgb_img_path)
 			preds_correct = [None] * len(list_of_images_paths)
 			save_vpr_visualization(self.log_dir, 0, list_of_images_paths, preds_correct)
-		
 		return {'succ': True, 'map_id': self.DB_DESCRIPTORS_ID[vpr_pred[0]]}
 	
-	def perform_local_pos(self):
+	def perform_local_loc(self):
 		# Option 0: Select keyframe using covisibility graph
 		# 1. check if the current observation is already matched with the last reference map node
-		im_start_time = time.time()
 		matcher_result = self.perform_image_matching(self.ref_map_node, self.curr_obs_node)
 		num_inliers = matcher_result["num_inliers"]
-		print(f"Local localization time via. Image Matching: {time.time() - im_start_time:.3f}s with {num_inliers} inliers")
 		# 2. if the number of inliers is less than 200, search new keyframes from the covisibility of the last reference map node
-		if matcher_result is None or num_inliers < 200:
+		if matcher_result is None or num_inliers < self.args.min_inliers_threshold:
 			all_nodes = [nei_node for nei_node, _ in self.ref_map_node.edges]
 			all_dis = []
 			alpha = 0.3
@@ -183,7 +177,7 @@ class LocPipeline:
 				im_start_time = time.time()
 				matcher_result = self.perform_image_matching(sorted_nodes[0], self.curr_obs_node)
 				num_inliers = matcher_result["num_inliers"]
-				if matcher_result is None or num_inliers < 200:
+				if matcher_result is None or num_inliers < self.args.min_inliers_threshold:
 					sorted_nodes = np.delete(sorted_nodes, 0)
 					continue
 				else:
@@ -259,7 +253,6 @@ class LocPipeline:
 				rgb_img_ref_bgr = cv2.cvtColor(rgb_img_ref, cv2.COLOR_RGB2BGR)
 				rgb_img_obs_bgr = cv2.cvtColor(rgb_img_obs, cv2.COLOR_RGB2BGR)
 				merged_img = np.hstack((rgb_img_ref_bgr, rgb_img_obs_bgr))
-				# Loop through matched keypoints, draw circles and lines
 				for i in range(0, len(mkpts_map), step_size):
 					x0, y0 = mkpts_map[i]
 					x1, y1 = mkpts_obs[i]
@@ -291,21 +284,14 @@ def perform_localization(loc: LocPipeline, args):
 		depth_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
 		depth_img = load_depth_image(depth_img_path, depth_scale=args.depth_scale)
 
-		# Extract VPR descriptors
-		vpr_start_time = time.time()
-		with torch.no_grad():
-			desc = loc.vpr_model(rgb_img.unsqueeze(0).to(args.device)).cpu().numpy()
-		print(f"Extract VPR descriptors cost: {time.time() - vpr_start_time:.3f}s")
-
 		raw_K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
 						  obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
 						  0, 0, 1], dtype=np.float32).reshape(3, 3)
 		raw_img_size = (int(obs_cam_intrinsics[obs_id, 4]), int(obs_cam_intrinsics[obs_id, 5])) # width, height
 		K = pytool_sensor.utils.correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
 		img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
-
 		# Create observation node
-		obs_node = ImageNode(obs_id, rgb_img, depth_img, desc,
+		obs_node = ImageNode(obs_id, rgb_img, depth_img, None,
 							 rospy.Time.now().to_sec(),
 							 np.zeros(3), np.array([0, 0, 0, 1]),
 							 K, img_size,
@@ -316,7 +302,13 @@ def perform_localization(loc: LocPipeline, args):
 
 		"""Perform global localization via. visual place recognition"""
 		if not loc.has_global_pos:
+			loc_start_time = time.time()
+			if loc.curr_obs_node.get_descriptor() is None:
+				with torch.no_grad():
+					desc = loc.vpr_model(loc.curr_obs_node.rgb_image.unsqueeze(0).to(args.device)).cpu().numpy()
+				loc.curr_obs_node.set_descriptor(desc)
 			result = loc.perform_global_loc(save=(args.num_preds_to_save!=0))
+			print(f"Global localization costs: {time.time() - loc_start_time:.3f}s")
 			if result['succ']:
 				matched_map_id = result['map_id']
 				loc.has_global_pos = True
@@ -331,7 +323,9 @@ def perform_localization(loc: LocPipeline, args):
 
 		"""Perform local localization via. image matching"""
 		if loc.has_global_pos:
-			result = loc.perform_local_pos()
+			loc_start_time = time.time()
+			result = loc.perform_local_loc()
+			print(f"Local localization costs: {time.time() - loc_start_time:.3f}s")
 			if result['succ']:
 				T_w_obs = result['T_w_obs']
 				trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
