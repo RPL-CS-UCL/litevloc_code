@@ -24,7 +24,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 from utils.pose_solver import available_solvers, get_solver
 from utils.utils_image_matching_method import save_visualization
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map-free-reloc"))
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map_free_reloc"))
 from config.default import cfg
 from lib.datasets.datamodules import DataModule
 from lib.utils.data import data_to_model_device
@@ -79,7 +79,7 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             if str_matcher == "mickey":
                 R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0)
                 R, t = to_numpy(R), to_numpy(t)
-                inliers = to_numpy(matcher.scene["inliers"].squeeze(0))[0]
+                inliers_solver = to_numpy(matcher.scene["inliers"].squeeze(0))[0]
             else:
                 depth_img0 = to_numpy(data['depth0'].squeeze(0))
                 depth_img1 = to_numpy(data['depth1'].squeeze(0))
@@ -112,16 +112,11 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             results_dict[scene].append(estimated_pose)
 
             if args.debug:
-                # print(R)
                 print(t.T)
                 if num_inliers < 100:
                     print(f"Inliers number < 100: {num_inliers} at {data['scene_id'][0]}/{data['pair_names']}")
-                save_visualization(
-                    rgb_img0, rgb_img1, mkpts0, mkpts1, 
-                    args.out_dir, 0, n_viz=100, line_width=0.6)                    
-                if str_matcher == "duster" and args.viz:
-                    print('Visualization')
-                    matcher.scene.show(cam_size=0.05)
+                save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, args.out_dir, 0, n_viz=100, line_width=0.6)                    
+                if str_matcher == "duster" and args.viz: matcher.scene.show(cam_size=0.05)
                 time.sleep(0.5)
                 # input()
         except Exception as e:
@@ -137,7 +132,6 @@ def save_submission(results_dict: dict, output_path: Path):
     with ZipFile(output_path, "w") as zip:
         for scene, poses in results_dict.items():
             poses_str = "\n".join((str(pose) for pose in poses))
-            # print(poses_str)
             zip.writestr(f"pose_{scene}.txt", poses_str.encode("utf-8"))
 
 def eval(args):

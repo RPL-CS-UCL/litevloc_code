@@ -10,7 +10,7 @@
 		args="--dataset_path $(arg map_path)
 					--image_size 512 288 --device=cuda
 					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3
-					--img_matcher master --save_img_matcher
+					--img_matcher master --save_img_matcher --n_kpts 1024
 					--pose_solver pnp --config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml
 					--viz
 					--global_pos_threshold 20.0

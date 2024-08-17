@@ -9,7 +9,7 @@ import torch
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 
-from matching import viz2d, get_matcher, available_models
+from image_matching_models.matching import viz2d, get_matcher, available_models
 
 
 def parse_arguments():
