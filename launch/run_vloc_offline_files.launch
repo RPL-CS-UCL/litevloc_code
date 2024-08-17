@@ -14,7 +14,7 @@
 					--pose_solver pnp --config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml
 					--viz
 					--global_pos_threshold 20.0
-					--min_inliers_threshold 200" >
+					--min_inliers_threshold 300" >
 		<param name="frame_id_map" value="vloc_map" />
 		<param name="child_frame_id" value="habitat_camera" />
 	</node>
