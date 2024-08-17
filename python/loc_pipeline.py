@@ -117,7 +117,7 @@ class LocPipeline:
 
 	def perform_image_matching(self, matcher, map_node, obs_node):
 		try:
-			matcher_result = matcher(obs_node.rgb_image, map_node.rgb_image)
+			matcher_result = matcher(map_node.rgb_image, obs_node.rgb_image)
 
 			"""Save matching results"""
 			if self.args.save_img_matcher:
@@ -144,22 +144,23 @@ class LocPipeline:
 		dis, pred = perform_knn_search(self.DB_POSES[:, :3], query_pose, 3, [1])
 		if len(pred[0]) == 0 or dis[0][0] > self.args.global_pos_threshold: return None
 		closest_map_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[pred[0][0]])
-		all_nodes = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node]
-		all_num_inliers = []
+		all_nodes, all_dis = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node], []
+		alpha = 0.3
 		for node in all_nodes:
+			dis_trans, dis_angle = self.curr_obs_node.compute_distance(node)
+			dis = alpha * min(dis_trans / 5.0, 1.0) + (1 - alpha) * min(dis_angle / 360.0, 1.0)
+			all_dis.append(dis)
+		sorted_nodes = [all_nodes[i] for i in np.argsort(all_dis)]
+
+		start_time = time.time()
+		all_num_inliers = []
+		for node in sorted_nodes:
 			matcher_result = self.perform_image_matching(self.img_matcher_lighter, node, obs_node)
 			all_num_inliers.append(matcher_result["num_inliers"])
-		node_max_inliers = all_nodes[np.argmax(all_num_inliers)]
+			if time.time() - start_time > 0.3: break
+		out_str = ' '.join([f'{node.id}: {num_inliers}' for node, num_inliers in zip(sorted_nodes, all_num_inliers)])
+		node_max_inliers = sorted_nodes[np.argmax(all_num_inliers)]
 		return node_max_inliers
-		# print(np.argmax(all_num_inliers))
-		# sorted_nodes = [all_nodes[i] for i in np.argsort(all_num_inliers)[::-1]]
-		# if len(sorted_nodes) == 0: return None
-		# out_str = 'Neighbors of the map node: ' + ' '.join([f'{node.id} ({num_inliers})' for node, num_inliers in zip(all_nodes, all_num_inliers)]) + '\n'
-		# out_str += 'Sorted neighbors of the map node: ' + ' '.join([f'{node.id} ({num_inliers})' for node, num_inliers in zip(sorted_nodes, all_num_inliers)])
-		# print(out_str)
-		# out_str += f'Found the reference map node: {node_max_inliers.id}'
-		# print(out_str)
-		# return sorted_nodes[0]
 
 	def perform_global_loc(self, save=False):
 		vpr_dis, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
@@ -181,50 +182,23 @@ class LocPipeline:
 		search_start_time = time.time()
 		ref_map_node = self.search_keyframe_from_graph(self.curr_obs_node)
 		if ref_map_node is None: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
-		print(f"Search keyframe costs: {time.time() - search_start_time:.3f}s")
-		print(f'Found the reference map node: {ref_map_node.id}')
+		print(f"Search keyframe costs: {time.time() - search_start_time:.3f}s, Found the reference map node: {ref_map_node.id}")
 		
 		matching_start_time = time.time()
 		self.ref_map_node = ref_map_node
 		matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
 		print(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
+		print(f'Number of inliers: {matcher_result["num_inliers"]}')
 
 		if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
 			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
-		
-		# # Option 0: Select keyframe using covisibility graph
-		# # 1. check if the current observation is already matched with the last reference map node
-		# matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
-		# # 2. if the number of inliers is less than 200, search new keyframes from the covisibility of the last reference map node
-		# if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
-		# 	all_nodes = [nei_node for nei_node, _ in self.ref_map_node.edges]
-		# 	all_dis = []
-		# 	alpha = 0.3
-		# 	for node in all_nodes:
-		# 		dis_trans, dis_angle = self.curr_obs_node.compute_distance(node)
-		# 		dis = alpha * min(dis_trans / 5.0, 1.0) + (1 - alpha) * min(dis_angle / 360.0, 1.0)
-		# 		all_dis.append(dis)
-		# 	sorted_nodes = [all_nodes[i] for i in np.argsort(all_dis)[:3]]
-		# 	print(f'Failed to localize the current observation with the reference map node {self.ref_map_node.id}')
-		# 	print(f'Sorted {len(sorted_nodes)} neighbors of the map node {self.ref_map_node.id}')
-		# 	print([node.id for node in sorted_nodes])
-		# 	while True:
-		# 		if len(sorted_nodes) == 0: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
-		# 		matcher_result = self.perform_image_matching(sorted_nodes[0], self.curr_obs_node)
-		# 		if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
-		# 			sorted_nodes = np.delete(sorted_nodes, 0)
-		# 			continue
-		# 		else:
-		# 			self.ref_map_node = sorted_nodes[0]
-		# 			print(f'Found the reference map node: {self.ref_map_node.id}')
-		# 			break
 		try:
 			T_mapnode_obs = None
 			mkpts0, mkpts1 = (matcher_result["inliers0"], matcher_result["inliers1"])
-			mkpts0_raw = mkpts0 * [self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0], 
-								   self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]]
-			mkpts1_raw = mkpts1 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
+			mkpts0_raw = mkpts0 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
 								   self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]]
+			mkpts1_raw = mkpts1 * [self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0], 
+								   self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]]
 			if self.args.img_matcher == "mickey":
 				inliers = matcher_result["num_inliers"]
 				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
@@ -235,18 +209,19 @@ class LocPipeline:
 			else:
 				depth_img0 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
 				R, t, inliers = self.pose_solver.estimate_pose(
-					mkpts0_raw, mkpts1_raw,
+					mkpts1_raw, mkpts0_raw,
 					self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
 					depth_img0, None)
 				T_mapnode_obs = np.eye(4)
 				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
 				print(f'{self.args.pose_solver}: Number of inliers: {inliers}')
+
 			if T_mapnode_obs is not None:
 				T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
 					self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
 				T_w_obs = T_w_mapnode @ T_mapnode_obs
-				self.ref_map_node.set_matched_kpts(mkpts1, inliers)
-				self.curr_obs_node.set_matched_kpts(mkpts0, inliers)
+				self.ref_map_node.set_matched_kpts(mkpts0, inliers)
+				self.curr_obs_node.set_matched_kpts(mkpts1, inliers)
 				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': inliers}
 		except Exception as e:
 			print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
