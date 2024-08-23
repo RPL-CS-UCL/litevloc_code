@@ -1,24 +1,47 @@
 <launch>
-	<!-- Base Parameters -->
-	<arg name="project_directory" default="/Titan/code/robohike_ws/src/topo_loc" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_map/" />
 
-	<param name="use_sim_time" value="true" />
+	<!-- Base Parameters -->
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/out_$(arg env_id)/out_map/" />
+
+  <!-- Navigation Interface -->
+	<!-- Transform the frame_id of localization odometry to robot -->
+	<!-- Publish: /vloc/state_estimation, /vloc/state_estimation_path -->
+  <node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="log">
+		<remap from="/Odometry" to="/pose_fusion/odometry" />
+    <param name="loc_world_frame_id" value="vloc_map" />
+    <param name="loc_sensor_frame_id" value="zed2_left_camera_optical_frame" />
+    <param name="world_frame_id" value="map" />
+    <param name="sensor_frame_id" value="zed2_left_camera_optical_frame" />
+    <param name="base_frame_id" value="base" /> <!-- robot_id -->
+  </node>
+
+	<!-- Planning -->
+	<node name="ros_global_planner" pkg="topo_loc" type="ros_global_planner.py" output="screen"
+		args="--dataset_path $(arg map_path) \
+					--image_size 512 288 --device=cuda \
+					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512" >
+		<param name="frame_id_map" value="vloc_map" />
+		<param name="main_freq" value="1" />
+		<param name="conv_dist" value="0.5" />
+	</node>
 
 	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
+					--image_size 512 288
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 
-					--img_matcher master --pose_solver pnp
-					--config_pose_solver $(arg project_directory)/python/config/dataset/ucl_campus.yaml --viz
-					--ros_rgb_img_type compressed" >
+					--img_matcher master --pose_solver pnp 
+					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
+					--ros_rgb_img_type raw
+					--global_pos_threshold 20.0
+					--min_inliers_threshold 300" >
 		<remap from="/color/image" to="/zed2/zed_node/left/image_rect_color/compressed" />
 		<remap from="/depth/image" to="/zed2/zed_node/depth/depth_registered" />
 		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />
+		<param name="frame_id_map" value="vloc_map" />
 	</node>
 
-	<!-- Pose Fusion: base - zed2_left_camera_optical_frame -->
-	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="screen">
+	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log">
 		<remap from="/local/odometry" to="/state_estimator/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
 		<param name="frame_id_map" value="vloc_map" />
@@ -28,5 +51,8 @@
   <!-- Option 1: x y z yaw pitch roll (radians) frame_id child_frame_id period_in_ms -->
   <!-- Option 2: x y z qx qy qz qw frame_id child_frame_id period_in_ms -->
   <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" />
+	
+	<!-- RVIZ -->
+	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find topo_loc)/rviz_cfg/topo_graph_anymal.rviz" required="false" />
 
 </launch>

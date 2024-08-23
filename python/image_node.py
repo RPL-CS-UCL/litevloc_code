@@ -1,5 +1,3 @@
-import os
-
 from pycpptools.src.python.utils_algorithm.base_node import BaseNode
 
 class ImageNode(BaseNode):

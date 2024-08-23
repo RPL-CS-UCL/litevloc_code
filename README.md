@@ -12,6 +12,7 @@ cd image-matching-models && python -m pip install -e .
 git clone git@github.com:gogojjh/pycpptools.git
 cd pycpptools && python -m pip install -e .
 ```
+And modify ```PYTHONPATH```
 
 3. Create conda environment
 ```
@@ -20,7 +21,7 @@ conda activate topo_loc && pip install -r requirements.txt
 ```
 
 4. Install Pytorch and Torchvision on the Jetson platform
-Check ```RPL-RoboHike/docs/tutorial_setup_jetson_orin.md``` for details
+Check ```RPL-RoboHike/docs/tutorial_setup_jetson_orin.md``` for details. Need to use python3.8 to be compatiable with pre-complied torch.
 
 5. Download ```Map-free-reloc```
 

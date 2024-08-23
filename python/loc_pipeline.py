@@ -1,4 +1,4 @@
-#! /opt/conda/envs/topo_loc/bin/python
+#! $(CONDAPATH)/envs/topo_loc/bin/python
 
 """
 Usage: 
@@ -17,7 +17,6 @@ rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc
 
 import os
 import sys
-
 import pathlib
 import numpy as np
 import torch
@@ -30,6 +29,11 @@ from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseArray
 from visualization_msgs.msg import MarkerArray
 import tf2_ros
+
+import rospkg
+rospkg = rospkg.RosPack()
+pack_path = rospkg.get_path('topo_loc')
+sys.path.append(os.path.join(pack_path, '../image_matching_models'))
 
 from matching.utils import to_numpy
 from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search
