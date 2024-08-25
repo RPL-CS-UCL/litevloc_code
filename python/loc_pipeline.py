@@ -1,4 +1,4 @@
-#! $(CONDAPATH)/envs/topo_loc/bin/python
+#! /Rocket_ssd/miniconda3/envs/topo_loc/bin/python
 
 """
 Usage: 
@@ -362,8 +362,11 @@ if __name__ == '__main__':
 
 	# Initialize the localization pipeline
 	loc_pipeline = LocPipeline(args, log_dir)
+	print('Initialize VPR Model')
 	loc_pipeline.init_vpr_model()
+	print('Initialize Image Matcher')
 	loc_pipeline.init_img_matcher()
+	print('Initialize Pose Solver')
 	loc_pipeline.init_pose_solver()
 	loc_pipeline.read_map_from_file()
 

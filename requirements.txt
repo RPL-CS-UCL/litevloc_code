@@ -32,3 +32,4 @@ py3_wget
 roma
 huggingface_hub
 open3d
+pytorch_lightning

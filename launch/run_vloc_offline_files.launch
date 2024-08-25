@@ -3,13 +3,16 @@
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
 	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/out_$(arg env_id)/out_map/" />
+	<arg name="use_rviz" default="false" />
+
 	<param name="use_sim_time" value="false" />
 
 	<!-- Localization -->
 	<node name="loc_pipeline" pkg="topo_loc" type="loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
 					--image_size 512 288 --device=cuda
-					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3
+					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512
+					--save_descriptors --num_preds_to_save 3
 					--img_matcher master --save_img_matcher --n_kpts 1024
 					--pose_solver pnp --config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml
 					--viz
@@ -25,6 +28,8 @@
   <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" />
 	
 	<!-- RVIZ -->
-	<node name="rviz" pkg="rviz" type="rviz" args="-d $(find topo_loc)/rviz_cfg/topo_graph_matterport3d.rviz" required="false" />
+	<group if="$(arg use_rviz)">
+		<node name="rviz" pkg="rviz" type="rviz" args="-d $(find topo_loc)/rviz_cfg/topo_graph_matterport3d.rviz" required="false" />
+	</group>
 
 </launch>
