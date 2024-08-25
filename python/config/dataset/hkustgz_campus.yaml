@@ -3,11 +3,13 @@ DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
   DATA_ROOT: '/Titan/dataset/data_apmp/hkustgz_campus/'
   # SCENES: [s00000, s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008, s00009, s00010, s00011, s00012, s00013, s00014, s00015, s00016, s00017]
-  SCENES: [s00002_sample]
-  ESTIMATED_DEPTH: map   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
+  # SCENES: [s00023, s00029, s00039, s00035, s00038, s00041, s00044, s00048, s00049, s00054, s00057, s00059, s00062, s00065, s00067, s00068, s00073, s00075, \
+  #          s00083, s00084, s00092, s00094, s00097, s00100, s00103, s00105, s00106, s00114, s00119, s00120, s00139, s00141, s00145, s00146, s00149, s00154]
+  SCENES: [s00145]
+  ESTIMATED_DEPTH: ray_neighbor   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
-  HEIGHT: 720             # Images are resized
-  WIDTH: 1280
+  HEIGHT: 288             # Images are resized
+  WIDTH: 512
   MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!

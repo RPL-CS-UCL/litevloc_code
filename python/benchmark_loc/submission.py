@@ -115,7 +115,7 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 print(t.T)
                 if num_inliers < 100:
                     print(f"Inliers number < 100: {num_inliers} at {data['scene_id'][0]}/{data['pair_names']}")
-                save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, args.out_dir, 0, n_viz=100, line_width=0.6)                    
+                save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, args.out_dir, len(results_dict[scene]), n_viz=100, line_width=0.6)                    
                 if str_matcher == "duster" and args.viz: matcher.scene.show(cam_size=0.05)
                 time.sleep(0.5)
                 # input()

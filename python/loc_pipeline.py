@@ -188,11 +188,11 @@ class LocPipeline:
 		self.ref_map_node = ref_map_node
 		matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
 		print(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
-		print(f'Number of inliers: {matcher_result["num_inliers"]}')
 
 		if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
 			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 		try:
+			print(f'Number of inliers: {matcher_result["num_inliers"]}')
 			T_mapnode_obs = None
 			mkpts0, mkpts1 = (matcher_result["inliers0"], matcher_result["inliers1"])
 			mkpts0_raw = mkpts0 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
@@ -348,7 +348,7 @@ def perform_localization(loc: LocPipeline, args):
 		# Set as the initial guess of the next observation
 		loc.last_obs_node = loc.curr_obs_node
 		time.sleep(0.01)
-		input()
+		input("Press Enter to continue...")
 
 if __name__ == '__main__':
 	args = parse_arguments()
