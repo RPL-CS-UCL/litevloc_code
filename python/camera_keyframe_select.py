@@ -21,7 +21,6 @@ python camera_keyframe_select.py \
 """
 
 import os
-import sys
 
 import numpy as np
 import argparse
