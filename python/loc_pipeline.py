@@ -331,8 +331,12 @@ def perform_localization(loc: LocPipeline, args):
 				print('Failed to determine the global position.')
 				continue
 		else:
-			init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
-			loc.curr_obs_node.set_pose(init_trans, init_quat)
+			if loc.last_obs_node is not None:
+				init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
+				loc.curr_obs_node.set_pose(init_trans, init_quat)
+			else:
+				print('Failed to determine the global position.')
+				continue				
 
 		"""Perform local localization via. image matching"""
 		if loc.has_global_pos:
@@ -353,7 +357,6 @@ def perform_localization(loc: LocPipeline, args):
 		# Set as the initial guess of the next observation
 		loc.last_obs_node = loc.curr_obs_node
 		time.sleep(0.01)
-		input()
 
 if __name__ == '__main__':
 	args = parse_arguments()
