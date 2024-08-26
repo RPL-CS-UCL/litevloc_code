@@ -33,13 +33,15 @@ from PIL import Image
 import open3d as o3d
 
 from pycpptools.src.python.utils_sensor.tools_depth_image import depth_image_to_point_cloud, transform_point_cloud
-from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix
+from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix, compute_relative_dis_TF
 from pycpptools.src.python.utils_visualization.tools_vis_camera import plot_cameras, plot_connected_cameras
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Select a fixed number of camera keyframes to maximize region coverage.")
     parser.add_argument('--path_dataset', type=str, required=True, help="Path to the dataset file")
     parser.add_argument('--out_dir', type=str, required=True, help="Path to the stored file")
+    parser.add_argument('--thre_trans', type=float, default=0.1, help="Translation threshold")
+    parser.add_argument('--thre_rot', type=float, default=1, help="Rotation threshold")
     parser.add_argument('--num_select_cam', type=int, default=10, help="Number of selected cameras")
     parser.add_argument('--grid_resolution', type=float, default=1.0, help="Resolution of the grid")
     parser.add_argument('--coverage_threshold', type=float, default=0.95, help="Coverage threshold")
@@ -90,22 +92,33 @@ class KeyFrameSelect:
         self.args = args
 
         # Load the dataset         
-        path_pose = os.path.join(args.path_dataset, 'poses.txt')
-        self.poses = np.loadtxt(path_pose) # time, tx, ty, tz, qx, qy, qz, qw
-        path_intrinsics = os.path.join(args.path_dataset, 'intrinsics.txt')
-        intrinsics = np.loadtxt(path_intrinsics)[0, :] # fx, fy, cx, cy, width, height
-        self.img_size = (int(intrinsics[4]), int(intrinsics[5])) # width, height
-        self.K = np.array([[intrinsics[0], 0, intrinsics[2]], [0, intrinsics[1], intrinsics[3]], [0, 0, 1]])
-        self.num_select_cam = self.args.num_select_cam
-
         if 'matterport3d' in args.path_dataset:
             """Simu Matterport3d"""
-            self.sample_step = 5
             self.start_indice = 0
         else:
             """Real Anymal"""
-            self.sample_step = 10
             self.start_indice = 12100
+
+        path_pose = os.path.join(args.path_dataset, 'poses.txt')
+        self.poses = np.loadtxt(path_pose)  # time, tx, ty, tz, qx, qy, qz, qw
+        path_intrinsics = os.path.join(args.path_dataset, 'intrinsics.txt')
+        self.intrinsics = np.loadtxt(path_intrinsics)[0, :]  # fx, fy, cx, cy, width, height
+
+        # Maually select valid poses according to the relative pose threshold
+        self.valid_pose = [0] * len(self.poses)
+        for i in range(self.start_indice, len(self.poses)):
+            if i == self.start_indice: 
+                self.valid_pose[i] = 1
+            else:
+                T0 = convert_vec_to_matrix(self.poses[i-1, 1:4], self.poses[i-1, 4:])
+                T1 = convert_vec_to_matrix(self.poses[i, 1:4], self.poses[i, 4:])
+                dis_trans, dis_angle = compute_relative_dis_TF(T0, T1)
+                if dis_trans > args.thre_trans or dis_angle > args.thre_rot: 
+                    self.valid_pose[i] = 1
+
+        self.img_size = (int(self.intrinsics[4]), int(self.intrinsics[5])) # width, height
+        self.K = np.array([[self.intrinsics[0], 0, self.intrinsics[2]], [0, self.intrinsics[1], self.intrinsics[3]], [0, 0, 1]])
+        self.num_select_cam = self.args.num_select_cam
 
         # Create a grid map
         min_x, max_x = np.min(self.poses[:, 1]) - 1, np.max(self.poses[:, 1]) + 1
@@ -126,8 +139,7 @@ class KeyFrameSelect:
 
     def store_depth_points(self):
         for indice, pose in enumerate(self.poses):
-            if indice % self.sample_step != 0: continue
-            if indice < self.start_indice: continue
+            if self.valid_pose[indice] == 0: continue
             if self.args.viz:
                 print(f"Storing Depth Points: {indice}")
             path_depth = os.path.join(self.args.path_dataset, f'seq/{indice:06d}.depth.png')
@@ -169,7 +181,8 @@ class KeyFrameSelect:
         while True:
             remain_occu_ratio = self.get_num_occupancy(self.inc_grid_map) / num_total_occu
             print(f"Remain Occupancy Ratio: {remain_occu_ratio:.5f}, Num of Select Cameras: {len(select_cam_id)}")
-            if remain_occu_ratio > self.args.coverage_threshold or len(select_cam_id) > self.num_select_cam: break
+            if remain_occu_ratio > self.args.coverage_threshold or len(select_cam_id) > self.num_select_cam: 
+                break
 
             random_cam_id = np.random.choice(all_cam_id, size=min(20, len(all_cam_id)), replace=False)
             num_new_covered_list = []
@@ -201,12 +214,12 @@ def main():
 
     print('Creating KeyFrameSelect Object')
     keyframe_select = KeyFrameSelect(args)
-    print(f'Number of cameras: {len(keyframe_select.poses)}, Maximiumly Selected cameras: {keyframe_select.num_select_cam}')
+    print(f'Number of cameras to be loaded: {len(keyframe_select.poses)}, Maximiumly Selected cameras: {keyframe_select.num_select_cam}')
 
     print('Storing Depth Points ...')
     keyframe_select.store_depth_points()
 
-    print('Building Full Occupancy Map ...')
+    print(f'Building Full Occupancy Map with {len(keyframe_select.world_depth_points_dict)} cameras')
     keyframe_select.build_occupancy_map()
 
     print('Selecting Keyframes ...')
