@@ -31,6 +31,11 @@ Check ```RPL-RoboHike/docs/tutorial_setup_jetson_orin.md``` for details. Need to
     export TORCH_HOME=path_torch_hub
     ```
 
+7. Build the repo:
+    ```
+    catkin build topo_loc -DPYTHON_EXECUTABLE=$(which python)
+    ```
+
 ### Issues
 1. ```cannot import name 'cache' from 'functools'```
 Replace the original code with [Link](https://stackoverflow.com/questions/66846743/importerror-cannot-import-name-cache-from-functools)

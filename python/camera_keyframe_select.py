@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 """
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_general/ \
@@ -12,6 +14,7 @@ python camera_keyframe_select.py \
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_B6ByNegPMK/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_B6ByNegPMK/out_map \
+--thre_trans 0.3 --thre_rot 5 \
 --grid_resolution 0.1 --num_select_cam 75 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
@@ -41,7 +44,7 @@ def parse_arguments():
     parser.add_argument('--path_dataset', type=str, required=True, help="Path to the dataset file")
     parser.add_argument('--out_dir', type=str, required=True, help="Path to the stored file")
     parser.add_argument('--thre_trans', type=float, default=0.1, help="Translation threshold")
-    parser.add_argument('--thre_rot', type=float, default=1, help="Rotation threshold")
+    parser.add_argument('--thre_rot', type=float, default=3, help="Rotation threshold")
     parser.add_argument('--num_select_cam', type=int, default=10, help="Number of selected cameras")
     parser.add_argument('--grid_resolution', type=float, default=1.0, help="Resolution of the grid")
     parser.add_argument('--coverage_threshold', type=float, default=0.95, help="Coverage threshold")
@@ -52,7 +55,7 @@ def parse_arguments():
 def crop_points(points, args):
     if 'matterport3d' in args.path_dataset:
         """Simu Matterport3d"""
-        max_depth = 7.0
+        max_depth = 10.0
         points = points[(points[:, 1] > -0.3) & (points[:, 1] < 0.3)]
         points = points[(points[:, 2] < max_depth)]
         points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.1]
@@ -82,7 +85,7 @@ def check_connection(grid_map, reso, pose_i, pose_j):
     # plt.show()
     # print(f"Path Length: {path_length}, Phy Length: {phy_length}")
     """"""
-    if ((path[-1] == goal).all()) and (path_length < 20.0) and (path_length <= phy_length * 2.0):
+    if ((path[-1] == goal).all()) and (path_length < 7.5) and (path_length <= phy_length * 1.3):
         return path_length
     else:
         return None
@@ -92,12 +95,7 @@ class KeyFrameSelect:
         self.args = args
 
         # Load the dataset         
-        if 'matterport3d' in args.path_dataset:
-            """Simu Matterport3d"""
-            self.start_indice = 0
-        else:
-            """Real Anymal"""
-            self.start_indice = 12100
+        self.start_indice = 0 if 'matterport3d' in args.path_dataset else 12100
 
         path_pose = os.path.join(args.path_dataset, 'poses.txt')
         self.poses = np.loadtxt(path_pose)  # time, tx, ty, tz, qx, qy, qz, qw
@@ -106,15 +104,17 @@ class KeyFrameSelect:
 
         # Maually select valid poses according to the relative pose threshold
         self.valid_pose = [0] * len(self.poses)
+        j = self.start_indice
         for i in range(self.start_indice, len(self.poses)):
             if i == self.start_indice: 
                 self.valid_pose[i] = 1
             else:
-                T0 = convert_vec_to_matrix(self.poses[i-1, 1:4], self.poses[i-1, 4:])
+                T0 = convert_vec_to_matrix(self.poses[j, 1:4], self.poses[j, 4:])
                 T1 = convert_vec_to_matrix(self.poses[i, 1:4], self.poses[i, 4:])
                 dis_trans, dis_angle = compute_relative_dis_TF(T0, T1)
                 if dis_trans > args.thre_trans or dis_angle > args.thre_rot: 
                     self.valid_pose[i] = 1
+                    j = i
 
         self.img_size = (int(self.intrinsics[4]), int(self.intrinsics[5])) # width, height
         self.K = np.array([[self.intrinsics[0], 0, self.intrinsics[2]], [0, self.intrinsics[1], self.intrinsics[3]], [0, 0, 1]])
