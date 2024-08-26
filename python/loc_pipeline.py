@@ -1,14 +1,15 @@
-#! /Rocket_ssd/miniconda3/envs/topo_loc/bin/python
+#! /usr/bin/env python
 
 """
 Usage: 
 python loc_pipeline.py \
 --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
---image_size 288 512 --device=cuda \
---vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
+--image_size 512 288 --device=cuda \
+--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 --save_descriptors --num_preds_to_save 3 \
 --img_matcher master --save_img_matcher \
 --pose_solver pnp --config_pose_solver config/dataset/matterport3d.yaml \
---viz
+--viz \
+--global_pos_threshold 20.0 --min_inliers_threshold 300
 
 Usage: 
 rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc.bag \
@@ -352,7 +353,7 @@ def perform_localization(loc: LocPipeline, args):
 		# Set as the initial guess of the next observation
 		loc.last_obs_node = loc.curr_obs_node
 		time.sleep(0.01)
-		input("Press Enter to continue...")
+		input()
 
 if __name__ == '__main__':
 	args = parse_arguments()

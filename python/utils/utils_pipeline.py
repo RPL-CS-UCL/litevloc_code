@@ -71,7 +71,7 @@ def parse_arguments():
 											help="distance (in meters) for a prediction to be considered a positive")
 	parser.add_argument("--vpr_method", type=str, default="cosplace",
 											choices=["netvlad", "apgem", "sfrs", "cosplace", "convap", "mixvpr", "eigenplaces", 
-																"eigenplaces-indoor", "anyloc", "salad", "salad-indoor", "cricavpr"],
+													 "eigenplaces-indoor", "anyloc", "salad", "salad-indoor", "cricavpr"],
 											help="_")
 	parser.add_argument("--vpr_backbone", type=str, default=None,
 											choices=[None, "VGG16", "ResNet18", "ResNet50", "ResNet101", "ResNet152"],

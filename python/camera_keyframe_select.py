@@ -15,12 +15,13 @@ python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_B6ByNegPMK/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_B6ByNegPMK/out_map \
 --thre_trans 0.3 --thre_rot 5 \
---grid_resolution 0.1 --num_select_cam 75 --coverage_threshold 0.9
+--grid_resolution 0.1 --num_select_cam 62 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_map/ \
---grid_resolution 1.0 --num_select_cam 70 --coverage_threshold 0.8
+--thre_trans 2.0 --thre_rot 30 \
+--grid_resolution 0.1 --num_select_cam 60 --coverage_threshold 0.9
 """
 
 import os
@@ -61,7 +62,7 @@ def crop_points(points, args):
         points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.1]
     else:
         """Real Anymal"""
-        max_depth = 8.0
+        max_depth = 7.0
         points = points[(points[:, 1] > -1.5) & (points[:, 1] < -0.7)]
         points = points[(points[:, 2] < max_depth)]
         points = points[np.sqrt(points[:, 0]**2 + points[:, 1]**2 + points[:, 2]**2) > 0.5]    
@@ -85,7 +86,7 @@ def check_connection(grid_map, reso, pose_i, pose_j):
     # plt.show()
     # print(f"Path Length: {path_length}, Phy Length: {phy_length}")
     """"""
-    if ((path[-1] == goal).all()) and (path_length < 7.5) and (path_length <= phy_length * 1.3):
+    if ((path[-1] == goal).all()) and (path_length < 15.0) and (path_length <= phy_length * 1.4):
         return path_length
     else:
         return None
@@ -184,7 +185,7 @@ class KeyFrameSelect:
             if remain_occu_ratio > self.args.coverage_threshold or len(select_cam_id) > self.num_select_cam: 
                 break
 
-            random_cam_id = np.random.choice(all_cam_id, size=min(20, len(all_cam_id)), replace=False)
+            random_cam_id = np.random.choice(all_cam_id, size=min(50, len(all_cam_id)), replace=False)
             num_new_covered_list = []
             for cam_id in random_cam_id:
                 points_world = self.world_depth_points_dict[cam_id]
@@ -195,9 +196,9 @@ class KeyFrameSelect:
             select_cam_id.append(optimal_cam_id)
             all_cam_id.remove(optimal_cam_id)
             self.update_covered_space(self.inc_grid_map, self.world_depth_points_dict[optimal_cam_id], 0.2)
+            print(f"Optimal Camera ID: {optimal_cam_id}, Num of New Covered: {np.max(num_new_covered_list)}")
 
             if self.args.debug and self.args.viz:
-                print(f"Optimal Camera ID: {optimal_cam_id}, Num of New Covered: {np.max(num_new_covered_list)}")
                 gridshow(self.inc_grid_map.occupancy(), extent=self.inc_grid_map.get_extent_xy())
                 plt.xlabel('X')
                 plt.ylabel('Y')

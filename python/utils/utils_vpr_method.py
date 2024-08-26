@@ -83,7 +83,7 @@ def parse_arguments():
 	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
 	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
-											help="Resizing shape for images (HxW). If a single int is passed, set the"
+											help="Resizing shape for images (WxH). If a single int is passed, set the"
 											"smallest edge of all images to this value, while keeping aspect ratio")
 
 	parser.add_argument("--positive_dist_threshold", type=int, default=25,

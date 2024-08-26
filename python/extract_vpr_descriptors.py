@@ -3,7 +3,7 @@ Usage:
 python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
 --method cosplace --backbone ResNet18 --descriptors_dimension 512 \
 --num_preds_to_save 3 \
---image_size 288 512 \
+--image_size 512 288 \
 --device cuda \
 --save_descriptors
 
@@ -11,7 +11,7 @@ Usage for Jetson:
 python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
 --method cosplace --backbone ResNet18 --descriptors_dimension 256 \
 --num_preds_to_save 3 \
---image_size 200 200 \
+--image_size 512 288 \
 --device cuda \
 --save_descriptors
 """
