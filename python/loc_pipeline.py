@@ -212,11 +212,11 @@ class LocPipeline:
 				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t
 				print(f'Mickey Solver:\n', T_mapnode_obs)
 			else:
-				depth_img0 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
+				depth_img1 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
 				R, t, inliers = self.pose_solver.estimate_pose(
 					mkpts1_raw, mkpts0_raw,
 					self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
-					depth_img0, None)
+					depth_img1, None)
 				T_mapnode_obs = np.eye(4)
 				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
 				print(f'{self.args.pose_solver}: Number of inliers: {inliers}')

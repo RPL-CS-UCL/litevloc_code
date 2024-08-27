@@ -204,7 +204,7 @@ def parse_arguments():
 			args.vpr_backbone = "Dinov2"
 			args.vpr_descriptors_dimension = 10752
 	
-	if args.image_size and len(args.image_size) > 2:
+	if args.image_size is not None and len(args.image_size) > 2:
 			raise ValueError(f"The --image_size parameter can only take up to 2 values, but has received {len(args.image_size)}.")
 	
 	if args.unit_type and abs(args.depth_scale - 1.0) > 1e-3:

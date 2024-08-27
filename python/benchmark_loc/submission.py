@@ -51,11 +51,11 @@ class Pose:
 
 def predict(loader, matcher, solver, str_matcher, str_solver):
     results_dict = defaultdict(list)
-
     running_time = []
+    save_indice = 0
     for data in tqdm(loader):
         try:
-            # NOTE(gogojjh): rgb images are resize, depth images are not resized
+            # NOTE(gogojjh): the original data loader: rgb images are resize, depth images are not resized
             data = data_to_model_device(data, matcher)
             rgb_img0, rgb_img1 = data['image0'], data['image1']
             rgb_img0 = rgb_img0.squeeze(0)
@@ -72,7 +72,6 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 matcher_result["inliers0"],
                 matcher_result["inliers1"],
             )
-            # print("Found {} matched keypoints".format(num_inliers))
 
             """Pose Estimation"""
             start_time = time.time()
@@ -83,6 +82,9 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             else:
                 depth_img0 = to_numpy(data['depth0'].squeeze(0))
                 depth_img1 = to_numpy(data['depth1'].squeeze(0))
+                if cfg.DATASET.MAX_DEPTH is not None:
+                    depth_img0[depth_img0 > cfg.DATASET.MAX_DEPTH] = 0.0
+                    depth_img1[depth_img1 > cfg.DATASET.MAX_DEPTH] = 0.0
                 K0 = to_numpy(K0.squeeze(0))
                 K1 = to_numpy(K1.squeeze(0))
                 ori_w, ori_h = depth_img0.shape[1], depth_img0.shape[0]
@@ -91,10 +93,12 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 mkpts0_raw = mkpts0 * [ori_w / rgb_img0.shape[2], ori_h / rgb_img0.shape[1]]
                 mkpts1_raw = mkpts1 * [ori_w / rgb_img1.shape[2], ori_h / rgb_img1.shape[1]]
                 """Definition of solver output"""
-                # R (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate kpts0 to kpts1.
-                # t (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate kpts0 to kpts1.
+                # R01 (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate depth_img1 to depth_img0.
+                # t01 (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate depth_img1 to depth_img0.
                 # inliers_solver (int): Number of inliers used in the final pose estimation.
-                R, t, inliers_solver = solver.estimate_pose(mkpts0_raw, mkpts1_raw, K0_raw, K1_raw, depth_img0, depth_img1)
+                R01, t01, inliers_solver = solver.estimate_pose(mkpts1_raw, mkpts0_raw, K1_raw, K0_raw, depth_img1, depth_img0)
+                T01 = np.eye(4); T01[:3, :3] = R01; T01[:3,  3] = t01.reshape(3)
+                T10 = np.linalg.inv(T01); R = T10[:3, :3]; t = T10[:3,  3].reshape(3, 1)
             solver_time = time.time() - start_time           
             running_time.append(matching_time + solver_time)
 
@@ -106,19 +110,21 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
 
             # populate results_dict
             estimated_pose = Pose(image_name=query_img,
-                                  q=mat2quat(R).reshape(-1),
-                                  t=t.reshape(-1),
-                                  inliers=num_inliers)
+                                q=mat2quat(R).reshape(-1),
+                                t=t.reshape(-1),
+                                inliers=num_inliers)
             results_dict[scene].append(estimated_pose)
 
             if args.debug:
                 print(t.T)
                 if num_inliers < 100:
                     print(f"Inliers number < 100: {num_inliers} at {data['scene_id'][0]}/{data['pair_names']}")
-                save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, args.out_dir, len(results_dict[scene]), n_viz=100, line_width=0.6)                    
+                out_match_dir = Path(os.path.join(args.out_dir, f"{str_matcher}_{str_solver}"))
+                out_match_dir.mkdir(parents=True, exist_ok=True)
+                Path(out_match_dir / "preds").mkdir(parents=True, exist_ok=True)
+                save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, out_match_dir, save_indice, n_viz=30, line_width=0.6)
+                save_indice += 1
                 if str_matcher == "duster" and args.viz: matcher.scene.show(cam_size=0.05)
-                time.sleep(0.5)
-                # input()
         except Exception as e:
             scene = data['scene_id'][0]
             query_img = data['pair_names'][1][0]
@@ -159,7 +165,7 @@ def eval(args):
                 results_dict, avg_runtime = predict(dataloader, matcher, solver, model, pose_solver)
 
                 # Save runtimes to txt
-                runtime_str = f"{model}_{pose_solver}: {avg_runtime:.3f}s"
+                runtime_str = f"(image_matching + pose_solver) {model}_{pose_solver}: {avg_runtime:.3f}s"
                 f.write(runtime_str + "\n")
                 tqdm.write(runtime_str)
 
