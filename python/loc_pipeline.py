@@ -37,7 +37,7 @@ pack_path = rospkg.get_path('topo_loc')
 sys.path.append(os.path.join(pack_path, '../image_matching_models'))
 
 from matching.utils import to_numpy
-from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search
+from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search, compute_cosine_similarity
 from utils.utils_vpr_method import save_visualization as save_vpr_visualization
 from utils.utils_image_matching_method import initialize_img_matcher
 from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
@@ -68,9 +68,7 @@ class LocPipeline:
 
 	def init_img_matcher(self):
 		self.img_matcher = initialize_img_matcher(self.args.img_matcher, self.args.device, self.args.n_kpts)
-		self.img_matcher_lighter = initialize_img_matcher('eloftr', self.args.device, self.args.n_kpts)
 		logging.info(f"Image matcher: {self.args.img_matcher}")
-		logging.info(f"Image matcher (lighter): eloftr")
 		
 	def init_pose_solver(self):
 		cfg.merge_from_file(self.args.config_pose_solver)
@@ -144,12 +142,15 @@ class LocPipeline:
 		return None
 
 	# Search potential keyframes using the covisiblity graph
-	def search_keyframe_from_graph(self, obs_node):
+	def search_keyframe_from_graph(self, obs_node):		
 		query_pose = obs_node.trans.reshape(1, 3)
 		dis, pred = perform_knn_search(self.DB_POSES[:, :3], query_pose, 3, [1])
 		if len(pred[0]) == 0 or dis[0][0] > self.args.global_pos_threshold: return None
 		closest_map_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[pred[0][0]])
 		all_nodes, all_dis = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node], []
+
+		# TODO(gogojjh): compute the cosine similarity between the descriptors
+
 		alpha = 0.3
 		for node in all_nodes:
 			dis_trans, dis_angle = self.curr_obs_node.compute_distance(node)
@@ -303,8 +304,12 @@ def perform_localization(loc: LocPipeline, args):
 		raw_img_size = (int(obs_cam_intrinsics[obs_id, 4]), int(obs_cam_intrinsics[obs_id, 5])) # width, height
 		K = pytool_sensor.utils.correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
 		img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
+		
+		with torch.no_grad():
+			desc = loc.vpr_model(rgb_img.unsqueeze(0).to(args.device)).cpu().numpy()
+
 		# Create observation node
-		obs_node = ImageNode(obs_id, rgb_img, depth_img, None,
+		obs_node = ImageNode(obs_id, rgb_img, depth_img, desc,
 							 rospy.Time.now().to_sec(),
 							 np.zeros(3), np.array([0, 0, 0, 1]),
 							 K, img_size,
@@ -316,10 +321,6 @@ def perform_localization(loc: LocPipeline, args):
 		"""Perform global localization via. visual place recognition"""
 		if not loc.has_global_pos:
 			loc_start_time = time.time()
-			if loc.curr_obs_node.get_descriptor() is None:
-				with torch.no_grad():
-					desc = loc.vpr_model(loc.curr_obs_node.rgb_image.unsqueeze(0).to(args.device)).cpu().numpy()
-				loc.curr_obs_node.set_descriptor(desc)
 			result = loc.perform_global_loc(save=(args.num_preds_to_save!=0))
 			print(f"Global localization costs: {time.time() - loc_start_time:.3f}s")
 			if result['succ']:
@@ -328,14 +329,14 @@ def perform_localization(loc: LocPipeline, args):
 				loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
 				loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
 			else:
-				print('Failed to determine the global position.')
+				print('Failed to determine the global position since no VPR results.')
 				continue
 		else:
 			if loc.last_obs_node is not None:
 				init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
 			else:
-				print('Failed to determine the global position.')
+				print('Failed to determine the global position since not correct VPR.')
 				continue				
 
 		"""Perform local localization via. image matching"""
