@@ -1,4 +1,5 @@
-rosbag record -o /Rocket_ssd/dataset/data_topo_loc/loc_fusion \
+rosbag record -o /Rocket_ssd/dataset/data_topo_loc/loc_result \
+  /habitat_camera/odometry \
   /graph /graph/poses \
   /vloc/odometry /vloc/path /vloc/path_gt /vloc/image_map_obs \
   /pose_fusion/odometry /pose_fusion/path \

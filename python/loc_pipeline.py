@@ -61,6 +61,7 @@ class LocPipeline:
 		self.log_dir = log_dir
 		self.has_global_pos = False
 		self.frame_id_map = 'map'
+		self.depth_range = (0.1, 15.0)
 
 	def init_vpr_model(self):
 		self.vpr_model = initialize_vpr_model(self.args.vpr_method, self.args.vpr_backbone, self.args.vpr_descriptors_dimension, self.args.device)
@@ -142,15 +143,7 @@ class LocPipeline:
 		dis, pred = perform_knn_search(self.DB_POSES[:, :3], query_pose, 3, [1])
 		if len(pred[0]) == 0 or dis[0][0] > self.args.global_pos_threshold: return None
 		closest_map_node = self.image_graph.get_node(pred[0][0])
-		all_nei_nodes, all_dis = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node], []
-
-		# alpha = 0.3
-		# for node in all_nei_nodes:
-		# 	dis_trans, dis_angle = self.curr_obs_node.compute_distance(node)
-		# 	dis = alpha * min(dis_trans / 5.0, 1.0) + (1 - alpha) * min(dis_angle / 360.0, 1.0)
-		# 	all_dis.append(dis)
-		# sorted_nodes = [all_nei_nodes[i] for i in np.argsort(all_dis)]
-		# out_str = ' '.join([f'{node.id}({dis:.2f})' for node, dis in zip(sorted_nodes, all_dis)])
+		all_nei_nodes = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node]
 
 		list_dis = [compute_euclidean_dis(obs_node.get_descriptor(), node.get_descriptor()) for node in all_nei_nodes]
 		node_min_dis = all_nei_nodes[np.argmin(list_dis)]
@@ -181,7 +174,9 @@ class LocPipeline:
 		matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
 		print(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
 
-		if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
+		if matcher_result is None:
+			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
+		if matcher_result["num_inliers"] < self.args.min_inliers_threshold:
 			print(f'[Fail] Number of inliers: {matcher_result["num_inliers"]}')
 			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 		try:
@@ -283,7 +278,7 @@ def perform_localization(loc: LocPipeline, args):
 		rgb_img = load_rgb_image(rgb_img_path, resize, normalized=False)
 
 		depth_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
-		depth_img = load_depth_image(depth_img_path, depth_scale=args.depth_scale)
+		depth_img = load_depth_image(depth_img_path, depth_scale=0.001)
 
 		raw_K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
 						  obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 

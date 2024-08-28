@@ -62,7 +62,6 @@ def odom_callback(odom_msg):
 
 def perform_localization(loc: LocPipeline, args):
 	obs_id = 0
-	min_depth, max_depth = 0.1, 15.0
 	resize = args.image_size
 	r = rospy.Rate(loc.main_freq)
 	while not rospy.is_shutdown():
@@ -76,7 +75,7 @@ def perform_localization(loc: LocPipeline, args):
 			rgb_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(rgb_img_msg)
 			depth_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(depth_img_msg)
 			if depth_img_msg.encoding == "mono16": depth_img *= 0.001
-			depth_img[(depth_img < min_depth) | (depth_img > max_depth)] = 0.0
+			depth_img[(depth_img < loc.depth_range[0]) | (depth_img > loc.depth_range[1])] = 0.0
 			# To tensor
 			rgb_img_tensor = rgb_image_to_tensor(rgb_img, resize, normalized=False)
 			depth_img_tensor = depth_image_to_tensor(depth_img, depth_scale=1.0)
@@ -85,8 +84,11 @@ def perform_localization(loc: LocPipeline, args):
 			raw_img_size = (camera_info_msg.width, camera_info_msg.height)
 			K = pytool_sensor.utils.correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
 			img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
+
 			# Create observation node
-			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, None,
+			with torch.no_grad():
+				desc = loc.vpr_model(rgb_img_tensor.unsqueeze(0).to(args.device)).cpu().numpy()
+			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, desc,
 								 rgb_img_time, np.zeros(3), np.array([0, 0, 0, 1]),
 								 K, img_size, 
 								 '', '')
@@ -96,20 +98,16 @@ def perform_localization(loc: LocPipeline, args):
 			"""Perform global localization via. visual place recognition"""
 			if not loc.has_global_pos:
 				loc_start_time = time.time()
-				if loc.curr_obs_node.get_descriptor() is None:
-					with torch.no_grad():
-						desc = loc.vpr_model(loc.curr_obs_node.rgb_image.unsqueeze(0).to(args.device)).cpu().numpy()
-					loc.curr_obs_node.set_descriptor(desc)
 				result = loc.perform_global_loc(save=False)
 				print(f"Global localization cost: {time.time() - loc_start_time:.3f}s")
-
 				if result['succ']:
 					matched_map_id = result['map_id']
 					loc.has_global_pos = True
 					loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
 					loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
+					print(f'Found VPR Node in global position: {matched_map_id}')
 				else:
-					print('Failed to determine the global position.')
+					print('Failed to determine the global position since no VPR results.')
 					continue
 			else:
 				# Initialize the current transformation using the historical fused poses
@@ -124,7 +122,7 @@ def perform_localization(loc: LocPipeline, args):
 				
 				dis_trans, _ = pytool_math.tools_eigen.compute_relative_dis(init_trans, init_quat, loc.ref_map_node.trans, loc.ref_map_node.quat)
 				if dis_trans > loc.args.global_pos_threshold:
-					print('Too far distance from the ref_map_node. Losing Visual tracking')
+					print('Too far distance from the ref_map_node. Losing Visual Tracking')
 					print('Reset the global position.')
 					loc.has_global_pos = False
 					loc.ref_map_node = None
@@ -163,6 +161,9 @@ if __name__ == '__main__':
 	loc_pipeline.initalize_ros()
 	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'map')
 	loc_pipeline.main_freq = rospy.get_param('~main_freq', 1)
+	min_depth = rospy.get_param('~min_depth', 0.1)
+	max_depth = rospy.get_param('~max_depth', 15.0)
+	loc_pipeline.depth_range = (min_depth, max_depth)
 
 	# Subscribe to RGB, depth images, and odometry
 	if args.ros_rgb_img_type == 'raw':
