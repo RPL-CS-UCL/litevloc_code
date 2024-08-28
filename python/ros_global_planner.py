@@ -3,7 +3,7 @@
 """
 Usage: 
 python ros_global_planner.py \
---dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
+--dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/vloc_17DRP5sb8fy/out_map \
 --image_size 288 512 --device=cuda \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors \
 --num_preds_to_save 3 
@@ -14,7 +14,6 @@ import pathlib
 import logging
 import numpy as np
 import torch
-import time
 import rospy
 from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
@@ -90,7 +89,6 @@ class GlobalPlanner:
 		trans, quat = pytool_ros.ros_msg.convert_rosodom_to_vec(odom_msg)
 		robot_node = PointNode(self.robot_id, None, time, trans, quat, None, None)
 		self.robot_id += 1
-
 		self.perform_planning(robot_node)
 
 	def perform_planning(self, robot_node):

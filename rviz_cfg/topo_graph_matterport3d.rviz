@@ -24,7 +24,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: ObsImage
+    SyncSource: ImageGoalObs
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -95,8 +95,6 @@ Visualization Manager:
       Name: Graph
       Namespaces:
         edges: true
-        nodes: true
-        text: true
       Queue Size: 100
       Value: true
     - Class: rviz/MarkerArray
@@ -104,7 +102,7 @@ Visualization Manager:
       Marker Topic: /graph/shortest_path
       Name: GraphShortestPath
       Namespaces:
-        edges: true
+        {}
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -150,7 +148,7 @@ Visualization Manager:
         Alpha: 1
         Axes Length: 0.5
         Axes Radius: 0.10000000149011612
-        Color: 255; 25; 0
+        Color: 255; 255; 0
         Head Length: 0.30000001192092896
         Head Radius: 0.20000000298023224
         Shaft Length: 0.75
@@ -340,7 +338,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -0.005000007338821888
+      Angle: -0.005000018514692783
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -350,10 +348,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 49.11097717285156
+      Scale: 56.759681701660156
       Target Frame: habitat_camera
-      X: -1.501976728439331
-      Y: -0.10002407431602478
+      X: -0.9164984226226807
+      Y: -0.34054693579673767
     Saved: ~
 Window Geometry:
   Displays:

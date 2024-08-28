@@ -25,37 +25,35 @@ class ImageGraphLoader:
 			print(f"Descriptors not found in {descs_path}")
 			descs = None
 
-		for i in range(poses.shape[0]):
-			rgb_img_path = os.path.join(graph_path, 'seq', f'{i:06}.color.jpg')
+		for idx in range(poses.shape[0]):
+			rgb_img_path = os.path.join(graph_path, 'seq', f'{idx:06}.color.jpg')
 			rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
 			
-			depth_img_path = os.path.join(graph_path, 'seq', f'{i:06}.depth.png')
+			depth_img_path = os.path.join(graph_path, 'seq', f'{idx:06}.depth.png')
 			if os.path.exists(depth_img_path):
 				depth_image = load_depth_image(depth_img_path, depth_scale=depth_scale)
 			else:
 				depth_image = None
 
 			# Each row: time, tx, ty, tz, qx, qy, qz, qw
-			time, trans, quat = poses[i, 0], poses[i, 1:4], poses[i, 4:]
+			time, trans, quat = poses[idx, 0], poses[idx, 1:4], poses[idx, 4:]
 
 			# Each row: fx fy cx cy width height
-			raw_K = np.array([intrinsics[i, 0], 0, intrinsics[i, 2], 
-						      0, intrinsics[i, 1], intrinsics[i, 3], 
+			raw_K = np.array([intrinsics[idx, 0], 0, intrinsics[idx, 2], 
+						      0, intrinsics[idx, 1], intrinsics[idx, 3], 
 						      0, 0, 1], dtype=np.float32).reshape(3, 3)
-			raw_img_size = (int(intrinsics[i, 4]), int(intrinsics[i, 5])) # width, height
+			raw_img_size = (int(intrinsics[idx, 4]), int(intrinsics[idx, 5])) # width, height
 			K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
 			img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
 			
 			# Create observation node
-			node = ImageNode(i, rgb_image, depth_image, f'image node {i}', 
+			desc = descs[idx, :] if descs is not None else None
+			node = ImageNode(idx, rgb_image, depth_image, desc,
 							 time, trans, quat, 
 							 K, img_size,
 							 rgb_img_path, depth_img_path)
 			node.set_raw_intrinsics(raw_K, raw_img_size)
 			node.set_pose_gt(trans, quat)
-
-			if descs is not None:
-				node.set_descriptor(descs[i, :])
 
 			image_graph.add_node(node)
 

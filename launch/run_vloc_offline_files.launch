@@ -2,7 +2,7 @@
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/out_$(arg env_id)/out_map/" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/vloc_$(arg env_id)/out_map/" />
 	<arg name="use_rviz" default="false" />
 
 	<param name="use_sim_time" value="false" />

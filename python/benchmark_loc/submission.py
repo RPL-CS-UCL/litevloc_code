@@ -22,10 +22,10 @@ from matching.utils import to_numpy
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 from utils.pose_solver import available_solvers, get_solver
+from utils.pose_solver_default import cfg
 from utils.utils_image_matching_method import save_visualization
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map_free_reloc"))
-from config.default import cfg
 from lib.datasets.datamodules import DataModule
 from lib.utils.data import data_to_model_device
 

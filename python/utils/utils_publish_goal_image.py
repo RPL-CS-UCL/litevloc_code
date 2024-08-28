@@ -2,7 +2,6 @@ import rospy
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import cv2
-import sys
 import argparse
 
 def publish_image(image_path):

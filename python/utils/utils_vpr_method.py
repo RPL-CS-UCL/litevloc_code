@@ -55,12 +55,18 @@ def perform_knn_search(database_descriptors, queries_descriptors, descriptors_di
 	distances, predictions = faiss_index.search(queries_descriptors, max(recall_values))
 	return distances, predictions
 
+def compute_euclidean_dis(query_descriptor, database_descriptor):
+	desc1 = query_descriptor.reshape(-1)
+	desc2 = database_descriptor.reshape(-1)
+	dis = np.linalg.norm(desc1 - desc2)
+	return dis
+
 def compute_cosine_similarity(query_descriptor, database_descriptor):
 	"""Compute cosine similarity between query and database descriptors."""
-	query_descriptor = query_descriptor / np.linalg.norm(query_descriptor)
-	database_descriptor = database_descriptor / np.linalg.norm(database_descriptor)
-	similarity = np.dot(query_descriptor, database_descriptor)
-	return similarity
+	desc1 = query_descriptor.reshape(-1)
+	desc2 = database_descriptor.reshape(-1)
+	sim = np.dot(desc1, desc2) / (np.linalg.norm(desc1) * np.linalg.norm(desc2))
+	return sim
 
 def save_descriptors(log_dir, queries_descriptors, database_descriptors):
 	"""Save descriptors to files."""

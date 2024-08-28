@@ -37,7 +37,7 @@ pack_path = rospkg.get_path('topo_loc')
 sys.path.append(os.path.join(pack_path, '../image_matching_models'))
 
 from matching.utils import to_numpy
-from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search, compute_cosine_similarity
+from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search, compute_euclidean_dis
 from utils.utils_vpr_method import save_visualization as save_vpr_visualization
 from utils.utils_image_matching_method import initialize_img_matcher
 from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
@@ -99,22 +99,17 @@ class LocPipeline:
 		logging.info(f"Loaded {self.image_graph} from {data_path}")
 
 		# Extract VPR descriptors for all nodes in the map
-		self.DB_DESCRIPTORS_ID = np.array(self.image_graph.get_all_id())
 		self.DB_DESCRIPTORS = np.array([map_node.get_descriptor() for _, map_node in self.image_graph.nodes.items()], dtype="float32")
-		print(f"IDs: {self.DB_DESCRIPTORS_ID} extracted {self.DB_DESCRIPTORS.shape} VPR descriptors.")
+		print(f"Extracted {self.DB_DESCRIPTORS.shape} VPR descriptors from the map.")
 		self.DB_POSES = np.empty((self.image_graph.get_num_node(), 7), dtype="float32")
 		for indices, (_, map_node) in enumerate(self.image_graph.nodes.items()):
 			self.DB_POSES[indices, :3] = map_node.trans
 			self.DB_POSES[indices, 3:] = map_node.quat
 
-	def perform_vpr(self, db_descs, query_desc):
-		query_desc_arr = np.empty((1, self.args.vpr_descriptors_dimension), dtype="float32")
-		query_desc_arr[0] = query_desc
+	def perform_vpr(self, db_descs: np.array, query_desc: np.array):
 		dis, pred = perform_knn_search(
-			db_descs,
-			query_desc_arr,
-			self.args.vpr_descriptors_dimension,
-			self.args.recall_values
+			db_descs, query_desc,
+			self.args.vpr_descriptors_dimension, self.args.recall_values
 		)
 		return dis, pred
 
@@ -146,56 +141,48 @@ class LocPipeline:
 		query_pose = obs_node.trans.reshape(1, 3)
 		dis, pred = perform_knn_search(self.DB_POSES[:, :3], query_pose, 3, [1])
 		if len(pred[0]) == 0 or dis[0][0] > self.args.global_pos_threshold: return None
-		closest_map_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[pred[0][0]])
-		all_nodes, all_dis = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node], []
+		closest_map_node = self.image_graph.get_node(pred[0][0])
+		all_nei_nodes, all_dis = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node], []
 
-		# TODO(gogojjh): compute the cosine similarity between the descriptors
+		# alpha = 0.3
+		# for node in all_nei_nodes:
+		# 	dis_trans, dis_angle = self.curr_obs_node.compute_distance(node)
+		# 	dis = alpha * min(dis_trans / 5.0, 1.0) + (1 - alpha) * min(dis_angle / 360.0, 1.0)
+		# 	all_dis.append(dis)
+		# sorted_nodes = [all_nei_nodes[i] for i in np.argsort(all_dis)]
+		# out_str = ' '.join([f'{node.id}({dis:.2f})' for node, dis in zip(sorted_nodes, all_dis)])
 
-		alpha = 0.3
-		for node in all_nodes:
-			dis_trans, dis_angle = self.curr_obs_node.compute_distance(node)
-			dis = alpha * min(dis_trans / 5.0, 1.0) + (1 - alpha) * min(dis_angle / 360.0, 1.0)
-			all_dis.append(dis)
-		sorted_nodes = [all_nodes[i] for i in np.argsort(all_dis)]
-
-		start_time = time.time()
-		all_num_inliers = []
-		for node in sorted_nodes:
-			matcher_result = self.perform_image_matching(self.img_matcher_lighter, node, obs_node)
-			all_num_inliers.append(matcher_result["num_inliers"])
-			if time.time() - start_time > 0.3: break
-		out_str = ' '.join([f'{node.id}: {num_inliers}' for node, num_inliers in zip(sorted_nodes, all_num_inliers)])
-		node_max_inliers = sorted_nodes[np.argmax(all_num_inliers)]
-		return node_max_inliers
+		list_dis = [compute_euclidean_dis(obs_node.get_descriptor(), node.get_descriptor()) for node in all_nei_nodes]
+		node_min_dis = all_nei_nodes[np.argmin(list_dis)]
+		out_str = ' '.join([f'{node.id}({dis:.2f})' for node, dis in zip(all_nei_nodes, list_dis)]) + f' Closest node: {node_min_dis.id}'
+		print(out_str)
+		return node_min_dis
 
 	def perform_global_loc(self, save=False):
-		vpr_dis, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
-		vpr_dis, vpr_pred = vpr_dis[0, :], vpr_pred[0, :]
-		if len(vpr_pred) == 0:
-			print('No start node found, cannot determine the global position.')
-			return {'succ': False, 'map_id': None}
-		# Save VPR visualization for the top-k predictions
+		_, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
+		if len(vpr_pred[0]) == 0: return {'succ': False, 'map_id': None}
 		if save:
 			list_of_images_paths = [self.curr_obs_node.rgb_img_path]
-			for i in range(len(vpr_pred[:self.args.num_preds_to_save])):
-				map_node = self.image_graph.get_node(self.DB_DESCRIPTORS_ID[vpr_pred[i]])
+			for i in range(len(vpr_pred[0, :self.args.num_preds_to_save])):
+				map_node = self.image_graph.get_node(vpr_pred[0, i])
 				list_of_images_paths.append(map_node.rgb_img_path)
 			preds_correct = [None] * len(list_of_images_paths)
 			save_vpr_visualization(self.log_dir, 0, list_of_images_paths, preds_correct)
-		return {'succ': True, 'map_id': self.DB_DESCRIPTORS_ID[vpr_pred[0]]}
+		return {'succ': True, 'map_id': vpr_pred[0, 0]}
 	
 	def perform_local_loc(self):
 		search_start_time = time.time()
-		ref_map_node = self.search_keyframe_from_graph(self.curr_obs_node)
-		if ref_map_node is None: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
-		print(f"Search keyframe costs: {time.time() - search_start_time:.3f}s, Found the reference map node: {ref_map_node.id}")
+		ref_node = self.search_keyframe_from_graph(self.curr_obs_node)
+		if ref_node is None: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
+		print(f"Search keyframe costs: {time.time() - search_start_time:.3f}s, Found the reference map node: {ref_node.id}")
 		
 		matching_start_time = time.time()
-		self.ref_map_node = ref_map_node
+		self.ref_map_node = ref_node
 		matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
 		print(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
 
 		if matcher_result is None or matcher_result["num_inliers"] < self.args.min_inliers_threshold:
+			print(f'[Fail] Number of inliers: {matcher_result["num_inliers"]}')
 			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 		try:
 			print(f'Number of inliers: {matcher_result["num_inliers"]}')
@@ -288,7 +275,7 @@ def perform_localization(loc: LocPipeline, args):
 	resize = args.image_size
 	loc.last_obs_node = None
 
-	for obs_id in range(0, len(obs_poses_gt), 30):
+	for obs_id in range(0, len(obs_poses_gt), 20):
 		if rospy.is_shutdown(): break
 		print(f"Loading observation with id {obs_id}")
 
@@ -328,6 +315,7 @@ def perform_localization(loc: LocPipeline, args):
 				loc.has_global_pos = True
 				loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
 				loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
+				print(f'Found VPR Node in global position: {matched_map_id}')
 			else:
 				print('Failed to determine the global position since no VPR results.')
 				continue
@@ -358,6 +346,7 @@ def perform_localization(loc: LocPipeline, args):
 		# Set as the initial guess of the next observation
 		loc.last_obs_node = loc.curr_obs_node
 		time.sleep(0.01)
+		input()
 
 if __name__ == '__main__':
 	args = parse_arguments()
