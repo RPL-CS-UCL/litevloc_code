@@ -1,5 +1,7 @@
 #! /opt/conda/envs/topo_loc/bin/python
 
+import logging
+
 # ROS
 import rospy
 from std_msgs.msg import Header
@@ -37,9 +39,9 @@ tf_buffer, listener = None, None
 # Odometry covariance
 SIGMA_ODOMETRY = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.01, 0.01, 0.01])
 # indoor: 
-SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
+# SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
 # outdoor:
-SIGMA_PRIOR = np.array([np.deg2rad(5.0), np.deg2rad(5.0), np.deg2rad(5.0), 0.2, 0.2, 0.2])
+SIGMA_PRIOR = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.1, 0.1, 1.0])
 
 def odom_local_callback(odom_msg):
 	global frame_id_lsensor, frame_id_gsensor, T_gsensor_lsensor, init_extrinsics
@@ -95,8 +97,8 @@ def odom_local_callback(odom_msg):
 			pose_time = odom_global_msg.header.stamp.to_sec()
 			trans, quat = ros_msg.convert_rosodom_to_vec(odom_global_msg)
 			pose3 = convert_vec_gtsam_pose3(trans, quat)
-			idx_closest, _ = poses_local.find_closest(pose_time)
-			# print(f"Closest pose to global odometry at time {pose_time:.05f} is {idx_closest}")
+			idx_closest, _ = poses_local.find_closest(pose_time) # find the closest variable in the graph
+			rospy.loginfo(f"Closest pose to global odometry at time {pose_time:.05f} is {idx_closest}")
 
 			# Add prior factor
 			sigma = SIGMA_PRIOR
@@ -110,13 +112,13 @@ def odom_local_callback(odom_msg):
 		if not init_system:
 			# The system is initialized after the first global odometry
 			init_system = True
-			print("System initialized")
+			rospy.loginfo("System initialized")
 
 	if init_system:
 		# Publish the odometry
 		trans = curr_stamped_pose[1].translation()
 		quat = curr_stamped_pose[1].rotation().toQuaternion().coeffs() # xyzw
-		print(f"Current pose at time {curr_time}: {trans}")
+		rospy.loginfo(f"Current pose at time {curr_time}: {trans}")
 		header = Header(stamp=rospy.Time.from_sec(curr_stamped_pose[0]), frame_id=frame_id_map)
 		fusion_odom = ros_msg.convert_vec_to_rosodom(trans, quat, header, child_frame_id=frame_id_gsensor)
 		fusion_odom.pose.covariance = list(marginal_cov.flatten())

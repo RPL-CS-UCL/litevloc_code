@@ -11,7 +11,6 @@ python ros_global_planner.py \
 
 import os
 import pathlib
-import logging
 import numpy as np
 import torch
 import rospy
@@ -65,7 +64,7 @@ class GlobalPlanner:
 		data_path = self.args.dataset_path
 		self.point_graph = GraphLoader.load_data(data_path)
 		self.map_node_poses = np.array([node.trans for _, node in self.point_graph.nodes.items()])
-		logging.info(f"Loaded {self.point_graph} from {data_path}")
+		rospy.loginfo(f"Loaded {self.point_graph} from {data_path}")
 
 	def publish_path(self):
 		header = Header(stamp=rospy.Time.now(), frame_id=f'{self.frame_id_map}_graph')

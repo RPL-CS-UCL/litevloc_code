@@ -7,12 +7,10 @@ python pose_fusion.py \
 import os
 
 import gtsam
-import time
 import argparse
 import numpy as np
 import rospy
 from nav_msgs.msg import Odometry, Path
-import tf2_ros
 
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
 

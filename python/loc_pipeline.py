@@ -195,7 +195,7 @@ class LocPipeline:
 					self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
 					depth_img1, None)
 				print(f'{self.args.pose_solver}: Number of solver inliers: {solver_inliers}')
-				if solver_inliers < 10:
+				if solver_inliers < 150:
 					print(f'[Fail] No sufficient solver inliers')
 					return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 				T_mapnode_obs = np.eye(4)
