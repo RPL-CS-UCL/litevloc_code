@@ -3,12 +3,9 @@ Panels:
     Help Height: 0
     Name: Displays
     Property Tree Widget:
-      Expanded:
-        - /Status1
-        - /FusionOdometry1/Covariance1/Position1
-        - /FusionOdometry2/Shape1
+      Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 725
+    Tree Height: 574
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -26,7 +23,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: ImageGoalObs
+    SyncSource: ObsImage
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -58,7 +55,7 @@ Visualization Manager:
           Enabled: true
           Length: 3
           Name: MapAxes
-          Radius: 0.10000000149011612
+          Radius: 0.05000000074505806
           Reference Frame: <Fixed Frame>
           Show Trail: false
           Value: true
@@ -75,7 +72,7 @@ Visualization Manager:
           Offset:
             X: 0
             Y: 0
-            Z: 0
+            Z: -2
           Plane: XY
           Plane Cell Count: 10
           Reference Frame: <Fixed Frame>
@@ -134,80 +131,55 @@ Visualization Manager:
         Value: true
       Enabled: true
       Keep: 1
-      Name: LocOdometry
+      Name: EncoderOdometry
       Position Tolerance: 0
       Queue Size: 1
       Shape:
         Alpha: 1
         Axes Length: 0.5
         Axes Radius: 0.10000000149011612
-        Color: 255; 25; 0
+        Color: 114; 159; 207
+        Head Length: 0.30000001192092896
+        Head Radius: 0.20000000298023224
+        Shaft Length: 0.75
+        Shaft Radius: 0.10000000149011612
+        Value: Arrow
+      Topic: /state_estimator/odometry
+      Unreliable: false
+      Value: true
+    - Angle Tolerance: 0
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 1
+      Name: VLocOdometry
+      Position Tolerance: 0
+      Queue Size: 1
+      Shape:
+        Alpha: 1
+        Axes Length: 0.5
+        Axes Radius: 0.10000000149011612
+        Color: 252; 233; 79
         Head Length: 0.30000001192092896
         Head Radius: 0.20000000298023224
         Shaft Length: 0.75
         Shaft Radius: 0.10000000149011612
         Value: Arrow
       Topic: /vloc/odometry
-      Unreliable: false
-      Value: true
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz/Path
-      Color: 239; 41; 41
-      Enabled: true
-      Head Diameter: 0.30000001192092896
-      Head Length: 0.20000000298023224
-      Length: 0.30000001192092896
-      Line Style: Billboards
-      Line Width: 0.05000000074505806
-      Name: LocPath
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 255; 85; 255
-      Pose Style: None
-      Queue Size: 10
-      Radius: 0.029999999329447746
-      Shaft Diameter: 0.10000000149011612
-      Shaft Length: 0.10000000149011612
-      Topic: /vloc/path
-      Unreliable: false
-      Value: true
-    - Alpha: 1
-      Buffer Length: 1
-      Class: rviz/Path
-      Color: 138; 226; 52
-      Enabled: true
-      Head Diameter: 0.30000001192092896
-      Head Length: 0.20000000298023224
-      Length: 0.30000001192092896
-      Line Style: Billboards
-      Line Width: 0.05000000074505806
-      Name: GTPath
-      Offset:
-        X: 0
-        Y: 0
-        Z: 0
-      Pose Color: 255; 85; 255
-      Pose Style: None
-      Queue Size: 10
-      Radius: 0.029999999329447746
-      Shaft Diameter: 0.10000000149011612
-      Shaft Length: 0.10000000149011612
-      Topic: /vloc/path_gt
-      Unreliable: false
-      Value: true
-    - Class: rviz/Image
-      Enabled: true
-      Image Topic: /vloc/image_map_obs
-      Max Value: 1
-      Median window: 5
-      Min Value: 0
-      Name: ImageGoalObs
-      Normalize Range: true
-      Queue Size: 2
-      Transport Hint: raw
       Unreliable: false
       Value: true
     - Angle Tolerance: 0
@@ -245,6 +217,65 @@ Visualization Manager:
       Topic: /pose_fusion/odometry
       Unreliable: false
       Value: true
+    - Angle Tolerance: 0
+      Class: rviz/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.5
+          Color: 233; 185; 110
+          Scale: 6
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 1
+      Name: GTOdometry
+      Position Tolerance: 0
+      Queue Size: 1
+      Shape:
+        Alpha: 1
+        Axes Length: 0.5
+        Axes Radius: 0.10000000149011612
+        Color: 138; 226; 52
+        Head Length: 0.30000001192092896
+        Head Radius: 0.15000000596046448
+        Shaft Length: 1
+        Shaft Radius: 0.07000000029802322
+        Value: Arrow
+      Topic: /Odometry_global
+      Unreliable: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 239; 41; 41
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Billboards
+      Line Width: 0.05000000074505806
+      Name: VLocPath
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /vloc/path
+      Unreliable: false
+      Value: true
     - Alpha: 1
       Buffer Length: 1
       Class: rviz/Path
@@ -266,7 +297,19 @@ Visualization Manager:
       Radius: 0.029999999329447746
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
-      Topic: /vloc/path
+      Topic: /pose_fusion/path
+      Unreliable: false
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /vloc/image_map_obs
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: ImageGoalObs
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
       Unreliable: false
       Value: true
     - Class: rviz/Image
@@ -279,41 +322,6 @@ Visualization Manager:
       Normalize Range: true
       Queue Size: 2
       Transport Hint: compressed
-      Unreliable: false
-      Value: true
-    - Angle Tolerance: 0
-      Class: rviz/Odometry
-      Covariance:
-        Orientation:
-          Alpha: 0.5
-          Color: 255; 255; 127
-          Color Style: Unique
-          Frame: Local
-          Offset: 1
-          Scale: 1
-          Value: true
-        Position:
-          Alpha: 0.5
-          Color: 233; 185; 110
-          Scale: 6
-          Value: true
-        Value: true
-      Enabled: true
-      Keep: 100
-      Name: FusionOdometry
-      Position Tolerance: 0
-      Queue Size: 1
-      Shape:
-        Alpha: 1
-        Axes Length: 0.5
-        Axes Radius: 0.10000000149011612
-        Color: 255; 25; 0
-        Head Length: 0.30000001192092896
-        Head Radius: 0.10000000149011612
-        Shaft Length: 1
-        Shaft Radius: 0.05000000074505806
-        Value: Axes
-      Topic: /habitat_camera/odometry
       Unreliable: false
       Value: true
   Enabled: true
@@ -343,32 +351,38 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -9.28342342376709e-06
-      Class: rviz/TopDownOrtho
+      Class: rviz/ThirdPersonFollower
+      Distance: 15.012619972229004
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
+      Field of View: 0.7853981852531433
+      Focal Point:
+        X: 6.345235347747803
+        Y: -1.342447280883789
+        Z: -8.977263860288076e-06
+      Focal Shape Fixed Size: false
+      Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 62.03220748901367
+      Pitch: 0.4853985905647278
       Target Frame: zed2_left_camera_optical_frame
-      X: -1.6124968528747559
-      Y: -0.2612205743789673
+      Yaw: 5.193580150604248
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: true
-  Height: 931
+  Height: 885
   Hide Left Dock: true
   Hide Right Dock: true
   ImageGoalObs:
     collapsed: false
   ObsImage:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000018700000312fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073000000012800000312000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f0000024ffc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a0056006900650077007300000001280000024f000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000000000020000045c000000fbfc0100000003fb00000010004f006200730049006d0061006700650100000000000001600000009100fffffffb000000180049006d0061006700650047006f0061006c004f006200730100000166000002f6000000b000fffffffb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004b00000003efc0100000002fb0000000800540069006d00650000000000000004b00000041800fffffffb0000000800540069006d006501000000000000045000000000000000000000045c0000025e00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000001870000027bfc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c00610079007300000000dd0000027b000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f0000027bfc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a0056006900650077007300000000dd0000027b000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000416000000b0fc0100000003fb00000010004f006200730049006d0061006700650100000000000001450000009100fffffffb000000180049006d0061006700650047006f0061006c004f00620073010000014b000002cb000000b000fffffffb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004b00000003efc0100000002fb0000000800540069006d00650000000000000004b00000041800fffffffb0000000800540069006d00650100000000000004500000000000000000000004160000027b00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -377,6 +391,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: true
-  Width: 1116
-  X: 2322
+  Width: 1046
+  X: 2392
   Y: 34

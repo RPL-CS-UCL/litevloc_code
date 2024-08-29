@@ -117,7 +117,6 @@ class LocPipeline:
 	def perform_image_matching(self, matcher, map_node, obs_node):
 		try:
 			matcher_result = matcher(map_node.rgb_image, obs_node.rgb_image)
-
 			"""Save matching results"""
 			if self.args.save_img_matcher:
 				num_inliers, H, mkpts0, mkpts1 = (
@@ -126,16 +125,13 @@ class LocPipeline:
 					matcher_result["inliers0"],
 					matcher_result["inliers1"],
 				)
-				# out_str = f"Paths: map_id ({map_node.id}), obs_id ({obs_node.id}). "
-				# out_str += f"Found {num_inliers} inliers after RANSAC. "
 				save_img_matcher_visualization(
 					obs_node.rgb_image, map_node.rgb_image,
-					mkpts0, mkpts1, self.log_dir, obs_node.id, n_viz=100)
-				
+					mkpts0, mkpts1, self.log_dir, obs_node.id, n_viz=100)		
 			return matcher_result
 		except Exception as e:
 			logging.error(f"Error in image matching: {e}")
-		return None
+			return {"num_inliers_kpts": 0, "num_inliers": 0}
 
 	# Search potential keyframes using the covisiblity graph
 	def search_keyframe_from_graph(self, obs_node):		
@@ -172,15 +168,14 @@ class LocPipeline:
 		matching_start_time = time.time()
 		self.ref_map_node = ref_node
 		matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
+		kpts_inliers, H_inliers = matcher_result["num_inliers_kpts"], matcher_result["num_inliers"]
+		print(f'Number of kpts inliers: {kpts_inliers}, H inliers: {H_inliers}')
 		print(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
 
-		if matcher_result is None:
-			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
-		if matcher_result["num_inliers"] < self.args.min_inliers_threshold:
-			print(f'[Fail] Number of inliers: {matcher_result["num_inliers"]}')
+		if kpts_inliers < self.args.min_inliers_threshold:
+			print(f'[Fail] No sufficient matching kpts')
 			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 		try:
-			print(f'Number of inliers: {matcher_result["num_inliers"]}')
 			T_mapnode_obs = None
 			mkpts0, mkpts1 = (matcher_result["inliers0"], matcher_result["inliers1"])
 			mkpts0_raw = mkpts0 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
@@ -188,7 +183,6 @@ class LocPipeline:
 			mkpts1_raw = mkpts1 * [self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0], 
 								   self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]]
 			if self.args.img_matcher == "mickey":
-				inliers = matcher_result["num_inliers"]
 				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
 				R, t = to_numpy(R), to_numpy(t)
 				T_mapnode_obs = np.eye(4)
@@ -196,24 +190,27 @@ class LocPipeline:
 				print(f'Mickey Solver:\n', T_mapnode_obs)
 			else:
 				depth_img1 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
-				R, t, inliers = self.pose_solver.estimate_pose(
+				R, t, solver_inliers = self.pose_solver.estimate_pose(
 					mkpts1_raw, mkpts0_raw,
 					self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
 					depth_img1, None)
+				print(f'{self.args.pose_solver}: Number of solver inliers: {solver_inliers}')
+				if solver_inliers < 10:
+					print(f'[Fail] No sufficient solver inliers')
+					return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 				T_mapnode_obs = np.eye(4)
 				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
-				print(f'{self.args.pose_solver}: Number of inliers: {inliers}')
 
 			if T_mapnode_obs is not None:
 				T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
 					self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
 				T_w_obs = T_w_mapnode @ T_mapnode_obs
-				self.ref_map_node.set_matched_kpts(mkpts0, inliers)
-				self.curr_obs_node.set_matched_kpts(mkpts1, inliers)
-				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': inliers}
+				self.ref_map_node.set_matched_kpts(mkpts0, kpts_inliers)
+				self.curr_obs_node.set_matched_kpts(mkpts1, kpts_inliers)
+				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': solver_inliers}
 		except Exception as e:
 			print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
-			return {'succ': False, 'T_w_obs': None, 'solver_inliers': inliers}
+			return {'succ': False, 'T_w_obs': None, 'solver_inliers': solver_inliers}
 
 	def publish_message(self):
 		header = Header(stamp=rospy.Time.now(), frame_id=self.frame_id_map)
@@ -335,6 +332,11 @@ def perform_localization(loc: LocPipeline, args):
 				print(f'Estimated Poses: {trans.T}\n')
 			else:
 				print('Failed to determine the local position.')
+				query_pose = loc.curr_obs_node.trans.reshape(1, 3)
+				dis, pred = perform_knn_search(loc.DB_POSES[:, :3], query_pose, 3, [1])
+				if dis[0][0] > loc.args.global_pos_threshold:
+					loc.has_global_pos = False
+					loc.ref_map_node = None
 				continue
 
 		loc.publish_message()

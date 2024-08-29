@@ -65,7 +65,6 @@ class GlobalPlanner:
 		data_path = self.args.dataset_path
 		self.point_graph = GraphLoader.load_data(data_path)
 		self.map_node_poses = np.array([node.trans for _, node in self.point_graph.nodes.items()])
-		self.map_ids = [node_id for node_id, _ in self.point_graph.nodes.items()]
 		logging.info(f"Loaded {self.point_graph} from {data_path}")
 
 	def publish_path(self):
@@ -126,9 +125,8 @@ class GlobalPlanner:
 				return True
 
 			# shortest path planning
-			# TODO(gogojjh): 
-			i = np.argmin(np.linalg.norm(self.map_node_poses - robot_node.trans, axis=1))
-			self.plan_start_node = self.point_graph.get_node(self.map_ids[i])
+			map_id = np.argmin(np.linalg.norm(self.map_node_poses - robot_node.trans, axis=1))
+			self.plan_start_node = self.point_graph.get_node(map_id)
 			tra_distance, tra_path = \
 				pytool_alg.sp.dijk_shortest_path(self.point_graph, self.plan_start_node, self.plan_goal_node)
 			if tra_distance != float('inf'):

@@ -20,8 +20,8 @@ python camera_keyframe_select.py \
 python camera_keyframe_select.py \
 --path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_map/ \
---thre_trans 2.0 --thre_rot 30 \
---grid_resolution 0.1 --num_select_cam 60 --coverage_threshold 0.9
+--thre_trans 1.0 --thre_rot 20 \
+--grid_resolution 0.2 --num_select_cam 120 --coverage_threshold 0.9
 """
 
 import os
@@ -44,6 +44,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Select a fixed number of camera keyframes to maximize region coverage.")
     parser.add_argument('--path_dataset', type=str, required=True, help="Path to the dataset file")
     parser.add_argument('--out_dir', type=str, required=True, help="Path to the stored file")
+    parser.add_argument('--naive_selection', type=bool, default=False, help="Naive selection")
     parser.add_argument('--thre_trans', type=float, default=0.1, help="Translation threshold")
     parser.add_argument('--thre_rot', type=float, default=3, help="Rotation threshold")
     parser.add_argument('--num_select_cam', type=int, default=10, help="Number of selected cameras")

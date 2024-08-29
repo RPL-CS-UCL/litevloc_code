@@ -1,0 +1,61 @@
+#! /opt/conda/envs/topo_loc/bin/python
+
+"""
+Usage: 
+python ros_vis_map.py \
+--dataset_path /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_msg/out_map
+"""
+
+import os
+import pathlib
+import logging
+import numpy as np
+import torch
+import rospy
+from std_msgs.msg import Header
+from visualization_msgs.msg import MarkerArray
+from geometry_msgs.msg import PoseArray
+import tf2_ros
+
+from point_graph import PointGraphLoader as GraphLoader
+from utils.utils_pipeline import parse_arguments, setup_log_environment
+
+import pycpptools.src.python.utils_ros as pytool_ros
+
+class ROSVisMap:
+	def __init__(self, args):
+		self.args = args
+		self.frame_id_map = 'map'
+
+	def initalize_ros(self):
+		self.pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
+		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
+		self.br = tf2_ros.TransformBroadcaster()
+
+	def read_map_from_file(self):
+		data_path = self.args.dataset_path
+		self.point_graph = GraphLoader.load_data(data_path)
+		print(f"Loaded {self.point_graph} from {data_path}")
+
+	def perform_visualization(self):
+		while not rospy.is_shutdown():
+			header = Header(stamp=rospy.Time.now(), frame_id=self.frame_id_map)
+			tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, f"{self.frame_id_map}_graph")
+			self.br.sendTransform(tf_msg)
+			header = Header(stamp=rospy.Time.now(), frame_id=f"{self.frame_id_map}_graph")
+			pytool_ros.ros_vis.publish_graph(self.point_graph, header, self.pub_graph, self.pub_graph_poses)
+			rospy.Rate(1).sleep()
+
+if __name__ == '__main__':
+	args = parse_arguments()
+	out_dir = pathlib.Path(os.path.join(args.dataset_path, 'ros_vis_map'))
+	out_dir.mkdir(exist_ok=True, parents=True)
+	log_dir = setup_log_environment(out_dir, args)
+
+	rospy.init_node('ros_vis_map', anonymous=True)
+	
+	# Initialize the ros visualization map
+	ros_vis_map = ROSVisMap(args)
+	ros_vis_map.read_map_from_file()
+	ros_vis_map.initalize_ros()
+	ros_vis_map.perform_visualization()
