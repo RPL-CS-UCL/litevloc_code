@@ -34,6 +34,9 @@ frame_id_lsensor, frame_id_gsensor = None, None
 frame_id_map = 'map'
 init_extrinsics = False
 
+path_publish_freq = 1
+last_timestamp = 0
+
 tf_buffer, listener = None, None
 
 # Odometry covariance
@@ -41,10 +44,11 @@ SIGMA_ODOMETRY = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.
 # indoor: 
 # SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
 # outdoor:
-SIGMA_PRIOR = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.1, 0.1, 1.0])
+SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
 
 def odom_local_callback(odom_msg):
 	global frame_id_lsensor, frame_id_gsensor, T_gsensor_lsensor, init_extrinsics
+	global path_publish_freq, last_timestamp
 	frame_id_lsensor = odom_msg.child_frame_id
 	if frame_id_gsensor is None: return
 	if not init_extrinsics:
@@ -99,13 +103,12 @@ def odom_local_callback(odom_msg):
 			pose3 = convert_vec_gtsam_pose3(trans, quat)
 			idx_closest, _ = poses_local.find_closest(pose_time) # find the closest variable in the graph
 			rospy.loginfo(f"Closest pose to global odometry at time {pose_time:.05f} is {idx_closest}")
-
 			# Add prior factor
 			sigma = SIGMA_PRIOR
 			pose_fusion.add_prior_factor(idx_closest, pose3, sigma)
 		
 		# Perform the isam2 optimization 
-		pose_fusion.perform_optimization()
+		result = pose_fusion.perform_optimization()
 		# Update the current pose after optimization
 		curr_stamped_pose = (curr_time, pose_fusion.current_estimate.atPose3(curr_idx))
 		marginal_cov = pose_fusion.get_margin_covariance(curr_idx)
@@ -118,16 +121,30 @@ def odom_local_callback(odom_msg):
 		# Publish the odometry
 		trans = curr_stamped_pose[1].translation()
 		quat = curr_stamped_pose[1].rotation().toQuaternion().coeffs() # xyzw
-		rospy.loginfo(f"Current pose at time {curr_time}: {trans}")
 		header = Header(stamp=rospy.Time.from_sec(curr_stamped_pose[0]), frame_id=frame_id_map)
 		fusion_odom = ros_msg.convert_vec_to_rosodom(trans, quat, header, child_frame_id=frame_id_gsensor)
 		fusion_odom.pose.covariance = list(marginal_cov.flatten())
 		pose_fusion.pub_odom.publish(fusion_odom)
+		rospy.loginfo(f"Current pose at time {curr_time}: {trans}")
+		
 		# Publish the path
-		pose_msg = ros_msg.convert_odom_to_rospose(fusion_odom)
 		pose_fusion.path_msg.header = header
+		pose_msg = ros_msg.convert_vec_to_rospose(trans, quat, header)
 		pose_fusion.path_msg.poses.append(pose_msg)
-		pose_fusion.pub_path.publish(pose_fusion.path_msg)
+		if rospy.Time.now().to_sec() - last_timestamp > 1.0 / path_publish_freq:
+			pose_fusion.pub_path.publish(pose_fusion.path_msg)
+
+		# Publish the path with batch optimization
+		if rospy.Time.now().to_sec() - last_timestamp > 1.0 / path_publish_freq:
+			pose_fusion.path_msg_opt.header = header
+			pose_fusion.path_msg_opt.poses.clear()
+			for key in pose_fusion.current_estimate.keys():
+				pose3 = pose_fusion.current_estimate.atPose3(key)
+				trans, quat = pose3.translation(), pose3.rotation().toQuaternion().coeffs() # xyzw
+				pose_msg = ros_msg.convert_vec_to_rospose(trans, quat, header)
+				pose_fusion.path_msg_opt.poses.append(pose_msg)
+			pose_fusion.pub_path_opt.publish(pose_fusion.path_msg_opt)
+			last_timestamp = rospy.Time.now().to_sec()
 
 def odom_global_callback(odom_msg):
 	global frame_id_gsensor
@@ -155,6 +172,8 @@ if __name__ == '__main__':
 	odom_global = rospy.Subscriber('/global/odometry', Odometry, odom_global_callback)
 
 	frame_id_map = rospy.get_param('~frame_id_map', 'map')
-	print(f"Frame id map: {frame_id_map}")
+	rospy.loginfo(f"Frame id map: {frame_id_map}")
+	path_publish_freq = rospy.get_param('~path_publish_freq', 1)
+	rospy.loginfo(f"Path publish frequency: {path_publish_freq}")	
 
 	rospy.spin()

@@ -10,7 +10,7 @@
 	<!-- trigger global localization if distance to the closest map node exceeds it -->
 	<!-- indoor: 10.0; outdoor: 15.0 -->
 	<arg name="global_pos_threshold" default="15.0" /> 
-	<arg name="vloc_freq" default="1" />
+	<arg name="vloc_freq" default="1.0" />
 
   <!-- Navigation Interface -->
 	<!-- Transform the frame_id of localization odometry to robot -->
@@ -49,7 +49,7 @@
 		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />
 		<param name="main_freq" value="$(arg vloc_freq)" />
 		<param name="min_depth" value="0.001" />
-		<param name="max_depth" value="14.5" />
+		<param name="max_depth" value="13.0" />
 	</node>
 
 	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log">

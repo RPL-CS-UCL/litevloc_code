@@ -73,7 +73,9 @@ class PoseFusion:
 	def initalize_ros(self):
 		self.pub_odom = rospy.Publisher('/pose_fusion/odometry', Odometry, queue_size=10)
 		self.pub_path = rospy.Publisher('/pose_fusion/path', Path, queue_size=10)
+		self.pub_path_opt = rospy.Publisher('/pose_fusion/path_opt', Path, queue_size=10)
 		self.path_msg = Path()
+		self.path_msg_opt = Path()
 
 def perform_pose_fusion(pose_fusion: PoseFusion, args):
 	# Read data from file
