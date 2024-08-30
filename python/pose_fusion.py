@@ -11,6 +11,7 @@ import argparse
 import numpy as np
 import rospy
 from nav_msgs.msg import Odometry, Path
+from geometry_msgs.msg import PoseStamped
 
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
 
@@ -28,6 +29,7 @@ class PoseFusion:
 		self.graph = gtsam.NonlinearFactorGraph()
 		self.initail_estimate = gtsam.Values()
 		self.current_estimate = gtsam.Values()
+		self.timestamp = dict()
 
 		if args.isam_params:
 			params = gtsam.ISAM2Params()
@@ -49,12 +51,13 @@ class PoseFusion:
 		delta_pose = prev_pose.between(curr_pose)
 		self.graph.add(gtsam.BetweenFactorPose3(prev_key, curr_key, delta_pose, odometry_cov))
 
-	def add_init_estimate(self, key: int, pose: gtsam.Pose3):
+	def add_init_estimate(self, key: int, timestamp: float, pose: gtsam.Pose3):
 		if self.initail_estimate.exists(key):
 			self.initail_estimate.erase(key)
 			self.initail_estimate.insert(key, pose)
 		else:
 			self.initail_estimate.insert(key, pose)
+			self.timestamp[key] = timestamp
 
 	def perform_optimization(self):
 		self.isam.update(self.graph, self.initail_estimate)
@@ -74,6 +77,7 @@ class PoseFusion:
 		self.pub_odom = rospy.Publisher('/pose_fusion/odometry', Odometry, queue_size=10)
 		self.pub_path = rospy.Publisher('/pose_fusion/path', Path, queue_size=10)
 		self.pub_path_opt = rospy.Publisher('/pose_fusion/path_opt', Path, queue_size=10)
+		
 		self.path_msg = Path()
 		self.path_msg_opt = Path()
 

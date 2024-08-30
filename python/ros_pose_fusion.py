@@ -6,6 +6,7 @@ import logging
 import rospy
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped
 import tf2_ros
 
 import queue
@@ -40,11 +41,11 @@ last_timestamp = 0
 tf_buffer, listener = None, None
 
 # Odometry covariance
-SIGMA_ODOMETRY = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.01, 0.01, 0.01])
+SIGMA_ODOMETRY = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.01, 0.01, 0.1])
 # indoor: 
 # SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
 # outdoor:
-SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
+SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.05, 0.05, 0.5])
 
 def odom_local_callback(odom_msg):
 	global frame_id_lsensor, frame_id_gsensor, T_gsensor_lsensor, init_extrinsics
@@ -84,10 +85,10 @@ def odom_local_callback(odom_msg):
 
 	# the odometry is aligned with the global frame
 	if init_system:
-		pose_fusion.add_init_estimate(curr_idx, curr_stamped_pose[1])
+		pose_fusion.add_init_estimate(curr_idx, curr_time, curr_stamped_pose[1])
 	# the odometry is not aligned with the global frame
 	else:
-		pose_fusion.add_init_estimate(curr_idx, gtsam.Pose3())
+		pose_fusion.add_init_estimate(curr_idx, curr_time, gtsam.Pose3())
 
 	"""Process global odometry"""
 	if not odom_global_queue.empty():
@@ -121,13 +122,14 @@ def odom_local_callback(odom_msg):
 		# Publish the odometry
 		trans = curr_stamped_pose[1].translation()
 		quat = curr_stamped_pose[1].rotation().toQuaternion().coeffs() # xyzw
-		header = Header(stamp=rospy.Time.from_sec(curr_stamped_pose[0]), frame_id=frame_id_map)
+		header = Header(stamp=rospy.Time.from_sec(curr_time), frame_id=frame_id_map)
 		fusion_odom = ros_msg.convert_vec_to_rosodom(trans, quat, header, child_frame_id=frame_id_gsensor)
 		fusion_odom.pose.covariance = list(marginal_cov.flatten())
 		pose_fusion.pub_odom.publish(fusion_odom)
 		rospy.loginfo(f"Current pose at time {curr_time}: {trans}")
 		
 		# Publish the path
+		header = Header(stamp=rospy.Time.from_sec(curr_time), frame_id=frame_id_map)
 		pose_fusion.path_msg.header = header
 		pose_msg = ros_msg.convert_vec_to_rospose(trans, quat, header)
 		pose_fusion.path_msg.poses.append(pose_msg)
@@ -136,11 +138,13 @@ def odom_local_callback(odom_msg):
 
 		# Publish the path with batch optimization
 		if rospy.Time.now().to_sec() - last_timestamp > 1.0 / path_publish_freq:
+			header = Header(stamp=rospy.Time.from_sec(curr_time), frame_id=frame_id_map)
 			pose_fusion.path_msg_opt.header = header
 			pose_fusion.path_msg_opt.poses.clear()
 			for key in pose_fusion.current_estimate.keys():
 				pose3 = pose_fusion.current_estimate.atPose3(key)
 				trans, quat = pose3.translation(), pose3.rotation().toQuaternion().coeffs() # xyzw
+				header = Header(stamp=rospy.Time.from_sec(pose_fusion.timestamp[key]), frame_id=frame_id_map)
 				pose_msg = ros_msg.convert_vec_to_rospose(trans, quat, header)
 				pose_fusion.path_msg_opt.poses.append(pose_msg)
 			pose_fusion.pub_path_opt.publish(pose_fusion.path_msg_opt)
