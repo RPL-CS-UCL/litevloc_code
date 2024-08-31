@@ -41,7 +41,7 @@ class GlobalPlanner:
 		# Initialize variables
 		self.plan_start_node = None
 		self.plan_goal_node = None
-		self.planner_path = []
+		self.subgoals = []
 		self.robot_id = 0
 		self.conv_dist = 0.5
 
@@ -68,7 +68,7 @@ class GlobalPlanner:
 
 	def publish_path(self):
 		header = Header(stamp=rospy.Time.now(), frame_id=f'{self.frame_id_map}_graph')
-		pytool_ros.ros_vis.publish_shortest_path(self.planner_path, header, self.pub_shortest_path)
+		pytool_ros.ros_vis.publish_shortest_path(self.subgoals, header, self.pub_shortest_path)
 
 	def publish_waypoint(self, subgoal_node):
 		header = Header(stamp=rospy.Time.now(), frame_id=self.frame_id_map)
@@ -90,10 +90,12 @@ class GlobalPlanner:
 		self.perform_planning(robot_node)
 
 	def perform_planning(self, robot_node):
+		rospy.loginfo('[Global Planning] Start planning')
 		resize = self.args.image_size
 		# Finding the goal node via. visual place recognition"""
 		if not self.is_goal_init:
 			if self.manual_goal_img is not None:
+				# process goal image
 				self.img_lock.acquire()
 				img_tensor = rgb_image_to_tensor(self.manual_goal_img, resize, normalized=False)
 				self.img_lock.release()
@@ -103,45 +105,51 @@ class GlobalPlanner:
 									rospy.Time.now().to_sec(), np.zeros(3), np.array([0, 0, 0, 1]), 
 									None, resize, None, None)
 				self.loc_pipeline.curr_obs_node = obs_node
+
+				# find the goal image
 				result = self.loc_pipeline.perform_global_loc(save=False)
-				if result['succ']:
-					self.is_goal_init = True
-					self.plan_goal_node = self.point_graph.get_node(result['map_id'])
-					rospy.loginfo(f'Found goal node: {self.plan_goal_node.id}')
-				else:
-					rospy.loginfo('No goal node found, need to wait other goal image')
 				self.manual_goal_img = None
 				self.loc_pipeline.curr_obs_node = None
+				if not result['succ']:
+					rospy.loginfo('No goal node found, need to wait other goal image')
+					return
+
+				# shortest path planning
+				self.is_goal_init = True
+				goal_node = self.point_graph.get_node(result['map_id'])
+				rospy.loginfo(f'Found goal node: {goal_node.id}')
+
+				map_id = np.argmin(np.linalg.norm(self.map_node_poses - robot_node.trans, axis=1))
+				start_node = self.point_graph.get_node(map_id)
+				tra_distance, tra_path = \
+					pytool_alg.sp.dijk_shortest_path(self.point_graph, start_node, goal_node)
+				if tra_distance != float('inf'):
+					for i in range(len(tra_path) - 1):
+						node = tra_path[i]
+						node_next = tra_path[i + 1]
+						node.add_next_node(node_next)
+					self.subgoals = []
+					for node in tra_path:
+						self.subgoals.append(node)
+					out_str =  f"Travel distance of the shortest path: {tra_distance:.3f}m\n"
+					out_str += f"Shortest path: " + " -> ".join([str(node.id) for node in self.subgoals])
+					rospy.loginfo(out_str)
 
 		# Perform shortest path planning
 		if self.is_goal_init:
-			# check goal less than converage range
-			dis_goal = np.linalg.norm(robot_node.trans - self.plan_goal_node.trans)
+			subgoal = self.subgoals[0]
+			# Check whetherthe subgoal less than converage range
+			dis_goal = np.linalg.norm(robot_node.trans - subgoal.trans)
 			if dis_goal < self.conv_dist:
+				self.subgoals.pop(0) # Remove the first subgoal
+				rospy.loginfo(f'[Global Planning] SubGoal {subgoal.id} arrived')
+			# Reach the goal
+			if len(self.subgoals) == 0:
 				self.is_goal_init = False
-				self.plan_goal_node = None
-				rospy.loginfo('[Global Planning] Goal arrived')
-				return True
-
-			# shortest path planning
-			map_id = np.argmin(np.linalg.norm(self.map_node_poses - robot_node.trans, axis=1))
-			self.plan_start_node = self.point_graph.get_node(map_id)
-			tra_distance, tra_path = \
-				pytool_alg.sp.dijk_shortest_path(self.point_graph, self.plan_start_node, self.plan_goal_node)
-			if tra_distance != float('inf'):
-				self.planner_path = tra_path
-				for i in range(len(tra_path) - 1):
-					node = tra_path[i]
-					node_next = tra_path[i + 1]
-					node.add_next_node(node_next)
-				out_str =  f"Travel distance of the shortest path: {tra_distance:.3f}m\n"
-				out_str += f"Shortest path: " + " -> ".join([str(node.id) for node in tra_path])
-				rospy.loginfo(out_str)
-				self.publish_path()
-				if self.plan_start_node.id == self.plan_goal_node.id:
-					self.publish_waypoint(self.plan_goal_node)
-				else:
-					self.publish_waypoint(tra_path[1])
+				return
+			# Publish the closest subgoal as waypoint
+			self.publish_path()
+			self.publish_waypoint(self.subgoals[0])
 		rospy.Rate(self.main_freq).sleep()
 
 if __name__ == '__main__':

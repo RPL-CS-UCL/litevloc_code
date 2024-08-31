@@ -56,7 +56,7 @@
 	</group>
 
 	<!-- Localization -->
-	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
+	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="log"
 		args="--dataset_path $(arg map_path)
 					--image_size 512 288
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 
@@ -84,7 +84,7 @@
 	</node>
 
 	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log"
-		args="--env_type outdoor">
+		args="--env_type indoor">
 		<remap from="/local/odometry" to="/depth_reg/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
 		<param name="frame_id_map" value="vloc_map" />
