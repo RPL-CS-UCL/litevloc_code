@@ -1,4 +1,4 @@
-#! /opt/conda/envs/topo_loc/bin/python
+#! /usr/bin/env python
 
 """
 Usage: 
@@ -18,6 +18,7 @@ from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PointStamped
+from std_msgs.msg import Int16
 
 from point_graph import PointGraphLoader as GraphLoader
 from image_node import ImageNode
@@ -51,6 +52,10 @@ class GlobalPlanner:
 		self.is_goal_init = False
 		self.frame_id_map = 'map'
 
+		# Planner status
+		self.planner_status = Int16() 
+		self.planner_status.data = 0 # 0: No goal for starting, 1: Planning, 2: Success, 3: Fail
+
 	def initalize_ros(self):
 		# ROS subscriber
 		rospy.Subscriber('/goal_image', Image, self.goal_img_callback, queue_size=1)
@@ -59,6 +64,7 @@ class GlobalPlanner:
 		# ROS publisher
 		self.pub_shortest_path = rospy.Publisher('/graph/shortest_path', MarkerArray, queue_size=1)
 		self.pub_waypoint = rospy.Publisher('/way_point', PointStamped, queue_size=1)
+		self.status_pub = rospy.Publisher('/global_planner/status', Int16, queue_size=10)
 
 	def read_map_from_file(self):
 		data_path = self.args.dataset_path
@@ -87,13 +93,16 @@ class GlobalPlanner:
 		trans, quat = pytool_ros.ros_msg.convert_rosodom_to_vec(odom_msg)
 		robot_node = PointNode(self.robot_id, None, time, trans, quat, None, None)
 		self.robot_id += 1
+
 		self.perform_planning(robot_node)
+		self.status_pub.publish(self.planner_status)
 
 	def perform_planning(self, robot_node):
-		rospy.loginfo('[Global Planning] Start planning')
 		resize = self.args.image_size
 		# Finding the goal node via. visual place recognition"""
 		if not self.is_goal_init:
+			self.planner_status.data = 0
+
 			if self.manual_goal_img is not None:
 				# process goal image
 				self.img_lock.acquire()
@@ -114,8 +123,10 @@ class GlobalPlanner:
 					rospy.loginfo('No goal node found, need to wait other goal image')
 					return
 
-				# shortest path planning
 				self.is_goal_init = True
+				self.planner_status.data = 1
+
+				# shortest path planning
 				goal_node = self.point_graph.get_node(result['map_id'])
 				rospy.loginfo(f'Found goal node: {goal_node.id}')
 
@@ -146,6 +157,8 @@ class GlobalPlanner:
 			# Reach the goal
 			if len(self.subgoals) == 0:
 				self.is_goal_init = False
+				# planner status -> Success
+				self.planner_status.data = 2
 				return
 			# Publish the closest subgoal as waypoint
 			self.publish_path()

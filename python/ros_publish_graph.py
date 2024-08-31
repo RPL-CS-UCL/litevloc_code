@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import os
 import numpy as np
 import argparse
@@ -21,7 +23,7 @@ class ROSPublishGraph:
 		self.br = tf2_ros.TransformBroadcaster()
 
 	def read_map_from_file(self):
-		data_path = self.args.dataset_path
+		data_path = self.args.map_path
 		self.point_graph = GraphLoader.load_data(data_path)
 		print('Loaded point graph from {}'.format(data_path))
 		print('Number of nodes: {}'.format(len(self.point_graph.nodes)))
@@ -39,7 +41,7 @@ if __name__ == '__main__':
 		description="ROSPublishGraph",
 		formatter_class=argparse.ArgumentDefaultsHelpFormatter
 	)
-	parser.add_argument("--dataset_path", type=str, default="matterport3d", help="path to dataset_path")
+	parser.add_argument("--map_path", type=str, default="matterport3d", help="path to map_path")
 	args, unknown = parser.parse_known_args()
 
 	ros_publish_graph = ROSPublishGraph(args)

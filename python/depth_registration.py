@@ -6,12 +6,14 @@ from std_msgs.msg import Header
 from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import PoseStamped
 from cv_bridge import CvBridge
-import tf
-import numpy as np
-import open3d as o3d
 from message_filters import ApproximateTimeSynchronizer, Subscriber
+import tf
+
 import time
 import copy
+import numpy as np
+import open3d as o3d
+from scipy.spatial.transform import Rotation
 
 class DepthRegistration:
     def __init__(self):
@@ -51,11 +53,19 @@ class DepthRegistration:
         # Register the current depth points with the last depth points
         start_time = time.time()
         if self.last_depth_cloud is not None:
-            self.T_last_curr = self.estimate_pose_icp(depth_cloud, self.last_depth_cloud, np.eye(4))
-            # self.draw_registration_result(depth_cloud, self.last_depth_cloud, self.T_last_curr)
+            T_last_curr = copy.deepcopy(self.estimate_pose_icp(depth_cloud, self.last_depth_cloud, np.eye(4)))
+            # self.draw_registration_result(depth_cloud, self.last_depth_cloud, T_last_curr)
+
+            dis_angle = np.linalg.norm(Rotation.from_matrix(T_last_curr[:3, :3]).as_euler('xyz', degrees=True))
+            dis_trans = np.linalg.norm(T_last_curr[:3, 3])
+            # A large relative rotation or translation indicates a bad registration
+            if dis_angle < 5.0 or dis_trans < 0.1:
+                self.T_last_curr = T_last_curr
+            else:
+                rospy.logwarn("Bad registration result. Skip the current frame.")
         else:
             self.T_last_curr = np.eye(4)
-        print(f"Time taken for ICP: {time.time() - start_time:.3f}s")
+        rospy.loginfo(f"Time taken for ICP: {time.time() - start_time:.3f}s")
 
         self.T_w_cam = self.T_w_cam @ self.T_last_curr
         self.last_depth_cloud = depth_cloud
