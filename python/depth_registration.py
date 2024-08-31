@@ -103,9 +103,9 @@ class DepthRegistration:
 
     def estimate_pose_icp(self, source, target, current_transformation):
         # Point-to-plane ICP
-        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=1, max_nn=30))
-        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=1, max_nn=30))       
-        threshold = 0.2
+        source.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.5, max_nn=30))
+        target.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=0.5, max_nn=30))       
+        threshold = 0.5
         loss = o3d.pipelines.registration.TukeyLoss(k=0.05)
         result_icp = o3d.pipelines.registration.registration_icp(
             source, target, threshold, current_transformation, 
