@@ -64,7 +64,7 @@
 					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
 					--ros_rgb_img_type raw
 					--global_pos_threshold $(arg global_pos_threshold)
-					--min_inliers_threshold 300" >
+					--min_kpts_inliers_thre 300 --min_solver_inliers_thre 300" >
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/color/camera_info" to="/habitat_camera/color/camera_info" />
@@ -83,7 +83,8 @@
 		<param name="max_depth" value="10.0" />
 	</node>
 
-	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log">
+	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log"
+		args="--env_type outdoor">
 		<remap from="/local/odometry" to="/depth_reg/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
 		<param name="frame_id_map" value="vloc_map" />

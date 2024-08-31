@@ -19,6 +19,8 @@ from pycpptools.src.python.utils_algorithm.stamped_poses import StampedPoses
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3, convert_matrix_to_vec, convert_vec_to_matrix
 from pycpptools.src.python.utils_ros import ros_msg
 
+args = parse_arguments()
+
 # Threading
 lock_odom_global = threading.Lock()
 odom_global_queue = queue.Queue()
@@ -42,10 +44,12 @@ tf_buffer, listener = None, None
 
 # Odometry covariance
 SIGMA_ODOMETRY = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.01, 0.01, 0.1])
-# indoor: 
-# SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
-# outdoor:
-SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.05, 0.05, 0.5])
+if args.env_type == 'indoor':
+	# indoor: 
+	SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
+else:
+	# outdoor:
+	SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.05, 0.05, 0.5])
 
 def odom_local_callback(odom_msg):
 	global frame_id_lsensor, frame_id_gsensor, T_gsensor_lsensor, init_extrinsics
@@ -160,8 +164,6 @@ def odom_global_callback(odom_msg):
 	lock_odom_global.release()
 
 if __name__ == '__main__':
-	args = parse_arguments()
-
 	rospy.init_node('ros_pose_fusion', anonymous=False)
 	tf_buffer = tf2_ros.Buffer()
 	listener = tf2_ros.TransformListener(tf_buffer)

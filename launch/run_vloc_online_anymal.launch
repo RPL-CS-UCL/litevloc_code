@@ -43,7 +43,7 @@
 					--config_pose_solver $(find topo_loc)/python/config/dataset/ucl_campus.yaml --viz
 					--ros_rgb_img_type compressed
 					--global_pos_threshold $(arg global_pos_threshold)
-					--min_inliers_threshold 300" >
+					--min_kpts_inliers_thre 300 --min_solver_inliers_thre 150" >
 		<remap from="/color/image" to="/zed2/zed_node/left/image_rect_color/compressed" />
 		<remap from="/depth/image" to="/zed2/zed_node/depth/depth_registered" />
 		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />
@@ -52,8 +52,10 @@
 		<param name="max_depth" value="13.0" />
 	</node>
 
-	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log">
-		<remap from="/local/odometry" to="/state_estimator/odometry" />
+	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log" 
+		args="--env_type outdoor">
+		<!-- <remap from="/local/odometry" to="/state_estimator/odometry" /> -->
+		<remap from="/local/odometry" to="/AirSLAM/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
 		<param name="frame_id_map" value="vloc_map" />
 	</node>

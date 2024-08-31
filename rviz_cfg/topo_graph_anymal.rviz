@@ -4,7 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /FusionOdometry1/Covariance1/Position1
+        - /FusionOdometry1/Status1
       Splitter Ratio: 0.5
     Tree Height: 348
   - Class: rviz/Selection
@@ -142,9 +142,9 @@ Visualization Manager:
           Value: true
         Value: true
       Enabled: true
-      Keep: 1
-      Name: EncoderOdometry
-      Position Tolerance: 0
+      Keep: 100
+      Name: LocalOdometry
+      Position Tolerance: 1
       Queue Size: 1
       Shape:
         Alpha: 1
@@ -156,7 +156,7 @@ Visualization Manager:
         Shaft Length: 0.75
         Shaft Radius: 0.10000000149011612
         Value: Arrow
-      Topic: /state_estimator/odometry
+      Topic: /AirSLAM/odometry
       Unreliable: false
       Value: true
     - Angle Tolerance: 0
@@ -203,7 +203,7 @@ Visualization Manager:
           Color Style: Unique
           Frame: Local
           Offset: 1
-          Scale: 3
+          Scale: 1
           Value: true
         Position:
           Alpha: 0.5
@@ -400,7 +400,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 10.512550354003906
+      Distance: 32.3123893737793
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -408,17 +408,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 0.01078974548727274
-        Y: 0.5070691108703613
-        Z: 0.17707112431526184
+        X: 0.6725761294364929
+        Y: 3.0911314487457275
+        Z: 0.19707250595092773
       Focal Shape Fixed Size: false
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7547971606254578
+      Pitch: 0.7347965240478516
       Target Frame: base
-      Yaw: 0.4835933446884155
+      Yaw: 5.426783561706543
     Saved: ~
 Window Geometry:
   DepthImage:

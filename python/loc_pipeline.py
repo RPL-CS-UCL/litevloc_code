@@ -172,7 +172,7 @@ class LocPipeline:
 		print(f'Number of kpts inliers: {kpts_inliers}, H inliers: {H_inliers}')
 		print(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
 
-		if kpts_inliers < self.args.min_inliers_threshold:
+		if kpts_inliers < self.args.min_kpts_inliers_thre:
 			print(f'[Fail] No sufficient matching kpts')
 			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 		try:
@@ -195,7 +195,7 @@ class LocPipeline:
 					self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
 					depth_img1, None)
 				print(f'{self.args.pose_solver}: Number of solver inliers: {solver_inliers}')
-				if solver_inliers < 150:
+				if solver_inliers < self.args.min_solver_inliers_thre:
 					print(f'[Fail] No sufficient solver inliers')
 					return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 				T_mapnode_obs = np.eye(4)
