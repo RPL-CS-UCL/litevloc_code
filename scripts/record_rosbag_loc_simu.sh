@@ -6,4 +6,7 @@ rosbag record -o /Rocket_ssd/dataset/data_topo_loc/navigation_result \
   /depth_reg/odometry /depth_reg/path \
   /vloc/way_point /path /iplanner_path_fear /path_fear /iplanner_image \
   /overall_map /trajectory /cmd_vel /joy /way_point /navigation_boundary /state_estimation \
+  /Odometry /Odometry_global \
+  /AirSLAM/odometry \
   /tf /tf_static
+
