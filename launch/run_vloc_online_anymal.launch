@@ -54,8 +54,7 @@
 
 	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log" 
 		args="--env_type outdoor">
-		<!-- <remap from="/local/odometry" to="/state_estimator/odometry" /> -->
-		<remap from="/local/odometry" to="/AirSLAM/odometry" />
+		<remap from="/local/odometry" to="/state_estimator/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
 		<param name="frame_id_map" value="vloc_map" />
 	</node>
