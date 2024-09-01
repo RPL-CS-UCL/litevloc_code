@@ -5,5 +5,5 @@ rosbag record -o /Rocket_ssd/dataset/data_topo_loc/navigation_result \
   /pose_fusion/odometry /pose_fusion/path /pose_fusion/path_opt \
   /depth_reg/odometry /depth_reg/path \
   /vloc/way_point /path /iplanner_path_fear /path_fear /iplanner_image \
-  /overall_map /trajectory /cmd_vel \
+  /overall_map /trajectory /cmd_vel /joy /way_point /navigation_boundary /state_estimation \
   /tf /tf_static

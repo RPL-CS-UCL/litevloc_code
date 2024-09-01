@@ -18,10 +18,17 @@ python camera_keyframe_select.py \
 --grid_resolution 0.1 --num_select_cam 62 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
---path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_general/ \
---out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/out/out_map/ \
+--path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_msg/out_general/ \
+--out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_msg/out_map/ \
 --thre_trans 1.0 --thre_rot 20 \
 --grid_resolution 0.2 --num_select_cam 120 --coverage_threshold 0.9
+
+python camera_keyframe_select.py \
+--path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_general/ \
+--out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_map/ \
+--thre_trans 5.0 --thre_rot 30.0 \
+--naive_selection True
+--grid_resolution 0.2
 """
 
 import os
@@ -96,8 +103,8 @@ class KeyFrameSelect:
     def __init__(self, args):
         self.args = args
 
-        # Load the dataset         
-        self.start_indice = 0 if 'matterport3d' in args.path_dataset else 12100
+        # Load the dataset
+        self.start_indice = 12100 if 'vloc_ops_msg' in args.path_dataset else 0
 
         path_pose = os.path.join(args.path_dataset, 'poses.txt')
         self.poses = np.loadtxt(path_pose)  # time, tx, ty, tz, qx, qy, qz, qw
@@ -216,32 +223,39 @@ def main():
 
     print('Creating KeyFrameSelect Object')
     keyframe_select = KeyFrameSelect(args)
-    print(f'Number of cameras to be loaded: {len(keyframe_select.poses)}, Maximiumly Selected cameras: {keyframe_select.num_select_cam}')
 
-    print('Storing Depth Points ...')
-    keyframe_select.store_depth_points()
-
-    print(f'Building Full Occupancy Map with {len(keyframe_select.world_depth_points_dict)} cameras')
-    keyframe_select.build_occupancy_map()
-
-    print('Selecting Keyframes ...')
-    select_cam_id = keyframe_select.select_greedy()
-
-    fig = plt.figure()
-    ax = fig.add_subplot(121)
-    gridshow(keyframe_select.full_grid_map.occupancy(), extent=keyframe_select.full_grid_map.get_extent_xy())
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    plt.title('Full Occupancy Map')
-    ax = fig.add_subplot(122)
-    gridshow(keyframe_select.inc_grid_map.occupancy(), extent=keyframe_select.inc_grid_map.get_extent_xy())
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    plt.title('Inc Occupancy Map')
-    if args.viz:
-        plt.show()
+    if args.naive_selection:
+        print('Naive Selection ...')
+        select_cam_id = np.array([cam_id for cam_id in range(len(keyframe_select.poses)) if keyframe_select.valid_pose[cam_id] == 1])
+        print(f'Number of cameras to be loaded: {len(keyframe_select.poses)} with selecting {len(select_cam_id)} cameras')
     else:
-        plt.savefig(os.path.join(args.out_dir, 'occupancy_map.png'))
+        print('Using Greedy Selection ...')
+        print(f'Number of cameras to be loaded: {len(keyframe_select.poses)}, Maximiumly Selected cameras: {keyframe_select.num_select_cam}')
+
+        print('Storing Depth Points ...')
+        keyframe_select.store_depth_points()
+
+        print(f'Building Full Occupancy Map with {len(keyframe_select.world_depth_points_dict)} cameras')
+        keyframe_select.build_occupancy_map()
+
+        print('Selecting Keyframes ...')
+        select_cam_id = keyframe_select.select_greedy()
+
+        fig = plt.figure()
+        ax = fig.add_subplot(121)
+        gridshow(keyframe_select.full_grid_map.occupancy(), extent=keyframe_select.full_grid_map.get_extent_xy())
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        plt.title('Full Occupancy Map')
+        ax = fig.add_subplot(122)
+        gridshow(keyframe_select.inc_grid_map.occupancy(), extent=keyframe_select.inc_grid_map.get_extent_xy())
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        plt.title('Inc Occupancy Map')
+        if args.viz:
+            plt.show()
+        else:
+            plt.savefig(os.path.join(args.out_dir, 'occupancy_map.png'))
     print(f'Selected Cameras: ' + ' '.join([str(i) for i in select_cam_id]))
 
     """Save the selected keyframes"""
@@ -249,15 +263,20 @@ def main():
     for cam_id in select_cam_id:
         path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.color.jpg')
         new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.color.jpg')
-        os.system(f'cp {path_img} {new_path_img}')
+        if os.path.exists(path_img): 
+            os.system(f'cp {path_img} {new_path_img}')
+        else:
+            path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.color.png')
+            new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.color.png')
+            if os.path.exists(path_img): os.system(f'cp {path_img} {new_path_img}')
 
         path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.depth.png')
         new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.depth.png')
-        os.system(f'cp {path_img} {new_path_img}')
+        if os.path.exists(path_img): os.system(f'cp {path_img} {new_path_img}')
 
         path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.semantic.png')
         new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.semantic.png')
-        os.system(f'cp {path_img} {new_path_img}')
+        if os.path.exists(path_img): os.system(f'cp {path_img} {new_path_img}')
         new_cam_id += 1
     new_poses = keyframe_select.poses[select_cam_id, :]
     new_intrinsics = np.loadtxt(os.path.join(args.path_dataset, 'intrinsics.txt'))[select_cam_id, :]
@@ -267,16 +286,23 @@ def main():
 
     """Create edge list"""
     edge_list = np.empty((0, 3), dtype=np.float32)
-    dij_map = copy.copy(keyframe_select.full_grid_map)
-    valid_ij = np.where(dij_map.occupancy() < 0.999)
-    for va in valid_ij:
-        dij_map._occupancy[va[0], va[1]] = 0.0
-    for i in range(len(select_cam_id)):
-        for j in range(i+1, len(select_cam_id)):
-            pose_i, pose_j = keyframe_select.poses[select_cam_id[i], 1:], keyframe_select.poses[select_cam_id[j], 1:]
-            weight = check_connection(dij_map, args.grid_resolution, pose_i, pose_j)
-            if weight is not None:
+    if args.naive_selection:
+        for i in range(len(select_cam_id) - 3):
+            for j in range(i + 1, i + 3):
+                pose_i, pose_j = keyframe_select.poses[select_cam_id[i], 1:], keyframe_select.poses[select_cam_id[j], 1:]
+                weight = np.linalg.norm(pose_i[:2] - pose_j[:2])
                 edge_list = np.vstack((edge_list, np.array([i, j, weight]).reshape(1, 3)))
+    else:
+        dij_map = copy.copy(keyframe_select.full_grid_map)
+        valid_ij = np.where(dij_map.occupancy() < 0.999)
+        for va in valid_ij:
+            dij_map._occupancy[va[0], va[1]] = 0.0
+        for i in range(len(select_cam_id)):
+            for j in range(i+1, len(select_cam_id)):
+                pose_i, pose_j = keyframe_select.poses[select_cam_id[i], 1:], keyframe_select.poses[select_cam_id[j], 1:]
+                weight = check_connection(dij_map, args.grid_resolution, pose_i, pose_j)
+                if weight is not None:
+                    edge_list = np.vstack((edge_list, np.array([i, j, weight]).reshape(1, 3)))
     np.savetxt(os.path.join(args.out_dir, 'edge_list.txt'), edge_list, fmt='%.5f')
     
     fig = plt.figure()
