@@ -93,7 +93,6 @@ def perform_localization(loc: LocPipeline, args):
 								 K, img_size, 
 								 '', '')
 			obs_node.set_raw_intrinsics(raw_K, raw_img_size)
-			print(obs_node)
 			loc.curr_obs_node = obs_node
 
 			"""Perform global localization via. visual place recognition"""
@@ -135,9 +134,11 @@ def perform_localization(loc: LocPipeline, args):
 					T_w_obs = result['T_w_obs']
 					trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
 					loc.curr_obs_node.set_pose(trans, quat)
+					loc.has_local_pos = True
 					rospy.logwarn(f'Estimated Poses: {trans.T}\n')
 				else:
-					rospy.logwarn('[Fail] to determine the local position.')
+					loc.has_local_pos = False
+					rospy.logwarn('[Fail] to determine the local position.\n')
 				
 			loc.publish_message()
 			r.sleep()

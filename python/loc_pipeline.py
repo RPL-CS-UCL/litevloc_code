@@ -60,6 +60,7 @@ class LocPipeline:
 		self.args = args
 		self.log_dir = log_dir
 		self.has_global_pos = False
+		self.has_local_pos = False
 		self.frame_id_map = 'map'
 		self.depth_range = (0.1, 15.0)
 
@@ -228,13 +229,15 @@ class LocPipeline:
 		if self.curr_obs_node is not None:
 			header = Header(stamp=rospy.Time.from_sec(self.curr_obs_node.time), frame_id=self.frame_id_map)
 			
-			odom = pytool_ros.ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, self.child_frame_id)
-			self.pub_odom.publish(odom)
-			pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom)
-			
-			self.path_msg.header = header
-			self.path_msg.poses.append(pose_msg)
-			self.pub_path.publish(self.path_msg)
+			# Publish odometry and path if the local position is available
+			if self.has_local_pos:
+				odom = pytool_ros.ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, self.child_frame_id)
+				self.pub_odom.publish(odom)
+				pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom)
+				
+				self.path_msg.header = header
+				self.path_msg.poses.append(pose_msg)
+				self.pub_path.publish(self.path_msg)
 
 			if self.curr_obs_node.has_pose_gt:
 				pose_msg = pytool_ros.ros_msg.convert_vec_to_rospose(self.curr_obs_node.trans_gt, self.curr_obs_node.quat_gt, header)
@@ -321,6 +324,12 @@ def perform_localization(loc: LocPipeline, args):
 			if loc.last_obs_node is not None:
 				init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
+
+				dis_trans, _ = pytool_math.tools_eigen.compute_relative_dis(init_trans, init_quat, loc.ref_map_node.trans, loc.ref_map_node.quat)
+				if dis_trans > loc.args.global_pos_threshold:
+					rospy.logwarn('Too far distance from the ref_map_node. Losing Visual Tracking. Reset the global position.')
+					loc.has_global_pos = False
+					loc.ref_map_node = None
 			else:
 				rospy.logwarn('[Fail] to determine the global position since not correct VPR.')
 				continue				
@@ -334,16 +343,12 @@ def perform_localization(loc: LocPipeline, args):
 				T_w_obs = result['T_w_obs']
 				trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
 				loc.curr_obs_node.set_pose(trans, quat)
+				loc.has_local_pos = True
 				rospy.loginfo(f'Groundtruth Poses: {loc.curr_obs_node.trans_gt.T}')
 				rospy.loginfo(f'Estimated Poses: {trans.T}\n')
 			else:
+				loc.has_local_pos = False
 				rospy.logwarn('[Fail] to determine the local position.')
-				query_pose = loc.curr_obs_node.trans.reshape(1, 3)
-				dis, pred = perform_knn_search(loc.DB_POSES[:, :3], query_pose, 3, [1])
-				if dis[0][0] > loc.args.global_pos_threshold:
-					loc.has_global_pos = False
-					loc.ref_map_node = None
-				continue
 
 		loc.publish_message()
 		# Set as the initial guess of the next observation
