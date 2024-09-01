@@ -24,7 +24,7 @@ python camera_keyframe_select.py \
 --grid_resolution 0.2 --num_select_cam 120 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
---path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_general/ \
+--path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_general_512_288/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_map/ \
 --thre_trans 5.0 --thre_rot 30.0 \
 --naive_selection True
@@ -268,7 +268,6 @@ def main():
         else:
             path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.color.png')
             if os.path.exists(path_img): 
-                new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.color.jpg')
                 img = Image.open(path_img)
                 img.save(new_path_img)
 
