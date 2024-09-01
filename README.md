@@ -31,7 +31,7 @@ Check ```RPL-RoboHike/docs/tutorial_setup_jetson_orin.md``` for details. Need to
     export TORCH_HOME=path_torch_hub
     ```
 
-7. Build the repo:
+7. Build the ros package:
     ```
     catkin build topo_loc -DPYTHON_EXECUTABLE=$(which python)
     ```
