@@ -288,8 +288,8 @@ def main():
     """Create edge list"""
     edge_list = np.empty((0, 3), dtype=np.float32)
     if args.naive_selection:
-        for i in range(len(select_cam_id) - 3):
-            for j in range(i + 1, i + 3):
+        for i in range(len(select_cam_id) - 2):
+            for j in range(i + 1, i + 2):
                 pose_i, pose_j = keyframe_select.poses[select_cam_id[i], 1:], keyframe_select.poses[select_cam_id[j], 1:]
                 weight = np.linalg.norm(pose_i[:2] - pose_j[:2])
                 edge_list = np.vstack((edge_list, np.array([i, j, weight]).reshape(1, 3)))
