@@ -267,8 +267,10 @@ def main():
             os.system(f'cp {path_img} {new_path_img}')
         else:
             path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.color.png')
-            new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.color.png')
-            if os.path.exists(path_img): os.system(f'cp {path_img} {new_path_img}')
+            if os.path.exists(path_img): 
+                new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.color.jpg')
+                img = Image.open(path_img)
+                img.save(new_path_img)
 
         path_img = os.path.join(args.path_dataset, f'seq/{cam_id:06d}.depth.png')
         new_path_img = os.path.join(args.out_dir, f'seq/{new_cam_id:06d}.depth.png')

@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 """
 Usage:
 python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/vloc_17DRP5sb8fy/out_map \
