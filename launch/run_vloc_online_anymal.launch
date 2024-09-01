@@ -3,8 +3,8 @@
 	<!-- Base Parameters -->
 	<arg name="env_id" default="ops_msg" />
 	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_$(arg env_id)/out_map/" />
-	<arg name="use_rviz" default="true" />
-	<param name="use_sim_time" value="true" />
+	<arg name="use_rviz" default="false" />
+	<param name="use_sim_time" value="false" />
 
 	<!-- Localization Parameters -->
 	<!-- trigger global localization if distance to the closest map node exceeds it -->
@@ -32,6 +32,10 @@
 		<param name="frame_id_map" value="vloc_map" />
 		<param name="main_freq" value="1" />
 		<param name="conv_dist" value="0.5" />
+	</node>
+
+	<node name="ros_publish_goal_image" pkg="topo_loc" type="ros_publish_goal_image.py" output="screen"
+		args="--goal_image_path $(arg map_path)" >
 	</node>
 
 	<!-- Localization -->
