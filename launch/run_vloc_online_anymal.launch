@@ -9,7 +9,7 @@
 	<!-- Localization Parameters -->
 	<!-- trigger global localization if distance to the closest map node exceeds it -->
 	<!-- indoor: 10.0; outdoor: 15.0 -->
-	<arg name="global_pos_threshold" default="15.0" /> 
+	<arg name="global_pos_threshold" default="10.0" /> 
 	<arg name="vloc_freq" default="1.0" />
 
   <!-- Navigation Interface -->
