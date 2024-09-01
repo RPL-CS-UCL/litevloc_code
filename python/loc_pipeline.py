@@ -131,20 +131,32 @@ class LocPipeline:
 			return matcher_result
 		except Exception as e:
 			logging.error(f"Error in image matching: {e}")
-			return {"num_inliers_kpts": 0, "num_inliers": 0}
+			null_kpts = np.zeros((0, 2), dtype=np.float32)
+			return {"num_inliers_kpts": 0, "num_inliers": 0, "inliers0": null_kpts, "inliers1": null_kpts}
 
-	# Search potential keyframes using the covisiblity graph
-	def search_keyframe_from_graph(self, obs_node):		
+	def search_keyframe_from_graph(self, obs_node):
+		"""
+		This method searches for the visual-closest keyframe in the covisibility graph for a given observation node.
+
+		Parameters:
+		obs_node (Node): The observation node for which to find the closest keyframe. 
+
+		Returns:
+		Node: The closest keyframe node in the graph. 
+			  If no keyframe is found within the global position threshold, it returns None.
+		"""
 		query_pose = obs_node.trans.reshape(1, 3)
 		dis, pred = perform_knn_search(self.DB_POSES[:, :3], query_pose, 3, [1])
-		if len(pred[0]) == 0 or dis[0][0] > self.args.global_pos_threshold: return None
+		if len(pred[0]) == 0 or dis[0][0] > self.args.global_pos_threshold: 
+			return None
+		
 		closest_map_node = self.image_graph.get_node(pred[0][0])
 		all_nei_nodes = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node]
-
 		list_dis = [compute_euclidean_dis(obs_node.get_descriptor(), node.get_descriptor()) for node in all_nei_nodes]
 		node_min_dis = all_nei_nodes[np.argmin(list_dis)]
-		out_str = ' '.join([f'{node.id}({dis:.2f})' for node, dis in zip(all_nei_nodes, list_dis)]) + f' Closest node: {node_min_dis.id}'
-		print(out_str)
+		out_str = 'Keyframe candidate: '
+		out_str += ' '.join([f'{node.id}({dis:.2f})' for node, dis in zip(all_nei_nodes, list_dis)]) + f' Closest node: {node_min_dis.id}'
+		rospy.loginfo(out_str)
 		return node_min_dis
 
 	def perform_global_loc(self, save=False):
@@ -160,57 +172,51 @@ class LocPipeline:
 		return {'succ': True, 'map_id': vpr_pred[0, 0]}
 	
 	def perform_local_loc(self):
-		search_start_time = time.time()
+		matching_start_time = time.time()
 		ref_node = self.search_keyframe_from_graph(self.curr_obs_node)
 		if ref_node is None: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
-		print(f"Search keyframe costs: {time.time() - search_start_time:.3f}s, Found the reference map node: {ref_node.id}")
-		
-		matching_start_time = time.time()
 		self.ref_map_node = ref_node
-		matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
-		kpts_inliers, H_inliers = matcher_result["num_inliers_kpts"], matcher_result["num_inliers"]
-		print(f'Number of kpts inliers: {kpts_inliers}, H inliers: {H_inliers}')
-		print(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
 
-		if kpts_inliers < self.args.min_kpts_inliers_thre:
-			print(f'[Fail] No sufficient matching kpts')
+		matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
+		num_kpts_inliers, num_H_inliers = matcher_result["num_inliers_kpts"], matcher_result["num_inliers"]
+		mkpts0, mkpts1 = (matcher_result["inliers0"], matcher_result["inliers1"])
+		mkpts0_raw = mkpts0 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
+								self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]]
+		mkpts1_raw = mkpts1 * [self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0], 
+								self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]]
+		self.ref_map_node.set_matched_kpts(mkpts0, num_kpts_inliers)
+		self.curr_obs_node.set_matched_kpts(mkpts1, num_kpts_inliers)
+		rospy.loginfo(f'Number of kpts inliers: {num_kpts_inliers}, H inliers: {num_H_inliers}')
+		rospy.loginfo(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
+
+		if num_kpts_inliers < self.args.min_kpts_inliers_thre:
+			rospy.logwarn(f'[Fail] No sufficient matching kpts')
 			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 		try:
-			T_mapnode_obs = None
-			mkpts0, mkpts1 = (matcher_result["inliers0"], matcher_result["inliers1"])
-			mkpts0_raw = mkpts0 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
-								   self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]]
-			mkpts1_raw = mkpts1 * [self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0], 
-								   self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]]
+			# NOTE(gogojjh): the mickey matcher not used in this project
 			if self.args.img_matcher == "mickey":
 				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
 				R, t = to_numpy(R), to_numpy(t)
-				T_mapnode_obs = np.eye(4)
-				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t
-				print(f'Mickey Solver:\n', T_mapnode_obs)
+				num_solver_inliers = self.img_matcher.scene["inliers"]
 			else:
 				depth_img1 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
-				R, t, solver_inliers = self.pose_solver.estimate_pose(
+				R, t, num_solver_inliers = self.pose_solver.estimate_pose(
 					mkpts1_raw, mkpts0_raw,
 					self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
 					depth_img1, None)
-				print(f'{self.args.pose_solver}: Number of solver inliers: {solver_inliers}')
-				if solver_inliers < self.args.min_solver_inliers_thre:
-					print(f'[Fail] No sufficient solver inliers')
-					return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
+			if num_solver_inliers < self.args.min_solver_inliers_thre:
+				rospy.logwarn(f'[Fail] No sufficient number {num_solver_inliers} solver inliers')
+				return {'succ': False, 'T_w_obs': None, 'num_solver_inliers': 0}
+			else:
 				T_mapnode_obs = np.eye(4)
 				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
-
-			if T_mapnode_obs is not None:
-				T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(
-					self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
+				T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
 				T_w_obs = T_w_mapnode @ T_mapnode_obs
-				self.ref_map_node.set_matched_kpts(mkpts0, kpts_inliers)
-				self.curr_obs_node.set_matched_kpts(mkpts1, kpts_inliers)
-				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': solver_inliers}
+				rospy.logwarn(f'[Succ] sufficient number {num_solver_inliers} solver inliers')
+				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': num_solver_inliers}
 		except Exception as e:
-			print(f'Failed to estimate pose with {self.args.pose_solver}:', e)
-			return {'succ': False, 'T_w_obs': None, 'solver_inliers': solver_inliers}
+			rospy.logwarn(f'[Fail] to estimate pose with error:', e)
+			return {'succ': False, 'T_w_obs': None, 'solver_inliers': num_solver_inliers}
 
 	def publish_message(self):
 		header = Header(stamp=rospy.Time.now(), frame_id=self.frame_id_map)
@@ -224,8 +230,8 @@ class LocPipeline:
 			
 			odom = pytool_ros.ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, self.child_frame_id)
 			self.pub_odom.publish(odom)
-
 			pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom)
+			
 			self.path_msg.header = header
 			self.path_msg.poses.append(pose_msg)
 			self.pub_path.publish(self.path_msg)
@@ -301,37 +307,37 @@ def perform_localization(loc: LocPipeline, args):
 		if not loc.has_global_pos:
 			loc_start_time = time.time()
 			result = loc.perform_global_loc(save=(args.num_preds_to_save!=0))
-			print(f"Global localization costs: {time.time() - loc_start_time:.3f}s")
+			rospy.loginfo(f"Global localization costs: {time.time() - loc_start_time:.3f}s")
 			if result['succ']:
 				matched_map_id = result['map_id']
 				loc.has_global_pos = True
 				loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
 				loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
-				print(f'Found VPR Node in global position: {matched_map_id}')
+				rospy.logwarn(f'Found VPR Node in global position: {matched_map_id}')
 			else:
-				print('Failed to determine the global position since no VPR results.')
+				rospy.logwarn('[Fail] to determine the global position since no VPR results.')
 				continue
 		else:
 			if loc.last_obs_node is not None:
 				init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
 			else:
-				print('Failed to determine the global position since not correct VPR.')
+				rospy.logwarn('[Fail] to determine the global position since not correct VPR.')
 				continue				
 
 		"""Perform local localization via. image matching"""
 		if loc.has_global_pos:
 			loc_start_time = time.time()
 			result = loc.perform_local_loc()
-			print(f"Local localization costs: {time.time() - loc_start_time:.3f}s")
+			rospy.loginfo(f"Local localization costs: {time.time() - loc_start_time:.3f}s")
 			if result['succ']:
 				T_w_obs = result['T_w_obs']
 				trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
 				loc.curr_obs_node.set_pose(trans, quat)
-				print(f'Groundtruth Poses: {loc.curr_obs_node.trans_gt.T}')
-				print(f'Estimated Poses: {trans.T}\n')
+				rospy.loginfo(f'Groundtruth Poses: {loc.curr_obs_node.trans_gt.T}')
+				rospy.loginfo(f'Estimated Poses: {trans.T}\n')
 			else:
-				print('Failed to determine the local position.')
+				rospy.logwarn('[Fail] to determine the local position.')
 				query_pose = loc.curr_obs_node.trans.reshape(1, 3)
 				dis, pred = perform_knn_search(loc.DB_POSES[:, :3], query_pose, 3, [1])
 				if dis[0][0] > loc.args.global_pos_threshold:

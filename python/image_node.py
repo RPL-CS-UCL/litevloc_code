@@ -35,6 +35,11 @@ class ImageNode(BaseNode):
 		self.mkpts = None
 		self.inliers = None
 
+	def __str__(self):
+		out_str = f'Image Node ID: {self.id} with edge number: {len(self.edges)}'
+		out_str += f', intrinsics: [' + ', '.join([str(x) for x in self.raw_K.flatten()]) + ']'
+		return out_str
+
 	def set_descriptor(self, global_descriptor):
 		self.global_descriptor = global_descriptor
 

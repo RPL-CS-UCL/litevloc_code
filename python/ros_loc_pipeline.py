@@ -93,22 +93,22 @@ def perform_localization(loc: LocPipeline, args):
 								 K, img_size, 
 								 '', '')
 			obs_node.set_raw_intrinsics(raw_K, raw_img_size)
+			print(obs_node)
 			loc.curr_obs_node = obs_node
 
 			"""Perform global localization via. visual place recognition"""
 			if not loc.has_global_pos:
 				loc_start_time = time.time()
 				result = loc.perform_global_loc(save=False)
-				print(f"Global localization cost: {time.time() - loc_start_time:.3f}s")
+				rospy.loginfo(f"Global localization cost: {time.time() - loc_start_time:.3f}s")
 				if result['succ']:
 					matched_map_id = result['map_id']
 					loc.has_global_pos = True
 					loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
 					loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
-					print(f'Found VPR Node in global position: {matched_map_id}')
+					rospy.logwarn(f'Found VPR Node in global position: {matched_map_id}')
 				else:
-					print('Failed to determine the global position since no VPR results.')
-					continue
+					rospy.logwarn('Failed to determine the global position since no VPR results.')
 			else:
 				# Initialize the current transformation using the historical fused poses
 				idx_closest, stamped_pose_closest = fused_poses.find_closest(loc.curr_obs_node.time)
@@ -122,25 +122,23 @@ def perform_localization(loc: LocPipeline, args):
 				
 				dis_trans, _ = pytool_math.tools_eigen.compute_relative_dis(init_trans, init_quat, loc.ref_map_node.trans, loc.ref_map_node.quat)
 				if dis_trans > loc.args.global_pos_threshold:
-					print('Too far distance from the ref_map_node. Losing Visual Tracking')
-					print('Reset the global position.')
+					rospy.logwarn('Too far distance from the ref_map_node. Losing Visual Tracking. Reset the global position.')
 					loc.has_global_pos = False
 					loc.ref_map_node = None
-					continue
 
 			"""Perform local localization via. image matching"""
 			if loc.has_global_pos:
 				loc_start_time = time.time()
 				result = loc.perform_local_loc()
-				print(f"Local localization cost: {time.time() - loc_start_time:.3f}s")
+				rospy.loginfo(f"Local localization cost: {time.time() - loc_start_time:.3f}s")
 				if result['succ']:
 					T_w_obs = result['T_w_obs']
 					trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
 					loc.curr_obs_node.set_pose(trans, quat)
-					print(f'Estimated Poses: {trans.T}\n')
+					rospy.logwarn(f'Estimated Poses: {trans.T}\n')
 				else:
-					print('Failed to determine the local position.')
-					continue
+					rospy.logwarn('[Fail] to determine the local position.')
+				
 			loc.publish_message()
 			r.sleep()
 
