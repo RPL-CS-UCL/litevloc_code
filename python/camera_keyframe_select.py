@@ -24,11 +24,10 @@ python camera_keyframe_select.py \
 --grid_resolution 0.2 --num_select_cam 120 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
---path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_general_512_288/ \
+--path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_general/ \
 --out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_map/ \
---thre_trans 5.0 --thre_rot 30.0 \
---naive_selection True
---grid_resolution 0.2
+--thre_trans 6.0 --thre_rot 60.0 \
+--naive_selection True --grid_resolution 0.5
 """
 
 import os
@@ -104,7 +103,7 @@ class KeyFrameSelect:
         self.args = args
 
         # Load the dataset
-        self.start_indice = 12100 if 'vloc_ops_msg' in args.path_dataset else 0
+        self.start_indice = 12100 if 'vloc_ops_msg' in args.path_dataset else 37
 
         path_pose = os.path.join(args.path_dataset, 'poses.txt')
         self.poses = np.loadtxt(path_pose)  # time, tx, ty, tz, qx, qy, qz, qw
@@ -288,11 +287,12 @@ def main():
     """Create edge list"""
     edge_list = np.empty((0, 3), dtype=np.float32)
     if args.naive_selection:
-        for i in range(len(select_cam_id) - 2):
-            for j in range(i + 1, i + 2):
+        for i in range(len(select_cam_id)):
+            for j in range(i+1, len(select_cam_id)):
                 pose_i, pose_j = keyframe_select.poses[select_cam_id[i], 1:], keyframe_select.poses[select_cam_id[j], 1:]
-                weight = np.linalg.norm(pose_i[:2] - pose_j[:2])
-                edge_list = np.vstack((edge_list, np.array([i, j, weight]).reshape(1, 3)))
+                weight = np.linalg.norm(pose_i[:3] - pose_j[:3])
+                if weight < 7.0:
+                    edge_list = np.vstack((edge_list, np.array([i, j, weight]).reshape(1, 3)))
     else:
         dij_map = copy.copy(keyframe_select.full_grid_map)
         valid_ij = np.where(dij_map.occupancy() < 0.999)
