@@ -1,44 +1,21 @@
+<!-- Rosbag test: roslaunch topo_loc run_vloc_online_anymal.launch env_id:=ops_msg use_rviz:=false use_nav:=true -->
+<!-- Real robot test: roslaunch topo_loc run_vloc_online_anymal.launch env_id:=ops_msg use_rviz:=false use_nav:=false -->
 <launch>
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="ops_msg" />
 	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_$(arg env_id)/out_map/" />
 	<arg name="use_rviz" default="false" />
+	<arg name="use_nav" default="true" />
 	<param name="use_sim_time" value="false" />
 
-	<!-- Localization Parameters -->
+	<!-- Localization -->
+	<!-- Parameters -->
 	<!-- trigger global localization if distance to the closest map node exceeds it -->
 	<!-- indoor: 10.0; outdoor: 15.0 -->
 	<arg name="global_pos_threshold" default="10.0" /> 
 	<arg name="vloc_freq" default="1.0" />
 
-  <!-- Navigation Interface -->
-	<!-- Transform the frame_id of localization odometry to robot -->
-	<!-- Publish: /vloc/state_estimation, /vloc/state_estimation_path -->
-  <node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="log">
-		<remap from="/Odometry" to="/pose_fusion/odometry" />
-    <param name="loc_world_frame_id" value="vloc_map" />
-    <param name="loc_sensor_frame_id" value="zed2_left_camera_optical_frame" />
-    <param name="world_frame_id" value="map" />
-    <param name="sensor_frame_id" value="zed2_left_camera_optical_frame" />
-    <param name="base_frame_id" value="base" /> <!-- robot_id -->
-  </node>
-
-	<!-- Planning -->
-	<node name="ros_global_planner" pkg="topo_loc" type="ros_global_planner.py" output="screen"
-		args="--dataset_path $(arg map_path) \
-					--image_size 512 288 --device=cuda \
-					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256" >
-		<param name="frame_id_map" value="vloc_map" />
-		<param name="main_freq" value="1" />
-		<param name="conv_dist" value="0.5" />
-	</node>
-
-	<node name="ros_publish_goal_image" pkg="topo_loc" type="ros_publish_goal_image.py" output="screen"
-		args="--goal_image_path $(arg map_path)" >
-	</node>
-
-	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
 					--image_size 512 288
@@ -51,7 +28,7 @@
 		<remap from="/color/image" to="/zed2/zed_node/left/image_rect_color/compressed" />
 		<remap from="/depth/image" to="/zed2/zed_node/depth/depth_registered" />
 		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />
-		<param name="main_freq" value="$(arg vloc_freq)" />
+		<param name="main_freq" value="1.0" />
 		<param name="min_depth" value="0.001" />
 		<param name="max_depth" value="13.0" />
 	</node>
@@ -63,11 +40,40 @@
 		<param name="frame_id_map" value="vloc_map" />
 	</node>
 
+  <!-- Navigation Interface -->
+	<!-- Transform the frame_id of localization odometry to robot -->
+	<!-- Publish: /vloc/state_estimation, /vloc/state_estimation_path -->
+	<group if="$(arg use_nav)">
+		<node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="log">
+			<remap from="/Odometry" to="/pose_fusion/odometry" />
+			<remap from="/cloud_registered_body" to="/zed2/zed_node/point_cloud/cloud_registered" />
+			<param name="loc_world_frame_id" value="vloc_map" />
+			<param name="loc_sensor_frame_id" value="zed2_left_camera_optical_frame" />
+			<param name="world_frame_id" value="map" />
+			<param name="sensor_frame_id" value="zed2_left_camera_optical_frame" />
+			<param name="base_frame_id" value="base" /> <!-- robot_id -->
+		</node>
+	</group>
+
   <!-- Static TF -->
   <!-- Option 1: x y z yaw pitch roll (radians) frame_id child_frame_id period_in_ms -->
   <!-- Option 2: x y z qx qy qz qw frame_id child_frame_id period_in_ms -->
   <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" />
 	<node pkg="tf" type="static_transform_publisher" name="map_global_trans_publisher" args="0 0 0 0 0 0 map map_global 10" />
+
+	<!-- Global Planning -->
+	<node name="ros_global_planner" pkg="topo_loc" type="ros_global_planner.py" output="screen"
+		args="--dataset_path $(arg map_path) \
+					--image_size 512 288 --device=cuda \
+					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256" >
+		<param name="frame_id_map" value="vloc_map" />
+		<param name="main_freq" value="1" />
+		<param name="conv_dist" value="0.5" />
+	</node>
+
+	<node name="ros_publish_goal_image" pkg="topo_loc" type="ros_publish_goal_image.py" output="screen"
+		args="--goal_image_path $(arg map_path)" >
+	</node>
 	
 	<!-- RVIZ -->
 	<group if="$(arg use_rviz)">

@@ -70,6 +70,7 @@ def odom_local_callback(odom_msg):
 	"""Process local odometry"""
 	# Transform the frame_id of local odometry to the global sensor
 	# e.g., local sensor (imu) -> global sensor (camera) for robots
+	# T_wgsensor_gsensor: world frame of the camera -> the frame of the current camera
 	T_wlsensor_lsensor = ros_msg.convert_rosodom_to_matrix(odom_msg)
 	T_wgsensor_gsensor = T_gsensor_lsensor @ T_wlsensor_lsensor @ np.linalg.inv(T_gsensor_lsensor)
 	trans, quat = convert_matrix_to_vec(T_wgsensor_gsensor)
