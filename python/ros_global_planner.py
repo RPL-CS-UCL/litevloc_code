@@ -54,7 +54,7 @@ class GlobalPlanner:
 
 		# Planner status
 		self.planner_status = Int16() 
-		self.planner_status.data = 0 # 0: No goal for starting, 1: Planning, 2: Success, 3: Fail
+		self.planner_status.data = 0 # 0: No goal for starting; 1: Find a path; 2: Reach a subgoal; 3: Fail to plan a path, and then set to 0
 
 	def initalize_ros(self):
 		# ROS subscriber
@@ -102,7 +102,6 @@ class GlobalPlanner:
 		# Finding the goal node via. visual place recognition"""
 		if not self.is_goal_init:
 			self.planner_status.data = 0
-
 			if self.manual_goal_img is not None:
 				# process goal image
 				self.img_lock.acquire()
@@ -123,15 +122,12 @@ class GlobalPlanner:
 					rospy.loginfo('No goal node found, need to wait other goal image')
 					return
 
-				self.is_goal_init = True
-				self.planner_status.data = 1
-
-				# shortest path planning
 				goal_node = self.point_graph.get_node(result['map_id'])
 				rospy.loginfo(f'Found goal node: {goal_node.id}')
-
 				map_id = np.argmin(np.linalg.norm(self.map_node_poses - robot_node.trans, axis=1))
 				start_node = self.point_graph.get_node(map_id)
+
+				# shortest path planning
 				tra_distance, tra_path = \
 					pytool_alg.sp.dijk_shortest_path(self.point_graph, start_node, goal_node)
 				if tra_distance != float('inf'):
@@ -142,9 +138,15 @@ class GlobalPlanner:
 					self.subgoals = []
 					for node in tra_path:
 						self.subgoals.append(node)
-					out_str =  f"Travel distance of the shortest path: {tra_distance:.3f}m\n"
+					out_str = 'Success to plan a path'
+					out_str +=  f"Travel distance of the shortest path: {tra_distance:.3f}m\n"
 					out_str += f"Shortest path: " + " -> ".join([str(node.id) for node in self.subgoals])
-					rospy.loginfo(out_str)
+					rospy.logwarn(out_str)
+					self.is_goal_init = True
+					self.planner_status.data = 1
+				else:
+					rospy.logwarn('Fail to plan a path')
+					self.planner_status.data = 3
 
 		# Perform shortest path planning
 		if self.is_goal_init:
