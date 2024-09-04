@@ -20,7 +20,9 @@ class PointGraphLoader:
 			node = PointNode(i, f'point node {i}', time, trans, quat, None, None)
 			node.set_pose_gt(trans, quat)				
 			point_graph.add_node(node)
-		point_graph.read_edge_list(os.path.join(graph_path, 'edge_list.txt'))
+		edge_file = os.path.join(graph_path, 'edge_list.txt')
+		if os.path.exists(edge_file):
+			point_graph.read_edge_list(edge_file)
 		return point_graph
 
 # Image Graph Class

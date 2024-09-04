@@ -103,7 +103,7 @@ class KeyFrameSelect:
         self.args = args
 
         # Load the dataset
-        self.start_indice = 12100 if 'vloc_ops_msg' in args.path_dataset else 37
+        self.start_indice = 12100 if 'vloc_ops_msg' in args.path_dataset else 56
 
         path_pose = os.path.join(args.path_dataset, 'poses.txt')
         self.poses = np.loadtxt(path_pose)  # time, tx, ty, tz, qx, qy, qz, qw

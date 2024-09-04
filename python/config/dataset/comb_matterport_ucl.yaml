@@ -1,8 +1,11 @@
 MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
-  DATA_ROOT: '/Rocket_ssd/dataset/data_topo_loc/ucl_campus/map_free_eval'
-  SCENES: [s00000, s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008]
+  DATA_ROOT: '/Rocket_ssd/dataset/data_topo_loc/comb_matterport_ucl/map_free_eval'
+  SCENES: [s00000, s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008, s00009, 
+           s00010, s00011, s00012, s00013, s00014, s00015, s00016, s00017, s00018, s00019, 
+           s00020, s00021, s00022, s00023, s00024, s00025, s00026, s00027, s00028, s00029, 
+           s00030, s00031, s00032, s00033, s00034, s00035]
   ESTIMATED_DEPTH: zed   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
   HEIGHT: 288             # Images are resized
@@ -10,7 +13,7 @@ DATASET:
   MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!
-  MAX_DEPTH: 13.0
+  MAX_DEPTH: 100.0
 PNP:
   RANSAC_ITER: 1000
   REPROJECTION_INLIER_THRESHOLD: 3 # pixel
@@ -21,4 +24,4 @@ EMAT_RANSAC:
   CONFIDENCE: 0.9999
 PROCRUSTES:
   MAX_CORR_DIST: 0.05 # meters
-  REFINE: False # refine pose with Icp
+  REFINE: False # refine pose with ICP
