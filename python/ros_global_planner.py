@@ -63,7 +63,7 @@ class GlobalPlanner:
 
 		# ROS publisher
 		self.pub_shortest_path = rospy.Publisher('/graph/shortest_path', MarkerArray, queue_size=1)
-		self.pub_waypoint = rospy.Publisher('/way_point', PointStamped, queue_size=1)
+		self.pub_waypoint = rospy.Publisher('/vloc/way_point', PointStamped, queue_size=1)
 		self.status_pub = rospy.Publisher('/global_planner/status', Int16, queue_size=10)
 
 	def read_map_from_file(self):
