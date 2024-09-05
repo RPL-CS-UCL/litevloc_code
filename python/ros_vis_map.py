@@ -1,5 +1,4 @@
-#! /opt/conda/envs/topo_loc/bin/python
-
+#! /usr/bin/env python
 """
 Usage: 
 python ros_vis_map.py \
