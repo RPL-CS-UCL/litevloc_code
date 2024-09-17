@@ -208,11 +208,14 @@ def plot_images(image1, image2, title1="Image 1", title2="Image 2", save_path=No
         plt.close()
 
 
-def save_visualization(image0, image1, mkpts0, mkpts1, out_dir, index, n_viz=1, line_width=0.2):
+def save_visualization(image0, image1, mkpts0, mkpts1, out_dir, index, n_viz=1, line_width=0.2, text=None):
     """Save visualization of the matching results."""
     viz2d.plot_images([image0, image1])
     viz2d.plot_matches(mkpts0[::n_viz], mkpts1[::n_viz], color="lime", lw=line_width)
-    viz2d.add_text(0, f"{len(mkpts1)} matches", fs=30)
+    if text is not None:
+        viz2d.add_text(0, text, fs=20)
+    else:
+        viz2d.add_text(0, f"{len(mkpts1)} matches", fs=30)
     viz_path = os.path.join(out_dir, "preds", f"match_{index:06d}.jpg")
     viz2d.save_plot(viz_path)
     return viz_path

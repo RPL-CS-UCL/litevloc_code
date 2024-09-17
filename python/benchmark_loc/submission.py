@@ -122,7 +122,8 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 out_match_dir = Path(os.path.join(args.out_dir, f"{str_matcher}_{str_solver}"))
                 out_match_dir.mkdir(parents=True, exist_ok=True)
                 Path(out_match_dir / "preds").mkdir(parents=True, exist_ok=True)
-                save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, out_match_dir, save_indice, n_viz=30, line_width=0.6)
+                text = f"{len(mkpts1)} matches: {scene}-{query_img.split('/')[1]}" # "N matches: s00000-frame_000000.jpg"
+                save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, out_match_dir, save_indice, n_viz=30, line_width=0.6, text=text)
                 save_indice += 1
                 if str_matcher == "duster" and args.viz: matcher.scene.show(cam_size=0.05)
         except Exception as e:
