@@ -63,6 +63,7 @@ def parse_arguments():
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='0.001 or 1')
 	parser.add_argument("--ros_rgb_img_type", type=str, default='raw', help="raw or compressed")
 	parser.add_argument("--global_pos_threshold", type=float, default=20.0, help="Distance threshold to actively global localization")
+	parser.add_argument("--min_master_conf_thre", type=float, default=0.0, help="Threshold for the confidence of the Mast3R matches")
 	parser.add_argument("--min_kpts_inliers_thre", type=int, default=200, help="Number of keypoint inliers to consider image matching as valid")
 	parser.add_argument("--min_solver_inliers_thre", type=int, default=150, help="Number of solver inliers to consider image matching as valid")
 	"""

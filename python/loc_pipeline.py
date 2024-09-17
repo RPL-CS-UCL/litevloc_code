@@ -70,6 +70,8 @@ class LocPipeline:
 
 	def init_img_matcher(self):
 		self.img_matcher = initialize_img_matcher(self.args.img_matcher, self.args.device, self.args.n_kpts)
+		if self.args.img_matcher == "master": 
+			self.img_matcher.min_conf_thr = self.args.min_master_conf_thre
 		logging.info(f"Image matcher: {self.args.img_matcher}")
 		
 	def init_pose_solver(self):
@@ -194,8 +196,7 @@ class LocPipeline:
 			rospy.logwarn(f'[Fail] No sufficient matching kpts')
 			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 		try:
-			# NOTE(gogojjh): the mickey matcher not used in this project
-			if self.args.img_matcher == "mickey":
+			if self.args.img_matcher == "mickey": # Not used in this project
 				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
 				R, t = to_numpy(R), to_numpy(t)
 				num_solver_inliers = self.img_matcher.scene["inliers"]
@@ -364,11 +365,11 @@ if __name__ == '__main__':
 
 	# Initialize the localization pipeline
 	loc_pipeline = LocPipeline(args, log_dir)
-	print('Initialize VPR Model')
+	rospy.loginfo('Initialize VPR Model')
 	loc_pipeline.init_vpr_model()
-	print('Initialize Image Matcher')
+	rospy.loginfo('Initialize Image Matcher')
 	loc_pipeline.init_img_matcher()
-	print('Initialize Pose Solver')
+	rospy.loginfo('Initialize Pose Solver')
 	loc_pipeline.init_pose_solver()
 	loc_pipeline.read_map_from_file()
 
