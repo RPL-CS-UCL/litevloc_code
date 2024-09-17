@@ -252,23 +252,24 @@ class LocPipeline:
 				rgb_img_obs = (np.transpose(to_numpy(self.curr_obs_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
 				mkpts_map, num_inliers = self.ref_map_node.get_matched_kpts()
 				mkpts_obs, _ = self.curr_obs_node.get_matched_kpts()
-				step_size = max(1, len(mkpts_map) // n_viz)
-				rgb_img_ref_bgr = cv2.cvtColor(rgb_img_ref, cv2.COLOR_RGB2BGR)
-				rgb_img_obs_bgr = cv2.cvtColor(rgb_img_obs, cv2.COLOR_RGB2BGR)
-				merged_img = np.hstack((rgb_img_ref_bgr, rgb_img_obs_bgr))
-				for i in range(0, len(mkpts_map), step_size):
-					x0, y0 = mkpts_map[i]
-					x1, y1 = mkpts_obs[i]
-					cv2.circle(rgb_img_ref_bgr, (int(x0), int(y0)), 3, (0, 255, 0), -1)
-					cv2.circle(rgb_img_obs_bgr, (int(x1), int(y1)), 3, (0, 255, 0), -1)
-					cv2.line(merged_img, (int(x0), int(y0)), (int(x1) + rgb_img_ref.shape[1], int(y1)), (0, 255, 0), 2)	
-				text = f'Matched inliers kpts: {num_inliers}'
-				text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)[0]
-				text_x = (merged_img.shape[1] - text_size[0])
-				text_y = (merged_img.shape[0] - text_size[1])
-				cv2.putText(merged_img, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3, cv2.LINE_AA)
-				img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(merged_img, "bgr8", header, compressed=False)
-				self.pub_map_obs.publish(img_msg)
+				if mkpts_map is not None and mkpts_obs is not None:
+					step_size = max(1, len(mkpts_map) // n_viz)
+					rgb_img_ref_bgr = cv2.cvtColor(rgb_img_ref, cv2.COLOR_RGB2BGR)
+					rgb_img_obs_bgr = cv2.cvtColor(rgb_img_obs, cv2.COLOR_RGB2BGR)
+					merged_img = np.hstack((rgb_img_ref_bgr, rgb_img_obs_bgr))
+					for i in range(0, len(mkpts_map), step_size):
+						x0, y0 = mkpts_map[i]
+						x1, y1 = mkpts_obs[i]
+						cv2.circle(rgb_img_ref_bgr, (int(x0), int(y0)), 3, (0, 255, 0), -1)
+						cv2.circle(rgb_img_obs_bgr, (int(x1), int(y1)), 3, (0, 255, 0), -1)
+						cv2.line(merged_img, (int(x0), int(y0)), (int(x1) + rgb_img_ref.shape[1], int(y1)), (0, 255, 0), 2)	
+					text = f'Matched inliers kpts: {num_inliers}'
+					text_size = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 1.5, 3)[0]
+					text_x = (merged_img.shape[1] - text_size[0])
+					text_y = (merged_img.shape[0] - text_size[1])
+					cv2.putText(merged_img, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3, cv2.LINE_AA)
+					img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(merged_img, "bgr8", header, compressed=False)
+					self.pub_map_obs.publish(img_msg)
 
 def perform_localization(loc: LocPipeline, args):
 	"""Main loop for processing observations"""

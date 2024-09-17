@@ -77,7 +77,7 @@
 					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256" >
 		<param name="frame_id_map" value="vloc_map" />
 		<param name="main_freq" value="1" />
-		<param name="conv_dist" value="2.5" />
+		<param name="conv_dist" value="5.0" />
 	</node>
 
 	<node name="ros_publish_goal_image" pkg="topo_loc" type="ros_publish_goal_image.py" output="screen"

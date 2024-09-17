@@ -110,7 +110,7 @@ class GlobalPlanner:
 				img_tensor = rgb_image_to_tensor(self.manual_goal_img, resize, normalized=False)
 				self.img_lock.release()
 				with torch.no_grad():
-					desc = self.loc_pipeline.vpr_model(img_tensor.unsqueeze(0).to(args.device)).cpu().numpy()
+					desc = self.loc_pipeline.vpr_model(img_tensor.unsqueeze(0).to(self.args.device)).cpu().numpy()
 				obs_node = ImageNode(0, img_tensor, None, desc, 
 									rospy.Time.now().to_sec(), np.zeros(3), np.array([0, 0, 0, 1]), 
 									None, resize, None, None)
