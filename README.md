@@ -36,6 +36,9 @@ Check ```RPL-RoboHike/docs/tutorial_setup_jetson_orin.md``` for details. Need to
     catkin build topo_loc -DPYTHON_EXECUTABLE=$(which python)
     ```
 
+### Instruction of Visual Navigation
+1. [Instruction in Running Visual Navigation with Simulated Matterport3d Environment](instruction_vnav_simu_matterport3d.md)
+
 ### Issues
 1. ```cannot import name 'cache' from 'functools'```
 Replace the original code with [Link](https://stackoverflow.com/questions/66846743/importerror-cannot-import-name-cache-from-functools)
