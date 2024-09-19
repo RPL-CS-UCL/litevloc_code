@@ -1,59 +1,49 @@
-### Installation
+## LiteVLoc
+### Requirements
 
-1. Download ```image-matching-methods``` and ```VPR-evaluation-methods```
-```
+Install ```image-matching-methods``` and ```VPR-evaluation-methods```
+```bash
 git clone git@github.com:gogojjh/VPR-methods-evaluation.git
 git clone git@github.com:gogojjh/image-matching-models.git --recursive
 cd image-matching-models && python -m pip install -e .
 ```
-
-2. Download ```pycpptools```
-```
+Install ```pycpptools```
+```bash
 git clone git@github.com:gogojjh/pycpptools.git
 cd pycpptools && python -m pip install -e .
 ```
-And modify ```PYTHONPATH```
-
-3. Create conda environment
-```
+Create conda environment
+```bash
 conda env create -f environment.yaml
-conda activate topo_loc && pip install -r requirements.txt
+conda activate litevloc && pip install -r requirements.txt
+```
+Set this in the bash: 
+```bash
+export PYTHONPATH=$PYTHONPATH:~/robohike_ws/src
+export TORCH_HOME=path_torch_hub
+```
+Build the ros package:
+```bash
+catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
 ```
 
-4. Install Pytorch and Torchvision on the Jetson platform
-Check ```RPL-RoboHike/docs/tutorial_setup_jetson_orin.md``` for details. Need to use python3.8 to be compatiable with pre-complied torch.
-
-5. Download ```Map-free-reloc```
-
-6. Set this in the bash: 
-    ```
-    export PYTHONPATH=$PYTHONPATH:~/robohike_ws/src
-    export TORCH_HOME=path_torch_hub
-    ```
-
-7. Build the ros package:
-    ```
-    catkin build topo_loc -DPYTHON_EXECUTABLE=$(which python)
-    ```
-
-### Instruction of Visual Navigation
-1. [Instruction in Running Visual Navigation with Simulated Matterport3d Environment](instruction_vnav_simu_matterport3d.md)
+### Instruction of Usage
+1. [Instruction in Performing Map-free Benchmarking](instruction_map_free_evaluation.md)
+2. [Instruction in Running Visual Navigation with Simulated Matterport3d Environment](instruction_vnav_simu_matterport3d.md)
 
 ### Issues
-1. ```cannot import name 'cache' from 'functools'```
-Replace the original code with [Link](https://stackoverflow.com/questions/66846743/importerror-cannot-import-name-cache-from-functools)
-    ```shell script
-    from functools import lru_cache
-    @lru_cache(maxsize=None)
-      def xxx
-    ```
-
-2. ```/lib/aarch64-linux-gnu/libp11-kit.so.0: undefined symbol: ffi_type_pointer, version LIBFFI_BASE_7.0``` using cv_bridge
-Change the ```.so```. Complete tutorial is shown [here](https://blog.csdn.net/qq_38606680/article/details/129118491)
-    ```shell script
-    rm /Rocket_ssd/miniconda3/envs/topo_loc/lib/libffi.so.7
-    sudo ln -s /usr/lib/aarch64-linux-gnu/libffi.so.7 /Rocket_ssd/miniconda3/envs/topo_loc/lib/libffi.so.7
-    ```
-
-3. ```ImportError: /lib/aarch64-linux-gnu/libgomp.so.1: cannot allocate memory in static TLS block```
-Set this in the bash file: ```export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1```
+Issue: ```cannot import name 'cache' from 'functools'```
+> Replace the original code with [Link](https://stackoverflow.com/questions/66846743/importerror-cannot-import-name-cache-from-functools)
+```bash
+from functools import lru_cache
+@lru_cache(maxsize=None)
+    def xxx
+```
+Issue: ```/lib/aarch64-linux-gnu/libp11-kit.so.0: undefined symbol: ffi_type_pointer, version LIBFFI_BASE_7.0``` using cv_bridge
+> Change the ```.so```. Complete tutorial is shown [here](https://blog.csdn.net/qq_38606680/article/details/129118491)
+```bash
+rm /Rocket_ssd/miniconda3/envs/topo_loc/lib/libffi.so.7
+sudo ln -s /usr/lib/aarch64-linux-gnu/libffi.so.7 /Rocket_ssd/miniconda3/envs/topo_loc/lib/libffi.so.7
+```
+Issue: ```ImportError: /lib/aarch64-linux-gnu/libgomp.so.1: cannot allocate memory in static TLS block```
+> Set this in the bash file: ```export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1```

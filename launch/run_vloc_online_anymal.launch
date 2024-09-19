@@ -1,4 +1,3 @@
-<!-- Rosbag test: roslaunch topo_loc run_vloc_online_anymal.launch env_id:=ops_msg use_rviz:=false use_nav:=true vloc_freq:=0.5 -->
 <!-- Real robot test: roslaunch topo_loc run_vloc_online_anymal.launch env_id:=ops_lab use_rviz:=false use_nav:=false vloc_freq:=0.5 -->
 <launch>
 
@@ -63,12 +62,6 @@
 			<remap from="/vloc/registered_scan" to="/registered_scan" />
 		</node>	
 	</group>
-
-  <!-- Static TF -->
-  <!-- Option 1: x y z yaw pitch roll (radians) frame_id child_frame_id period_in_ms -->
-  <!-- Option 2: x y z qx qy qz qw frame_id child_frame_id period_in_ms -->
-  <!-- <node pkg="tf" type="static_transform_publisher" name="vloc_trans_publisher" args="0 0 0 0 0 0 map vloc_map 10" /> -->
-	<!-- <node pkg="tf" type="static_transform_publisher" name="map_global_trans_publisher" args="0 0 0 0 0 0 map map_global 10" /> -->
 
 	<!-- Global Planning -->
 	<node name="ros_global_planner" pkg="topo_loc" type="ros_global_planner.py" output="screen"

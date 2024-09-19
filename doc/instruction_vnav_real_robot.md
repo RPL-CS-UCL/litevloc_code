@@ -1,6 +1,39 @@
-## Instraction of Running Visual Navigation with Simulated Matterport3d
+## Instraction of Running Visual Navigation with Real Robots
 
-### Installation
+### Explanation of Input and Output of Each Module in ROS
+**ros_loc_pipeline.py**
+```bash
+Subscribe: 
+    /color/camera_info: synchonrized camera info
+    /color/image: synchonrized undistorted color image
+    /depth/image: synchonrized undistorted depth image
+Publish:
+    /graph: topo-matrix map
+    /graph/poses: position and orientation of each node of the topo-matrix map
+    /vloc/odometry: low-rate vloc pose in vloc_map frame
+    /vloc/path: visualize /vloc/odometry as path
+    /vloc/path_gt: gt pose visualized as path (if available)
+    /vloc/image_map_obs: image matching between the reference and query
+```
+**ros_pose_fusion.py**
+```bash
+Subscribe:
+    /local/odometry: high-rate odometry from visual odometry/inertial odometry/wheel encoder ...
+    /global/odometry: low-rate odometry from visual localization
+Publish:
+    /pose_fusion/odometry: real-time and high-rate odometry from pose SLAM
+    /pose_fusion/path: visualize /pose_fusion/odometry as path
+    /pose_fusion/path_opt: low-rate odometry after the batch optimization from pose SLAM
+```
+
+### Use
+Run VLoc with pose fusion
+```bash
+roslaunch topo_loc run_vloc_online_anymal.launch env_id:=ops_lab use_rviz:=false use_nav:=false vloc_freq:=0.5
+```
+
+
+<!-- ### Installation
 1. Setup your ROS workspace
     ```shell-script
     mkdir -p catkin_ws/src && cd catkin_ws/src
@@ -91,4 +124,4 @@ NOTE: using the proposed **visual localization** and **iPlanner** instead
       <img src="media/ins_simu_results.png" width="50%" 
       alt="ins_simu_results">
     </a>
-</div>
+</div> -->

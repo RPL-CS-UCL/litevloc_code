@@ -1,4 +1,4 @@
-name: topo_loc
+name: litevloc
 channels:
   - defaults
   - conda-forge

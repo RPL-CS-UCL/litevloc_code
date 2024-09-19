@@ -7,8 +7,9 @@ Panels:
         - /Global Options1
         - /Status1
         - /Map1
+        - /Localization1
       Splitter Ratio: 0.5578406453132629
-    Tree Height: 413
+    Tree Height: 918
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -26,7 +27,7 @@ Panels:
   - Class: rviz/Time
     Name: Time
     SyncMode: 0
-    SyncSource: ObsImage
+    SyncSource: ImageGoalObs
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -99,6 +100,8 @@ Visualization Manager:
           Name: Graph
           Namespaces:
             edges: true
+            nodes: true
+            text: true
           Queue Size: 100
           Value: true
         - Class: rviz/MarkerArray
@@ -106,7 +109,7 @@ Visualization Manager:
           Marker Topic: /graph/shortest_path
           Name: GraphShortestPath
           Namespaces:
-            {}
+            edges: true
           Queue Size: 100
           Value: true
         - Alpha: 1
@@ -115,7 +118,7 @@ Visualization Manager:
           Axes Radius: 0.10000000149011612
           Class: rviz/PoseArray
           Color: 239; 41; 41
-          Enabled: true
+          Enabled: false
           Head Length: 0.15000000596046448
           Head Radius: 0.25
           Name: GraphPose
@@ -125,7 +128,7 @@ Visualization Manager:
           Shape: Axes
           Topic: /graph/poses
           Unreliable: false
-          Value: true
+          Value: false
       Enabled: true
       Name: Map
     - Class: rviz/Group
@@ -147,7 +150,7 @@ Visualization Manager:
               Scale: 1
               Value: true
             Value: true
-          Enabled: true
+          Enabled: false
           Keep: 1
           Name: LocOdometry
           Position Tolerance: 0
@@ -164,7 +167,7 @@ Visualization Manager:
             Value: Arrow
           Topic: /vloc/odometry
           Unreliable: false
-          Value: true
+          Value: false
         - Angle Tolerance: 0
           Class: rviz/Odometry
           Covariance:
@@ -182,7 +185,7 @@ Visualization Manager:
               Scale: 6
               Value: true
             Value: true
-          Enabled: true
+          Enabled: false
           Keep: 1
           Name: FusionOdometry
           Position Tolerance: 0
@@ -199,12 +202,12 @@ Visualization Manager:
             Value: Axes
           Topic: /pose_fusion/odometry
           Unreliable: false
-          Value: true
+          Value: false
         - Alpha: 1
           Buffer Length: 1
           Class: rviz/Path
           Color: 173; 127; 168
-          Enabled: true
+          Enabled: false
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
@@ -223,11 +226,11 @@ Visualization Manager:
           Shaft Length: 0.10000000149011612
           Topic: /depth_reg/path
           Unreliable: false
-          Value: true
+          Value: false
         - Alpha: 1
           Buffer Length: 1
           Class: rviz/Path
-          Color: 114; 159; 207
+          Color: 255; 0; 0
           Enabled: true
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
@@ -252,7 +255,7 @@ Visualization Manager:
           Buffer Length: 1
           Class: rviz/Path
           Color: 239; 41; 41
-          Enabled: true
+          Enabled: false
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
@@ -271,12 +274,12 @@ Visualization Manager:
           Shaft Length: 0.10000000149011612
           Topic: /vloc/path
           Unreliable: false
-          Value: true
+          Value: false
         - Alpha: 1
           Buffer Length: 1
           Class: rviz/Path
           Color: 252; 233; 79
-          Enabled: true
+          Enabled: false
           Head Diameter: 0.30000001192092896
           Head Length: 0.20000000298023224
           Length: 0.30000001192092896
@@ -295,7 +298,7 @@ Visualization Manager:
           Shaft Length: 0.10000000149011612
           Topic: /pose_fusion/path_opt
           Unreliable: false
-          Value: true
+          Value: false
         - Class: rviz/Image
           Enabled: true
           Image Topic: /vloc/image_map_obs
@@ -309,7 +312,7 @@ Visualization Manager:
           Unreliable: false
           Value: true
         - Class: rviz/Image
-          Enabled: true
+          Enabled: false
           Image Topic: /habitat_camera/color/image
           Max Value: 1
           Median window: 5
@@ -319,7 +322,7 @@ Visualization Manager:
           Queue Size: 2
           Transport Hint: raw
           Unreliable: false
-          Value: true
+          Value: false
       Enabled: true
       Name: Localization
     - Alpha: 0.699999988079071
@@ -330,7 +333,7 @@ Visualization Manager:
       Name: waypoint
       Queue Size: 10
       Radius: 0.5
-      Topic: /way_point
+      Topic: /vloc/way_point
       Unreliable: false
       Value: true
     - Class: rviz/Image
@@ -372,7 +375,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: -0.009999686852097511
+      Angle: 3.129243850708008e-07
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
@@ -382,24 +385,24 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 23.503353118896484
+      Scale: 65.21153259277344
       Target Frame: habitat_camera
-      X: -4.300511360168457
-      Y: 4.8499274253845215
+      X: -1.477858304977417
+      Y: 0.40802624821662903
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: true
   GoalImage:
     collapsed: false
-  Height: 696
+  Height: 1391
   Hide Left Dock: true
   Hide Right Dock: true
   ImageGoalObs:
     collapsed: false
   ObsImage:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd000000040000000000000187000001dafc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c00610079007300000000c1000001da000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000001dafc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a0056006900650077007300000000c1000001da000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000000000020000039b00000094fc0100000004fb000000120047006f0061006c0049006d0061006700650100000000000000e10000009500fffffffb00000010004f006200730049006d00610067006501000000e7000000e40000009100fffffffb000000180049006d0061006700650047006f0061006c004f0062007301000001d1000001ca000000b000fffffffb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004b00000003efc0100000002fb0000000800540069006d00650000000000000004b00000041800fffffffb0000000800540069006d006501000000000000045000000000000000000000039b000001da00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd000000040000000000000187000003d1fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730000000183000003d1000000c700fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000003f5fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073000000015f000003f5000000a000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b20000000000000000000000020000044000000142fc0100000004fb000000120047006f0061006c0049006d0061006700650100000000000001910000007500fffffffb000000180049006d0061006700650047006f0061006c004f006200730100000197000002a90000008d00fffffffb00000010004f006200730049006d0061006700650000000208000002380000007100fffffffb0000000a00560069006500770073030000004e00000080000002e100000197000000030000044000000139fc0100000002fb0000000800540069006d00650000000000000004b00000035c00fffffffb0000000800540069006d0065010000000000000450000000000000000000000440000003d100000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -408,6 +411,6 @@ Window Geometry:
     collapsed: false
   Views:
     collapsed: true
-  Width: 923
-  X: 2512
+  Width: 1088
+  X: 2347
   Y: 24
