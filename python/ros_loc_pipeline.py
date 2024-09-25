@@ -42,8 +42,6 @@ import pycpptools.src.python.utils_ros as pytool_ros
 import pycpptools.src.python.utils_sensor as pytool_sensor
 import pycpptools.src.python.utils_algorithm as pytool_algo
 
-# if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
-
 fused_poses = pytool_algo.stpose.StampedPoses()
 rgb_depth_queue = queue.Queue()
 lock = threading.Lock()

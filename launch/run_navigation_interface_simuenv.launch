@@ -1,0 +1,19 @@
+<launch>
+
+	<!-- Navigation Interface -->
+	<!-- Transform the frame_id of localization odometry to robot -->
+	<!-- Publish: /vloc/state_estimation, /vloc/state_estimation_path -->
+	<node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="screen">
+		<param name="loc_world_frame_id" value="vloc_map" />
+		<param name="loc_sensor_frame_id" value="habitat_camera" />
+		<param name="world_frame_id" value="vloc_map_not_used" />
+		<param name="sensor_frame_id" value="habitat_camera" />
+		<param name="base_frame_id" value="vehicle" /> <!-- robot_id -->
+		<param name="point_skip" type="int" value="5" />
+
+		<remap from="/odometry" to="/pose_fusion/odometry" />
+		<remap from="/camera_info" to="/habitat_camera/color/camera_info" />
+		<remap from="/depth_image" to="/habitat_camera/depth/image" />
+	</node>	
+
+</launch>
