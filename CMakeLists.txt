@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(topo_loc)
+project(litevloc)
 
 set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_STANDARD 14)

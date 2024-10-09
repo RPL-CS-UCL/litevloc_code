@@ -1,5 +1,5 @@
 export PYTHON_PROJECT_PATH=/Titan/code/robohike_ws/src/pycpptools/
-export DATA_PATH=/Rocket_ssd/dataset/data_topo_loc/ucl_campus
+export DATA_PATH=/Rocket_ssd/dataset/data_litevloc/ucl_campus
 
 export SCENES=("ops_msg" "ops_msg" "ops_msg")
 export SEQ_NAMES=("ops_msg_seq0" "ops_msg_seq1" "ops_msg_seq2")

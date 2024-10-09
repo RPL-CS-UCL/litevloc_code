@@ -29,7 +29,7 @@ Publish:
 ### Use
 Run VLoc with pose fusion
 ```bash
-roslaunch topo_loc run_vloc_online_anymal.launch env_id:=ops_lab use_rviz:=false use_nav:=false vloc_freq:=0.5
+roslaunch litevloc run_vloc_online_anymal.launch env_id:=ops_lab use_rviz:=false use_nav:=false vloc_freq:=0.5
 ```
 
 
@@ -110,8 +110,8 @@ NOTE: using the proposed **visual localization** and **iPlanner** instead
     ```
 2. Run the visual localization
     ```
-    conda activate topo_loc
-    roslaunch topo_loc run_vloc_online_simuenv.launch env_id:=17DRP5sb8fy map_path:=data_topo_loc/matterport3d/vloc_17DRP5sb8fy/out_map/ use_nav:=true
+    conda activate litevloc
+    roslaunch litevloc run_vloc_online_simuenv.launch env_id:=17DRP5sb8fy map_path:=data_litevloc/matterport3d/vloc_17DRP5sb8fy/out_map/ use_nav:=true
     ```
 3. Run the iPlanner
     ```

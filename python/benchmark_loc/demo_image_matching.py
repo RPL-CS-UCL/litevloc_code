@@ -1,7 +1,7 @@
 """
 Usage: python test_image_matching_method.py \
 --matcher duster \
---input /Titan/code/robohike_ws/src/topo_loc/python/test/logs/match_pairs.txt \
+--input /Titan/code/robohike_ws/src/litevloc/python/test/logs/match_pairs.txt \
 --image_sizesd 288 512
 """
 

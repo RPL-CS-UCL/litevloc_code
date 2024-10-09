@@ -2,30 +2,30 @@
 
 """
 python camera_keyframe_select.py \
---path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_general/ \
---out_dir /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
+--path_dataset /Rocket_ssd/dataset/data_litevloc/matterport3d/out_17DRP5sb8fy/out_general/ \
+--out_dir /Rocket_ssd/dataset/data_litevloc/matterport3d/out_17DRP5sb8fy/out_map \
 --grid_resolution 0.1 --num_select_cam 15 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
---path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_EDJbREhghzL/out_general/ \
---out_dir /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_EDJbREhghzL/out_map \
+--path_dataset /Rocket_ssd/dataset/data_litevloc/matterport3d/out_EDJbREhghzL/out_general/ \
+--out_dir /Rocket_ssd/dataset/data_litevloc/matterport3d/out_EDJbREhghzL/out_map \
 --grid_resolution 0.1 --num_select_cam 25 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
---path_dataset /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_B6ByNegPMK/out_general/ \
---out_dir /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_B6ByNegPMK/out_map \
+--path_dataset /Rocket_ssd/dataset/data_litevloc/matterport3d/out_B6ByNegPMK/out_general/ \
+--out_dir /Rocket_ssd/dataset/data_litevloc/matterport3d/out_B6ByNegPMK/out_map \
 --thre_trans 0.3 --thre_rot 5 \
 --grid_resolution 0.1 --num_select_cam 62 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
---path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_msg/out_general/ \
---out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_msg/out_map/ \
+--path_dataset /Rocket_ssd/dataset/data_litevloc/ucl_campus/vloc_ops_msg/out_general/ \
+--out_dir /Rocket_ssd/dataset/data_litevloc/ucl_campus/vloc_ops_msg/out_map/ \
 --thre_trans 1.0 --thre_rot 20 \
 --grid_resolution 0.2 --num_select_cam 120 --coverage_threshold 0.9
 
 python camera_keyframe_select.py \
---path_dataset /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_general/ \
---out_dir /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_lab/out_map/ \
+--path_dataset /Rocket_ssd/dataset/data_litevloc/ucl_campus/vloc_ops_lab/out_general/ \
+--out_dir /Rocket_ssd/dataset/data_litevloc/ucl_campus/vloc_ops_lab/out_map/ \
 --thre_trans 6.0 --thre_rot 60.0 \
 --naive_selection True --grid_resolution 0.5
 """

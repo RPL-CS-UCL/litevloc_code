@@ -2,7 +2,7 @@
 	<!-- Base Parameters -->
 	<param name="use_sim_time" value="true" />
 
-	<node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="screen">
+	<node name="depth_registration" pkg="litevloc" type="depth_registration.py" output="screen">
 		<remap from="/depth/image" to="/zed2/zed_node/depth/depth_registered" />
 		<remap from="/depth/camera_info" to="/zed2/zed_node/depth/camera_info" />
 		<param name="frame_id_map" value="vloc_map" />

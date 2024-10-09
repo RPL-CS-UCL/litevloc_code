@@ -2,7 +2,7 @@
 """
 Usage: 
 python ros_vis_map.py \
---dataset_path /Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_ops_msg/out_map
+--dataset_path /Rocket_ssd/dataset/data_litevloc/ucl_campus/vloc_ops_msg/out_map
 """
 
 import numpy as np

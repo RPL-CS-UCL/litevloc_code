@@ -1,7 +1,7 @@
 """
 Usage:
 python pose_fusion.py \
---data_path /Rocket_ssd/dataset/data_topo_loc/17DRP5sb8fy/
+--data_path /Rocket_ssd/dataset/data_litevloc/17DRP5sb8fy/
 """
 
 import os

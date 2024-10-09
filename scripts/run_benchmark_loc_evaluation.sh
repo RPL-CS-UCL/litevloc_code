@@ -6,7 +6,7 @@
 #   sift-lg superpoint-lg gim-lg xfeat-lg sift-nn orb-nn gim-dkm xfeat
 
 export MAP_FREE_PATH="/Titan/code/robohike_ws/src/image_matching_models/third_party/mickey"
-export DATASET_PATH="/Rocket_ssd/dataset/data_topo_loc/matterport3d/map_free_eval/"
+export DATASET_PATH="/Rocket_ssd/dataset/data_litevloc/matterport3d/map_free_eval/"
 models=("roma" "tiny-roma" "duster" "master" "loftr" "eloftr" "matchformer" "xfeat-star" "sift-lg" "superpoint-lg" "gim-lg" "xfeat-lg" "sift-nn" "orb-nn" "gim-dkm" "xfeat")
 
 cd $MAP_FREE_PATH

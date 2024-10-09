@@ -1,5 +1,5 @@
 export PYTHON_PROJECT_PATH=/Titan/code/robohike_ws/src/pycpptools/
-export DATA_PATH=/Rocket_ssd/dataset/data_topo_loc/matterport3d
+export DATA_PATH=/Rocket_ssd/dataset/data_litevloc/matterport3d
 
 export SCENES=("17DRP5sb8fy" "17DRP5sb8fy" "17DRP5sb8fy" "EDJbREhghzL" "EDJbREhghzL" "EDJbREhghzL" "B6ByNegPMK" "B6ByNegPMK" "B6ByNegPMK")
 export SEQ_NAMES=("17DRP5sb8fy_seq0" "17DRP5sb8fy_seq1" "17DRP5sb8fy_seq2" "EDJbREhghzL_seq0" "EDJbREhghzL_seq1" "EDJbREhghzL_seq2" "B6ByNegPMK_seq0" "B6ByNegPMK_seq1" "B6ByNegPMK_seq2")

@@ -1,4 +1,4 @@
-rosbag record -o /Rocket_ssd/dataset/data_topo_loc/navigation_result \
+rosbag record -o /Rocket_ssd/dataset/data_litevloc/navigation_result \
   /habitat_camera/color/image /habitat_camera/depth/image /habitat_camera/odometry \
   /goal_image /graph /graph/poses /graph/shortest_path \
   /vloc/odometry /vloc/path /vloc/path_gt /vloc/image_map_obs \

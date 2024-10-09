@@ -1,9 +1,9 @@
-<!-- Real robot test: roslaunch topo_loc run_vloc_online_anymal.launch env_id:=ops_lab use_rviz:=false use_nav:=false vloc_freq:=0.5 -->
+<!-- Real robot test: roslaunch litevloc run_vloc_online_anymal.launch env_id:=ops_lab use_rviz:=false use_nav:=false vloc_freq:=0.5 -->
 <launch>
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="ops_msg" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/ucl_campus/vloc_$(arg env_id)/out_map/" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/ucl_campus/vloc_$(arg env_id)/out_map/" />
 	<arg name="use_rviz" default="false" />
 	<arg name="use_nav" default="false" />
 	<param name="use_sim_time" value="false" />
@@ -15,12 +15,12 @@
 	<arg name="global_pos_threshold" default="10.0" /> 
 	<arg name="vloc_freq" default="1.0" />
 
-	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
+	<node name="ros_loc_pipeline" pkg="litevloc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
 					--image_size 512 288
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 
 					--img_matcher master --pose_solver pnp 
-					--config_pose_solver $(find topo_loc)/python/config/dataset/ucl_campus.yaml --viz
+					--config_pose_solver $(find litevloc)/python/config/dataset/ucl_campus.yaml --viz
 					--ros_rgb_img_type compressed
 					--global_pos_threshold $(arg global_pos_threshold)
 					--min_master_conf_thre 1.2
@@ -35,7 +35,7 @@
 		<param name="frame_id_map" value="vloc_map" />
 	</node>
 
-	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log" 
+	<node name="ros_pose_fusion" pkg="litevloc" type="ros_pose_fusion.py" output="log" 
 		args="--env_type indoor">
 		<remap from="/local/odometry" to="/state_estimator/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
@@ -64,7 +64,7 @@
 	</group>
 
 	<!-- Global Planning -->
-	<node name="ros_global_planner" pkg="topo_loc" type="ros_global_planner.py" output="screen"
+	<node name="ros_global_planner" pkg="litevloc" type="ros_global_planner.py" output="screen"
 		args="--dataset_path $(arg map_path) \
 					--image_size 512 288 --device=cuda \
 					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256" >
@@ -73,13 +73,13 @@
 		<param name="conv_dist" value="5.0" />
 	</node>
 
-	<node name="ros_publish_goal_image" pkg="topo_loc" type="ros_publish_goal_image.py" output="screen"
+	<node name="ros_publish_goal_image" pkg="litevloc" type="ros_publish_goal_image.py" output="screen"
 		args="--goal_image_path $(arg map_path)" >
 	</node>
 	
 	<!-- RVIZ -->
 	<group if="$(arg use_rviz)">
-		<node name="rviz" pkg="rviz" type="rviz" args="-d $(find topo_loc)/rviz_cfg/topo_graph_anymal.rviz" required="false" />
+		<node name="rviz" pkg="rviz" type="rviz" args="-d $(find litevloc)/rviz_cfg/topo_graph_anymal.rviz" required="false" />
 	</group>
 
 </launch>

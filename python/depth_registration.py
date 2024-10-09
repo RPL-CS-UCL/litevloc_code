@@ -1,4 +1,4 @@
-#! /opt/conda/envs/topo_loc/bin/python
+#! /opt/conda/envs/litevloc/bin/python
 
 import rospy
 from sensor_msgs.msg import Image, CameraInfo

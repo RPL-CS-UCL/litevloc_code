@@ -2,7 +2,7 @@
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/vloc_$(arg env_id)/out_map/" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_$(arg env_id)/out_map/" />
 	<arg name="setup_simu_env" default="true" />
 	<arg name="use_rviz" default="true" />
 	<arg name="use_nav" default="true" />
@@ -53,7 +53,7 @@
 
 	<!-- Planning -->
 	<group if="$(arg setup_simu_env)">
-		<node name="ros_global_planner" pkg="topo_loc" type="ros_global_planner.py" output="log"
+		<node name="ros_global_planner" pkg="litevloc" type="ros_global_planner.py" output="log"
 			args="--dataset_path $(arg map_path) \
 						--image_size 512 288 --device=cuda \
 						--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256" >
@@ -62,18 +62,18 @@
 			<param name="conv_dist" value="0.5" />
 		</node>
 
-		<node name="ros_publish_goal_image" pkg="topo_loc" type="ros_publish_goal_image.py" output="log"
+		<node name="ros_publish_goal_image" pkg="litevloc" type="ros_publish_goal_image.py" output="log"
 			args="--goal_image_path $(arg map_path)" >
 		</node>
 	</group>
 
 	<!-- Localization -->
-	<node name="ros_loc_pipeline" pkg="topo_loc" type="ros_loc_pipeline.py" output="screen"
+	<node name="ros_loc_pipeline" pkg="litevloc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
 					--image_size 512 288
 					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 
 					--img_matcher master --pose_solver pnp 
-					--config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml --viz
+					--config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml --viz
 					--ros_rgb_img_type raw
 					--global_pos_threshold $(arg global_pos_threshold)
 					--min_master_conf_thre 1.5
@@ -88,7 +88,7 @@
 		<param name="max_depth" value="10.0" />
 	</node>
 
-	<node name="depth_registration" pkg="topo_loc" type="depth_registration.py" output="log">
+	<node name="depth_registration" pkg="litevloc" type="depth_registration.py" output="log">
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/depth/camera_info" to="/habitat_camera/depth/camera_info" />
 		<param name="frame_id_map" value="vloc_map" />
@@ -97,7 +97,7 @@
 		<param name="max_depth" value="10.0" />
 	</node>
 
-	<node name="ros_pose_fusion" pkg="topo_loc" type="ros_pose_fusion.py" output="log"
+	<node name="ros_pose_fusion" pkg="litevloc" type="ros_pose_fusion.py" output="log"
 		args="--env_type indoor">
 		<remap from="/local/odometry" to="/depth_reg/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
@@ -111,7 +111,7 @@
 	
 	<!-- RVIZ -->
 	<group if="$(arg use_rviz)">
-		<node name="rviz" pkg="rviz" type="rviz" args="-d $(find topo_loc)/rviz_cfg/topo_graph_matterport3d.rviz" required="false" />
+		<node name="rviz" pkg="rviz" type="rviz" args="-d $(find litevloc)/rviz_cfg/topo_graph_matterport3d.rviz" required="false" />
 	</group>
 
 </launch>

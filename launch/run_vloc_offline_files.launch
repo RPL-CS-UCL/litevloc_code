@@ -2,19 +2,19 @@
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_topo_loc/matterport3d/vloc_$(arg env_id)/out_map/" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_$(arg env_id)/out_map/" />
 	<arg name="use_rviz" default="false" />
 
 	<param name="use_sim_time" value="false" />
 
 	<!-- Localization -->
-	<node name="loc_pipeline" pkg="topo_loc" type="loc_pipeline.py" output="screen"
+	<node name="loc_pipeline" pkg="litevloc" type="loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
 					--image_size 512 288 --device=cuda
 					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256
 					--save_descriptors --num_preds_to_save 3
 					--img_matcher master --save_img_matcher --n_kpts 1024
-					--pose_solver pnp --config_pose_solver $(find topo_loc)/python/config/dataset/matterport3d.yaml
+					--pose_solver pnp --config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml
 					--viz
 					--global_pos_threshold 20.0
 					--min_inliers_threshold 300" >
@@ -29,7 +29,7 @@
 	
 	<!-- RVIZ -->
 	<group if="$(arg use_rviz)">
-		<node name="rviz" pkg="rviz" type="rviz" args="-d $(find topo_loc)/rviz_cfg/topo_graph_matterport3d.rviz" required="false" />
+		<node name="rviz" pkg="rviz" type="rviz" args="-d $(find litevloc)/rviz_cfg/topo_graph_matterport3d.rviz" required="false" />
 	</group>
 
 </launch>

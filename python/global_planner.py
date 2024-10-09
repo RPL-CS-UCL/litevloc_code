@@ -3,7 +3,7 @@
 """
 Usage: 
 python ros_global_planner.py \
---dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/vloc_17DRP5sb8fy/out_map \
+--dataset_path /Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_17DRP5sb8fy/out_map \
 --image_size 288 512 --device=cuda \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors \
 --num_preds_to_save 3 

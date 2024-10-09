@@ -2,7 +2,7 @@
 
 """
 Usage:
-python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/vloc_17DRP5sb8fy/out_map \
+python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_17DRP5sb8fy/out_map \
 --method cosplace --backbone ResNet18 --descriptors_dimension 256 \
 --num_preds_to_save 3 \
 --image_size 512 288 \
@@ -10,7 +10,7 @@ python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_topo_l
 --save_descriptors
 
 Usage for Jetson: 
-python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/vloc_17DRP5sb8fy/out_map \
+python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_17DRP5sb8fy/out_map \
 --method cosplace --backbone ResNet18 --descriptors_dimension 256 \
 --num_preds_to_save 3 \
 --image_size 512 288 \

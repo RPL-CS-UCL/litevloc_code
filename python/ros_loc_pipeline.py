@@ -3,7 +3,7 @@
 """
 Usage: 
 python loc_pipeline.py \
---dataset_path /Rocket_ssd/dataset/data_topo_loc/matterport3d/out_17DRP5sb8fy/out_map \
+--dataset_path /Rocket_ssd/dataset/data_litevloc/matterport3d/out_17DRP5sb8fy/out_map \
 --image_size 288 512 --device=cuda \
 --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
 --img_matcher master --save_img_matcher \
@@ -11,7 +11,7 @@ python loc_pipeline.py \
 --viz
 
 Usage: 
-rosbag record -O /Titan/dataset/data_topo_loc/anymal_lab_upstair_20240722_0/vloc.bag \
+rosbag record -O /Titan/dataset/data_litevloc/anymal_lab_upstair_20240722_0/vloc.bag \
 /vloc/odom /vloc/path /vloc/path_gt /vloc/image_map_obs
 """
 
