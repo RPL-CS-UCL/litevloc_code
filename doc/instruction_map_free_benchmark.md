@@ -38,7 +38,7 @@ You can choose any of the following methods (input to `get_matcher()`):
 ### Use
 Setup path for dataset and matcher for your evaluation. We support above image matchers defined in [image-matching-models](https://github.com/gmberton/image-matching-models)
 ```bash
-bash scripts/run_benchmark_loc_submission.py
+bash scripts/run_benchmark_loc_submission.sh
 ```
 Perform evaluation using [Mickey Evaluation Scripts](https://github.com/nianticlabs/mickey)
 ```bash

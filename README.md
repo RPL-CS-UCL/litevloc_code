@@ -28,8 +28,8 @@ catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
 ```
 
 ### Instruction of Usage
-1. [Instruction in Performing Map-free Benchmarking](instruction_map_free_evaluation.md)
-2. [Instruction in Running Visual Navigation with Simulated Matterport3d Environment](instruction_vnav_simu_matterport3d.md)
+1. [Instruction in Performing Map-free Benchmarking](doc/instruction_map_free_benchmark.md)
+2. [Instruction in Running Visual Navigation with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
 
 ### Issues
 Issue: ```cannot import name 'cache' from 'functools'```
