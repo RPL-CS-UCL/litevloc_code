@@ -1,5 +1,5 @@
 # [Computation]:
-# python submission.py --config ../config/dataset/mapfree.yaml --models master --pose_solver essentialmatrixmetricmean --out_dir /Titan/dataset/data_mapfree/results --split val
+# python submission.py --config ../config/dataset/matterport3d.yaml --split test --out_dir xx --models master --debug
 # [Evaluation] (in mickey folder):
 # python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetricmean/submission.zip --dataset_path /Titan/dataset/data_mapfree --split val --log error
 
@@ -36,6 +36,7 @@ class Pose:
     tar_image_name: str
     q: np.ndarray
     t: np.ndarray
+    loss: float
 
     def __str__(self) -> str:
         formatter = {"float": lambda v: f"{v:.6f}"}
@@ -47,13 +48,14 @@ class Pose:
             self.t, formatter=formatter, max_line_width=max_line_width
         )[1:-1]
         str_ref_image_names = " ".join(ref_image_name for ref_image_name in self.list_ref_image_name)
-        return f"{self.top_K} {self.tar_image_name} {str_ref_image_names} {q_str} {t_str}"
+        return f"{self.top_K} {self.tar_image_name} {str_ref_image_names} {q_str} {t_str} {self.loss:.3f}"
 
 def predict(loader, estimator, str_estimator):
     results_dict = defaultdict(list)
     running_time = []
+    save_indice = 0
     for data in tqdm(loader):
-        # try:
+        try:
             data = data_to_model_device(data, estimator) # Probably convert data to cuda
             list_ref_img = [img.squeeze(0) for img in data['list_image0']] # (3, H, W)
             list_ref_img_K = [K.squeeze(0) for K in data['list_K_color0']]
@@ -64,8 +66,6 @@ def predict(loader, estimator, str_estimator):
             tar_img_K = data['K_color1'].squeeze(0)
             tar_img_Kori = data['Kori_color1'].squeeze(0)
             init_img1_pose = data['image1_pose'].squeeze(0)
-
-            print(data['pair_names'][1], data['pair_names'][0])
 
             """Absolute Pose Estimation"""
             start_time = time.time()
@@ -91,32 +91,38 @@ def predict(loader, estimator, str_estimator):
             top_K = data['top_K'].detach().cpu().item()
             list_ref_img_name = [name[0] for name in data['pair_names'][0]]
             tar_img_name = data['pair_names'][1][0]
-
             estimated_pose = Pose(top_K=top_K,
                                   list_ref_image_name=list_ref_img_name, 
                                   tar_image_name=tar_img_name,
                                   q=mat2quat(Rcw).reshape(-1),
-                                  t=tcw.reshape(-1))
+                                  t=tcw.reshape(-1),
+                                  loss=loss)
             results_dict[scene].append(estimated_pose)
-
 
             if args.debug:
                 print(tcw.T)
                 if args.viz:
-                    estimator.scene.show()
-                # out_match_dir = Path(os.path.join(args.out_dir, f"{str_matcher}_{str_solver}"))
-                # out_match_dir.mkdir(parents=True, exist_ok=True)
-                # Path(out_match_dir / "preds").mkdir(parents=True, exist_ok=True)
+                    estimator.scene.show(cam_size=0.2)
+                out_est_dir = Path(os.path.join(args.out_dir, f"{str_estimator}"))
+                out_est_dir.mkdir(parents=True, exist_ok=True)
+                Path(out_est_dir / "preds").mkdir(parents=True, exist_ok=True)
                 # text = f"{len(mkpts1)} matches: {scene}-{query_img.split('/')[1]}" # "N matches: s00000-frame_000000.jpg"
                 # save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, out_match_dir, save_indice, n_viz=30, line_width=0.6, text=text)
-                # save_indice += 1
-                # if str_matcher == "duster" and args.viz: matcher.scene.show(cam_size=0.05)
-        # except Exception as e:
-        #     # scene = data['scene_id'][0]
-        #     # query_img = data['pair_names'][1][0]
-        #     # tqdm.write(f"Error with {str_matcher}: {e}")
-        #     # tqdm.write(f"(duster) May occur due to no overlapping regions or insufficient matching at {scene}/{query_img}.")
-        #     pass
+                save_indice += 1
+        except Exception as e:
+            scene = data['scene_id'][0]
+            top_K = data['top_K'].detach().cpu().item()
+            list_ref_img_name = [name[0] for name in data['pair_names'][0]]
+            tar_img_name = data['pair_names'][1][0]
+            estimated_pose = Pose(top_K=top_K,
+                                  list_ref_image_name=list_ref_img_name, 
+                                  tar_image_name=tar_img_name,
+                                  q=np.array([None, None, None, None]).reshape(-1),
+                                  t=np.array([None, None, None, None]).reshape(-1),
+                                  loss=0)
+            results_dict[scene].append(estimated_pose)
+            tqdm.write(f"Error with {str_estimator}: {e}")
+            tqdm.write(f"May occur due to no overlapping regions or insufficient matching at {scene}/{tar_img_name}.")
 
     avg_runtime = running_time[0] if len(running_time) == 1 else np.mean(running_time)
     return results_dict, avg_runtime

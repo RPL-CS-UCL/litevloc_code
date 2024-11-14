@@ -177,11 +177,13 @@ class MapFreeScene(data.Dataset):
 class MapFreeDataset(data.ConcatDataset):
     def __init__(self, cfg, mode, transforms=None):
         assert mode in ['train', 'val', 'test'], 'Invalid dataset mode'
+        assert cfg.DATASET.TOP_K >= 2 # At least 2 images for metric-based localization
+        assert cfg.DATASET.N_QUERY >= 1 # At least 1 query for localization
 
         data_root = Path(cfg.DATASET.DATA_ROOT) / mode
         resize = (cfg.DATASET.WIDTH, cfg.DATASET.HEIGHT)
 
-        if mode=='test':
+        if mode == 'test':
             test_scene = True
         else:
             test_scene = False
