@@ -1,4 +1,5 @@
 python/test/logs/
+python/test/*
 
 condaenv*
 *.swp
@@ -11,3 +12,4 @@ __pycache__
 
 dataset/
 *.rviz
+
