@@ -19,7 +19,6 @@ from transforms3d.quaternions import mat2quat
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../pose_estimation_models"))
 from estimator import available_models, get_estimator
-from estimator.utils import to_numpy, to_tensor
 
 from ape_default import cfg
 from datamodules import DataModule
@@ -50,7 +49,7 @@ class Pose:
         str_ref_image_names = " ".join(ref_image_name for ref_image_name in self.list_ref_image_name)
         return f"{self.top_K} {self.tar_image_name} {str_ref_image_names} {q_str} {t_str} {self.loss:.3f}"
 
-def predict(loader, estimator, str_estimator):
+def predict(loader, estimator, str_estimator, cfg):
     results_dict = defaultdict(list)
     running_time = []
     save_indice = 0
@@ -102,7 +101,7 @@ def predict(loader, estimator, str_estimator):
             if args.debug:
                 print(tcw.T)
                 if args.viz:
-                    estimator.scene.show(cam_size=0.2)
+                    estimator.scene.show(cam_size=cfg.DATASET.VIZ_CAM_SIZE)
                 out_est_dir = Path(os.path.join(args.out_dir, f"{str_estimator}"))
                 out_est_dir.mkdir(parents=True, exist_ok=True)
                 Path(out_est_dir / "preds").mkdir(parents=True, exist_ok=True)
@@ -156,7 +155,7 @@ def eval(args):
         for model in args.models:
             estimator = get_estimator(model, device=args.device)
             print(f"Running APE Method: {model}")
-            results_dict, avg_runtime = predict(dataloader, estimator, model)
+            results_dict, avg_runtime = predict(dataloader, estimator, model, cfg)
 
             # Save runtimes to txt
             runtime_str = f"{model}: {avg_runtime:.3f}s"

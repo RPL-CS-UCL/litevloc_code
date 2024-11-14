@@ -1,9 +1,10 @@
 MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
-  DATA_ROOT: '/Rocket_ssd/dataset/data_topo_loc/hkustgz_campus/map_free_eval'
-  SCENES: [s00000, s00001, s00003, s00004, s00005, s00007, s00008, s00009, s00010, s00011, s00013, s00014, s00015, s00016, s00017, s00019, 
-           s00020, s00021, s00022, s00023, s00026, s00027, s00029, s00030, s00032, s00033, s00034, s00036, s00038, s00039]
+  DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/hkustgz_campus/map_free_eval'
+  SCENES: [s00000]
+  # SCENES: [s00000, s00001, s00003, s00004, s00005, s00007, s00008, s00009, s00010, s00011, s00013, s00014, s00015, s00016, s00017, s00019, 
+  #          s00020, s00021, s00022, s00023, s00026, s00027, s00029, s00030, s00032, s00033, s00034, s00036, s00038, s00039]
   ESTIMATED_DEPTH: ray_neighbor   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
   HEIGHT: 288             # Images are resized
@@ -12,6 +13,9 @@ DATASET:
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!
   MAX_DEPTH: 100.0
+  TOP_K: 2
+  N_QUERY: 1
+  VIZ_CAM_SIZE: 1.0
 PNP:
   RANSAC_ITER: 1000
   REPROJECTION_INLIER_THRESHOLD: 3 # pixel

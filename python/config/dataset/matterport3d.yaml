@@ -8,7 +8,7 @@ DATASET:
   #          s00020, s00021, s00022, s00023, s00024, s00025, s00026]
   ESTIMATED_DEPTH: zed   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
-  HEIGHT: 288             # RGB Images are resized
+  HEIGHT: 160             # RGB Images are resized
   WIDTH: 512
   MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
@@ -16,6 +16,7 @@ DATASET:
   MAX_DEPTH: 15.0
   TOP_K: 2
   N_QUERY: 1
+  VIZ_CAM_SIZE: 0.2
 PNP:
   RANSAC_ITER: 1000
   REPROJECTION_INLIER_THRESHOLD: 3 # pixel

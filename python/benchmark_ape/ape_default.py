@@ -91,6 +91,7 @@ _CN.DATASET.QUERY_FRAME_COUNT = 1   # number of query frames to infer from. 1 or
 _CN.DATASET.MAX_DEPTH = None
 _CN.DATASET.N_QUERY = None
 _CN.DATASET.TOP_K = None
+_CN.DATASET.VIZ_CAM_SIZE = None
 
 ############# TRAINING #############
 _CN.TRAINING = CN()
