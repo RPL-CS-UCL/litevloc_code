@@ -18,7 +18,9 @@ from tqdm import tqdm
 from transforms3d.quaternions import mat2quat
 
 # from matching import available_models, get_matcher
-# from matching.utils import to_numpy
+from matching.utils import to_numpy, to_tensor
+
+from ape_default import cfg
 from datamodules import DataModule
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map_free_reloc"))
@@ -27,11 +29,12 @@ from lib.utils.data import data_to_model_device
 from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
 
 def get_ape_method(model, device="cuda"):
-    return 'test'
+    return model
 
 @dataclass
 class Pose:
-    list_ref_image_name: list(str)
+    top_K: int
+    list_ref_image_name: list
     tar_image_name: str
     q: np.ndarray
     t: np.ndarray
@@ -45,51 +48,44 @@ class Pose:
         t_str = np.array2string(
             self.t, formatter=formatter, max_line_width=max_line_width
         )[1:-1]
-        str_ref_image_names = " ".join(self.list_ref_image_name)
-        return f"{len(list_ref_image_name)} {tar_image_name} {str_ref_image_names} {q_str} {t_str}"
+        str_ref_image_names = " ".join(ref_image_name for ref_image_name in self.list_ref_image_name)
+        return f"{self.top_K} {self.tar_image_name} {str_ref_image_names} {q_str} {t_str}"
 
 def predict(loader, ape_method, str_ape_metho):
     results_dict = defaultdict(list)
     running_time = []
-    save_indice = 0
     for data in tqdm(loader):
-        try:
+        # try:
             # data = data_to_model_device(data, ape_method) # in torch.tensor, but in cpu
             list_ref_img  = [img.squeeze(0) for img in data['list_image0']]
             list_ref_img_K = [K.squeeze(0) for K in data['list_K_color0']]
-            list_ref_img_Kori = [K.squeeze(0) for K in data['list_K_color0_ori']]
-            list_ref_img_pose = [pose.squeeze(0) for pose in data['list_image0_pose']]
-            list_ref_img_name = [name for name in data['pair_names'][1]]
-            top_K = len(list_ref_img)
+            list_ref_img_Kori = [K.squeeze(0) for K in data['list_Kori_color0']]
+            list_ref_img_pose = [pose.squeeze(0) for pose in data['list_image0_pose']]          
+            list_ref_img_name = [name[0] for name in data['pair_names'][0]]
+            top_K = data['top_K'].squeeze(0)
+            print(list_ref_img_name)
 
             tar_img = data['image1'].squeeze(0)
             tar_img_K = data['K_color1'].squeeze(0)
-            tar_img_Kori = data['K_color1_ori'].squeeze(0)
-            tar_img_name = data['pair_names'][0]
-            
-            print(list_ref_img_name)
-            print(tar_img_name)
-
-            print(list_ref_img_K)
-            print(tar_img_K)
-            
-            print(list_ref_img_pose)
-            exit()
+            tar_img_Kori = data['Kori_color1'].squeeze(0)
+            tar_img_name = data['pair_names'][1][0]
 
             """Absolute Pose Estimation"""
             start_time = time.time()
-            ape_result = ape_method(list_ref_img, list_ref_img_K, list_ref_img_pose, tar_img, tar_img_K)
+            # ape_result = ape_method(list_ref_img, list_ref_img_K, list_ref_img_pose, tar_img, tar_img_K)
+            ape_result = {"R": to_tensor(np.eye(3), 'cpu'), "t": to_tensor(np.zeros(3), 'cpu')}
             ape_time = time.time() - start_time
+            running_time.append(ape_time)
 
             """Definition of solver output"""
             # Rwc (numpy.ndarray): Estimated rotation matrix from world (reference frame) to camera
             # twc (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate depth_img1 to depth_img0.
             # inliers_solver (int): Number of inliers used in the final pose estimation.
-            Rwc, twc = ape_result["R"].squeeze(0), ape_result["t"].squeeze(0)
+            R, t = ape_result["R"].squeeze(0), ape_result["t"].squeeze(0)
+            Rwc, twc = R, t
             # inliers = ape_result["inliers"].squeeze(0)
             Twc = np.eye(4); Twc[:3, :3] = Rwc; Twc[:3,  3] = twc.reshape(3)
             Tcw = np.linalg.inv(Twc); R = Twc[:3, :3]; t = Twc[:3,  3].reshape(3, 1)
-            running_time.append(list_num, ape_time)
 
             """Save Results"""
             scene = data['scene_id'][0]
@@ -97,10 +93,11 @@ def predict(loader, ape_method, str_ape_metho):
                 raise ValueError("Estimated pose is NaN or infinite.")
 
             # populate results_dict
-            estimated_pose = Pose(list_ref_image_name=list_ref_img_name, 
-                                  tar_image_name=tar_img_name,
-                                  q=mat2quat(R).reshape(-1),
-                                  t=t.reshape(-1))
+            estimated_pose = Pose(top_K=top_K,
+                                list_ref_image_name=list_ref_img_name, 
+                                tar_image_name=tar_img_name,
+                                q=mat2quat(R).reshape(-1),
+                                t=t.reshape(-1))
             results_dict[scene].append(estimated_pose)
 
             # if args.debug:
@@ -114,14 +111,14 @@ def predict(loader, ape_method, str_ape_metho):
             #     save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, out_match_dir, save_indice, n_viz=30, line_width=0.6, text=text)
             #     save_indice += 1
             #     if str_matcher == "duster" and args.viz: matcher.scene.show(cam_size=0.05)
-        except Exception as e:
-            # scene = data['scene_id'][0]
-            # query_img = data['pair_names'][1][0]
-            # tqdm.write(f"Error with {str_matcher}: {e}")
-            # tqdm.write(f"(duster) May occur due to no overlapping regions or insufficient matching at {scene}/{query_img}.")
-            pass
+        # except Exception as e:
+        #     # scene = data['scene_id'][0]
+        #     # query_img = data['pair_names'][1][0]
+        #     # tqdm.write(f"Error with {str_matcher}: {e}")
+        #     # tqdm.write(f"(duster) May occur due to no overlapping regions or insufficient matching at {scene}/{query_img}.")
+        #     pass
 
-    avg_runtime = np.mean(running_time)
+    avg_runtime = running_time[0] if len(running_time) == 1 else np.mean(running_time)
     return results_dict, avg_runtime
 
 def save_submission(results_dict: dict, output_path: Path):
@@ -131,8 +128,13 @@ def save_submission(results_dict: dict, output_path: Path):
             zip.writestr(f"pose_{scene}.txt", poses_str.encode("utf-8"))
 
 def eval(args):
+    # Load configs
+    cfg.merge_from_file(args.config)
+
     # Create dataloader for different datasets
     if args.split == 'test':
+        cfg.TRAINING.BATCH_SIZE = 1
+        cfg.TRAINING.NUM_WORKERS = 1
         dataloader = DataModule(cfg).test_dataloader()
     elif args.split == 'val':
         cfg.TRAINING.BATCH_SIZE = 1
@@ -144,7 +146,8 @@ def eval(args):
     output_root = Path(args.out_dir)
     output_root.mkdir(parents=True, exist_ok=True)
     with open(output_root / "runtime_results.txt", "w") as f:
-        for model in args.models:
+        # for model in args.models:
+        for model in ['master']:
             ape_method = get_ape_method(model, device=args.device)
             print(f"Running APE Method: {model}")
             results_dict, avg_runtime = predict(dataloader, ape_method, model)

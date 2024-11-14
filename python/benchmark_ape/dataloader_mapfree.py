@@ -1,5 +1,7 @@
 # Code adapted from Map-free benchmark: https://github.com/nianticlabs/map-free-reloc
 
+import os
+import sys
 import random
 from pathlib import Path
 import torch
@@ -10,10 +12,12 @@ from transforms3d.quaternions import qinverse, qmult, rotate_vector, quat2mat
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map_free_reloc"))
 from lib.datasets.utils import read_color_image, read_depth_image, correct_intrinsic_scale
 
+SEED = 42 # Set constant random seed for reproducibility
+
 class MapFreeScene(data.Dataset):
     def __init__(
-            self, scene_root, resize, overlap_limits=None, niter=1, top_K=2, transforms=None,
-            test_scene=False):
+            self, scene_root, resize, overlap_limits=None, N_query=1, top_K=2, 
+            transforms=None, test_scene=False):
         super().__init__()
 
         self.scene_root = Path(scene_root)
@@ -28,7 +32,7 @@ class MapFreeScene(data.Dataset):
         self.K, self.K_ori = self.read_intrinsics(self.scene_root, resize)
 
         # load pairs
-        self.pairs = self.load_pairs(self.scene_root, overlap_limits, niter, 42, top_K)
+        self.pairs = self.load_pairs(self.scene_root, overlap_limits, N_query, top_K)
 
     @staticmethod
     def read_intrinsics(scene_root: Path, resize=None):
@@ -70,7 +74,7 @@ class MapFreeScene(data.Dataset):
                 poses[img_name] = (qt[:4], qt[4:])
         return poses
 
-    def load_pairs(self, scene_root: Path, overlap_limits: tuple = None, niter: int = 1, seed: int = 42, top_K: int = 2):
+    def load_pairs(self, scene_root: Path, overlap_limits: tuple = None, N_query: int = 1, top_K: int = 2):
         """
         Load pairs of frames based on overlap for training scenes, or form pairs for test/val scenes.
         Sets a fixed seed and generates random indices from [0, len(self.poses)].
@@ -78,40 +82,41 @@ class MapFreeScene(data.Dataset):
         Args:
         scene_root (Path): The root directory of the scene.
         overlap_limits (tuple, optional): Min and max overlap range for filtering pairs.
-        sample_factor (int, optional): Applicable only for test/val scenes; specifies frame sampling interval.
-        seed (int, optional): Seed for random number generator. Default is 42.
-        N (int, optional): Number of random indices to generate. Default is 5.
+        N_query (int, optional): specifies the number of query for test.
+        top_K (int, optional): specifies the number of images for localization test.
 
         Returns:
         idxx: np.ndarray of shape [N+1,], containing indices [0, k1, k2, ..., kN].
         pairs: np.ndarray [Npairs, 4] with each column representing seaA, imA, seqB, imB, respectively.
         """
-        # Set random seed for reproducibility
-        random.seed(seed)
-        random_idxs = np.random.randint(0, len(self.poses) - 1, size=(niter, top_K))
-        idxs = np.zeros((niter, 3 + top_K), dtype=np.uint16)
+        # Generate random pairs
+        random.seed(SEED)
+        random_idxs = np.random.randint(0, len(self.poses) - 1, size=(N_query, top_K))
+        idxs = np.zeros((N_query, 3 + top_K), dtype=np.uint16)
         idxs[:, 2] = 1
         idxs[:, 3:] = random_idxs
         pairs = idxs.copy()
-        return idxs, pairs
+        return pairs
 
     def get_pair_path(self, pair):
-        seqA, imgA, seqB, list_imgB = pair[0], pair[1], pair[2], pair[3:]
-        tar_img_name = f'seq{seqA}/frame_{imgA:05}.jpg'
-        list_ref_img_name = [f'seq{seqB}/frame_{imgB:05}.jpg' for imgB in list_imgB]
-        return (tar_img_name, list_ref_img_name)
+        seqA_id, imgA_id, seqB_id, list_imgB_id = pair[0], pair[1], pair[2], pair[3:]
+        tar_img_name = f'seq{seqA_id}/frame_{imgA_id:05}.jpg'
+        list_ref_img_name = [f'seq{seqB_id}/frame_{imgB_id:05}.jpg' for imgB_id in list_imgB_id]
+        return tar_img_name, list_ref_img_name
 
     def __len__(self):
         return len(self.pairs)
 
     def __getitem__(self, index):
         # image paths (relative to scene_root)
-        im_path_tar, list_im_path_ref = self.get_pair_path(self.pairs[index])
+        im_path_tar, list_im_path_ref = self.get_pair_path(self.pairs[index, :])
 
         # load color images
         image_tar = read_color_image(self.scene_root / im_path_tar,
                                      self.resize, augment_fn=self.transforms)
-        list_image_ref = [read_color_image(self.scene_root / im_path_ref, self.resize, augment_fn=self.transforms)]
+        list_image_ref = [read_color_image(self.scene_root / im_path_ref, 
+                                           self.resize, augment_fn=self.transforms)
+                          for im_path_ref in list_im_path_ref]
 
         # load intrinsics
         list_K_ref = [torch.from_numpy(self.K[im_path_ref]) for im_path_ref in list_im_path_ref]
@@ -159,15 +164,15 @@ class MapFreeScene(data.Dataset):
             'Kori_color1': K_ori_tar,  # (3, 3)
             'list_image0_pose': list_img_ref_pose,  # list of (4, 4)
             'image1_pose': img_tar_pose,
+            'top_K': torch.tensor(len(list_image_ref)),
             'dataset_name': 'Mapfree',
             'scene_id': self.scene_root.stem,
             'scene_root': str(self.scene_root),
             'pair_id': index,
-            'pair_names': (list_im_path_ref, im_path_tar),
+            'pair_names': (list_im_path_ref, im_path_tar)
         }
 
         return data
-
 
 class MapFreeDataset(data.ConcatDataset):
     def __init__(self, cfg, mode, transforms=None):
@@ -189,6 +194,6 @@ class MapFreeDataset(data.ConcatDataset):
         # Init dataset objects for each scene
         data_srcs = [
             MapFreeScene(
-                data_root / scene, resize, overlap_limits=None, niter=2, seed=42, top_K=2, 
+                data_root / scene, resize, overlap_limits=None, N_query=cfg.DATASET.N_QUERY, top_K=cfg.DATASET.TOP_K, 
                 transforms=None, test_scene=False) for scene in scenes]
         super().__init__(data_srcs)
