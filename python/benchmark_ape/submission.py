@@ -75,7 +75,6 @@ def predict(loader, estimator, str_estimator, cfg):
             """Definition of solver output"""
             # Rwc (numpy.ndarray): Estimated rotation matrix from world (reference frame) to camera
             # twc (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate depth_img1 to depth_img0.
-            # inliers_solver (int): Number of inliers used in the final pose estimation.
             im_pose, loss = est_result["im_pose"], est_result["loss"]
             Rwc, twc = im_pose[:3, :3], im_pose[:3, 3].reshape(3, 1)
             Twc = np.eye(4); Twc[:3, :3] = Rwc; Twc[:3,  3] = twc.reshape(3)

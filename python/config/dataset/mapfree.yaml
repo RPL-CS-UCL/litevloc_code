@@ -1,17 +1,20 @@
 MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'
-  DATA_ROOT: '/Titan/dataset/data_mapfree'
-  # SCENES: [s00460, s00461, s00462, s00463, s00464, s00465, s00466, s00467, s00468, s00469, s00470]  # should be a list [] or None. If none, use all scenes.
+  DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/mapfree/map_free_eval'
   SCENES: [s00460]
+  # SCENES: [s00460, s00461, s00462, s00463, s00464, s00465, s00466, s00467, s00468, s00469, s00470]  # should be a list [] or None. If none, use all scenes.
   ESTIMATED_DEPTH: mickey  # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
-  HEIGHT: 720
-  WIDTH: 540
+  HEIGHT: 512
+  WIDTH: 288
   MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!
   MAX_DEPTH: 15.0
+  TOP_K: 2
+  N_QUERY: 1
+  VIZ_CAM_SIZE: 0.2
 PNP:
   RANSAC_ITER: 1000
   REPROJECTION_INLIER_THRESHOLD: 3 # pixel
