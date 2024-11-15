@@ -54,21 +54,30 @@ def predict(loader, estimator, str_estimator, cfg):
     running_time = []
     save_indice = 0
     for data in tqdm(loader):
-        try:
-            data = data_to_model_device(data, estimator) # Probably convert data to cuda
-            list_ref_img = [img.squeeze(0) for img in data['list_image0']] # (3, H, W)
+        # try:
+            # data = data_to_model_device(data, estimator)
+            top_K = data['top_K'].detach().cpu().item()
+            list_ref_img_path_full = [path[0] for path in data['list_image0_path_full']]
+            tar_img_path_full = data['image1_path_full']
+
             list_ref_img_K = [K.squeeze(0) for K in data['list_K_color0']]
-            list_ref_img_Kori = [K.squeeze(0) for K in data['list_Kori_color0']]
+            # list_ref_img_Kori = [K.squeeze(0) for K in data['list_Kori_color0']]
             list_ref_img_pose = [pose.squeeze(0) for pose in data['list_image0_pose']]
 
-            tar_img = data['image1'].squeeze(0)
             tar_img_K = data['K_color1'].squeeze(0)
-            tar_img_Kori = data['Kori_color1'].squeeze(0)
+            # tar_img_Kori = data['Kori_color1'].squeeze(0)
             init_img1_pose = data['image1_pose'].squeeze(0)
 
             """Absolute Pose Estimation"""
             start_time = time.time()
-            est_result = estimator(list_ref_img, tar_img, list_ref_img_pose, init_img1_pose, list_ref_img_K, tar_img_K, option='single')
+            option = {
+                'resize': 512,
+                'opt_cam': 'single'
+            }
+            est_result = estimator(list_ref_img_path_full, tar_img_path_full, 
+                                   list_ref_img_pose, init_img1_pose, 
+                                   list_ref_img_K, tar_img_K, 
+                                   option)
             est_time = time.time() - start_time
             running_time.append(est_time)
 
@@ -86,9 +95,8 @@ def predict(loader, estimator, str_estimator, cfg):
                 raise ValueError("Estimated pose is NaN or infinite.")
 
             # populate results_dict
-            top_K = data['top_K'].detach().cpu().item()
-            list_ref_img_name = [name[0] for name in data['pair_names'][0]]
             tar_img_name = data['pair_names'][1][0]
+            list_ref_img_name = [name[0] for name in data['pair_names'][0]]
             estimated_pose = Pose(top_K=top_K,
                                   list_ref_image_name=list_ref_img_name, 
                                   tar_image_name=tar_img_name,
@@ -107,20 +115,20 @@ def predict(loader, estimator, str_estimator, cfg):
                 # text = f"{len(mkpts1)} matches: {scene}-{query_img.split('/')[1]}" # "N matches: s00000-frame_000000.jpg"
                 # save_visualization(rgb_img0, rgb_img1, mkpts0, mkpts1, out_match_dir, save_indice, n_viz=30, line_width=0.6, text=text)
                 save_indice += 1
-        except Exception as e:
-            scene = data['scene_id'][0]
-            top_K = data['top_K'].detach().cpu().item()
-            list_ref_img_name = [name[0] for name in data['pair_names'][0]]
-            tar_img_name = data['pair_names'][1][0]
-            estimated_pose = Pose(top_K=top_K,
-                                  list_ref_image_name=list_ref_img_name, 
-                                  tar_image_name=tar_img_name,
-                                  q=np.array([None, None, None, None]).reshape(-1),
-                                  t=np.array([None, None, None, None]).reshape(-1),
-                                  loss=0)
-            results_dict[scene].append(estimated_pose)
-            tqdm.write(f"Error with {str_estimator}: {e}")
-            tqdm.write(f"May occur due to no overlapping regions or insufficient matching at {scene}/{tar_img_name}.")
+        # except Exception as e:
+        #     scene = data['scene_id'][0]
+        #     top_K = data['top_K'].detach().cpu().item()
+        #     list_ref_img_name = [name[0] for name in data['pair_names'][0]]
+        #     tar_img_name = data['pair_names'][1][0]
+        #     estimated_pose = Pose(top_K=top_K,
+        #                           list_ref_image_name=list_ref_img_name, 
+        #                           tar_image_name=tar_img_name,
+        #                           q=np.array([None, None, None, None]).reshape(-1),
+        #                           t=np.array([None, None, None, None]).reshape(-1),
+        #                           loss=0)
+        #     results_dict[scene].append(estimated_pose)
+        #     tqdm.write(f"Error with {str_estimator}: {e}")
+        #     tqdm.write(f"May occur due to no overlapping regions or insufficient matching at {scene}/{tar_img_name}.")
 
     avg_runtime = running_time[0] if len(running_time) == 1 else np.mean(running_time)
     return results_dict, avg_runtime

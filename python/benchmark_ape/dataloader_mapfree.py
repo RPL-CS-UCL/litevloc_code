@@ -9,10 +9,25 @@ import torch.utils.data as data
 import numpy as np
 from transforms3d.quaternions import qinverse, qmult, rotate_vector, quat2mat
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map_free_reloc"))
-from lib.datasets.utils import read_color_image, read_depth_image, correct_intrinsic_scale
+# sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map_free_reloc"))
+# from lib.datasets.utils import read_color_image, read_depth_image, correct_intrinsic_scale
 
 SEED = 42 # Set constant random seed for reproducibility
+
+def correct_intrinsic_scale(K, scale_x, scale_y):
+    """Given an intrinsic matrix (3x3) and two scale factors, returns the new intrinsic matrix corresponding to
+    the new coordinates x' = scale_x * x; y' = scale_y * y
+    Source: https://dsp.stackexchange.com/questions/6055/how-does-resizing-an-image-affect-the-intrinsic-camera-matrix
+    """
+
+    transform = np.eye(3)
+    transform[0, 0] = scale_x
+    transform[0, 2] = scale_x / 2 - 0.5
+    transform[1, 1] = scale_y
+    transform[1, 2] = scale_y / 2 - 0.5
+    Kprime = transform @ K
+
+    return Kprime
 
 class MapFreeScene(data.Dataset):
     def __init__(
@@ -110,13 +125,16 @@ class MapFreeScene(data.Dataset):
     def __getitem__(self, index):
         # image paths (relative to scene_root)
         im_path_tar, list_im_path_ref = self.get_pair_path(self.pairs[index, :])
+        
+        im_path_tar_full = os.path.join(str(self.scene_root), im_path_tar)
+        list_im_path_ref_full = [os.path.join(str(self.scene_root), im_path_ref) for im_path_ref in list_im_path_ref]
 
-        # load color images
-        image_tar = read_color_image(self.scene_root / im_path_tar,
-                                     self.resize, augment_fn=self.transforms)
-        list_image_ref = [read_color_image(self.scene_root / im_path_ref, 
-                                           self.resize, augment_fn=self.transforms)
-                          for im_path_ref in list_im_path_ref]
+        # # load color images
+        # image_tar = read_color_image(self.scene_root / im_path_tar,
+        #                              self.resize, augment_fn=self.transforms)
+        # list_image_ref = [read_color_image(self.scene_root / im_path_ref, 
+        #                                    self.resize, augment_fn=self.transforms)
+        #                   for im_path_ref in list_im_path_ref]
 
         # load intrinsics
         list_K_ref = [torch.from_numpy(self.K[im_path_ref]) for im_path_ref in list_im_path_ref]
@@ -156,20 +174,20 @@ class MapFreeScene(data.Dataset):
             img_tar_pose = torch.from_numpy(T)
 
         data = {
-            'list_image0': list_image_ref,  # list of (3, h, w) and normalized to [0, 1]
-            'image1': image_tar,
+            'list_image0_path_full': list_im_path_ref_full,  # list of paths of reference images
+            'image1_path_full': im_path_tar_full, # path of target image
             'list_K_color0': list_K_ref,  # list of (3, 3)
             'K_color1': K_tar,  # (3, 3)
             'list_Kori_color0': list_K_ori_ref,  # list of (3, 3)
             'Kori_color1': K_ori_tar,  # (3, 3)
             'list_image0_pose': list_img_ref_pose,  # list of (4, 4)
             'image1_pose': img_tar_pose,
-            'top_K': torch.tensor(len(list_image_ref)),
+            'top_K': torch.tensor(len(list_im_path_ref)),
             'dataset_name': 'Mapfree',
             'scene_id': self.scene_root.stem,
             'scene_root': str(self.scene_root),
             'pair_id': index,
-            'pair_names': (list_im_path_ref, im_path_tar)
+            'pair_names': (list_im_path_ref, im_path_tar),
         }
 
         return data
@@ -181,7 +199,6 @@ class MapFreeDataset(data.ConcatDataset):
         assert cfg.DATASET.N_QUERY >= 1 # At least 1 query for localization
 
         data_root = Path(cfg.DATASET.DATA_ROOT) / mode
-        resize = (cfg.DATASET.WIDTH, cfg.DATASET.HEIGHT)
 
         if mode == 'test':
             test_scene = True
@@ -196,6 +213,6 @@ class MapFreeDataset(data.ConcatDataset):
         # Init dataset objects for each scene
         data_srcs = [
             MapFreeScene(
-                data_root / scene, resize, overlap_limits=None, N_query=cfg.DATASET.N_QUERY, top_K=cfg.DATASET.TOP_K, 
+                data_root / scene, resize=None, overlap_limits=None, N_query=cfg.DATASET.N_QUERY, top_K=cfg.DATASET.TOP_K, 
                 transforms=None, test_scene=False) for scene in scenes]
         super().__init__(data_srcs)

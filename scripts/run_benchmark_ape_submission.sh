@@ -17,4 +17,4 @@ export OUT_DIR="/Rocket_ssd/dataset/data_litevloc/$DATASET_NAME/map_free_eval/re
 export MODELS="master"
 
 # Run the Python script
-python $PROJECT_PATH/python/benchmark_ape/submission.py --config $CONFIG_FILE --models $MODELS --out_dir $OUT_DIR --split val --debug --viz
+python $PROJECT_PATH/python/benchmark_ape/submission.py --config $CONFIG_FILE --models $MODELS --out_dir $OUT_DIR --split test --debug
