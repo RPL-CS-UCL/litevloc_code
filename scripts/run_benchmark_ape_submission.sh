@@ -14,7 +14,8 @@ DATASET_NAME=$1
 export PROJECT_PATH="/Titan/code/robohike_ws/src/litevloc"
 export CONFIG_FILE="$PROJECT_PATH/python/config/dataset/$DATASET_NAME.yaml"
 export OUT_DIR="/Rocket_ssd/dataset/data_litevloc/$DATASET_NAME/map_free_eval/results_ape"
-export MODELS="master"
+export MODELS="master duster hloc_disk_dilg vpr_cosplace_resnet18_512"
 
 # Run the Python script
-python $PROJECT_PATH/python/benchmark_ape/submission.py --config $CONFIG_FILE --models $MODELS --out_dir $OUT_DIR --split test --debug
+python $PROJECT_PATH/python/benchmark_ape/submission.py --config $CONFIG_FILE --models $MODELS --out_dir $OUT_DIR --n_query 1 --top_k 5 \
+  --split test --debug

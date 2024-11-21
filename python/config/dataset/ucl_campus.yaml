@@ -12,8 +12,6 @@ DATASET:
   MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
   QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!
   MAX_DEPTH: 13.0
-  TOP_K: 2
-  N_QUERY: 1
   VIZ_CAM_SIZE: 0.2
 PNP:
   RANSAC_ITER: 1000

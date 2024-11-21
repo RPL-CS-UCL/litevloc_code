@@ -44,30 +44,35 @@ class MapFreeScene(data.Dataset):
         self.poses = self.read_poses(self.scene_root)
 
         # read intrinsics
-        self.K, self.K_ori = self.read_intrinsics(self.scene_root, resize)
+        self.K, self.K_ori, self.im_size, self.im_size_ori = \
+            self.read_intrinsics(self.scene_root, resize)
 
         # load pairs
         self.pairs = self.load_pairs(self.scene_root, overlap_limits, N_query, top_K)
 
     @staticmethod
     def read_intrinsics(scene_root: Path, resize=None):
-        Ks = {}
         K_ori = {}
+        im_size_ori = {}
+        Ks = {}
+        im_size = {}
         with (scene_root / 'intrinsics.txt').open('r') as f:
             for line in f.readlines():
-                if '#' in line:
-                    continue
-
+                if '#' in line: continue
                 line = line.strip().split(' ')
                 img_name = line[0]
                 fx, fy, cx, cy, W, H = map(float, line[1:])
 
                 K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
                 K_ori[img_name] = K
+                im_size_ori[img_name] = np.array([W, H])
                 if resize is not None:
-                    K = correct_intrinsic_scale(K, resize[0] / W, resize[1] / H)
-                Ks[img_name] = K
-        return Ks, K_ori
+                    Ks[img_name] = correct_intrinsic_scale(K, resize[0] / W, resize[1] / H)
+                    im_size[img_name] = np.array([resize[0], resize[1]])
+                else:
+                    Ks[img_name] = K
+                    im_size[img_name] = np.array([W, H])
+        return Ks, K_ori, im_size, im_size_ori
 
     @staticmethod
     def read_poses(scene_root: Path):
@@ -80,9 +85,7 @@ class MapFreeScene(data.Dataset):
         poses = {}
         with (scene_root / 'poses.txt').open('r') as f:
             for line in f.readlines():
-                if '#' in line:
-                    continue
-
+                if '#' in line: continue
                 line = line.strip().split(' ')
                 img_name = line[0]
                 qt = np.array(list(map(float, line[1:])))
@@ -98,7 +101,7 @@ class MapFreeScene(data.Dataset):
         scene_root (Path): The root directory of the scene.
         overlap_limits (tuple, optional): Min and max overlap range for filtering pairs.
         N_query (int, optional): specifies the number of query for test.
-        top_K (int, optional): specifies the number of images for localization test.
+        top_K (int, optional): specifies the number of images (randomly selected) for localization test.
 
         Returns:
         idxx: np.ndarray of shape [N+1,], containing indices [0, k1, k2, ..., kN].
@@ -106,7 +109,9 @@ class MapFreeScene(data.Dataset):
         """
         # Generate random pairs
         random.seed(SEED)
-        random_idxs = np.random.randint(0, len(self.poses) - 1, size=(N_query, top_K))
+        random_idxs = np.zeros((N_query, top_K), dtype=np.uint16)
+        for i in range(N_query):
+            random_idxs[i, :] = np.random.choice(len(self.poses) - 1, size=top_K, replace=False)
         idxs = np.zeros((N_query, 3 + top_K), dtype=np.uint16)
         idxs[:, 2] = 1
         idxs[:, 3:] = random_idxs
@@ -120,29 +125,53 @@ class MapFreeScene(data.Dataset):
         return tar_img_name, list_ref_img_name
 
     def __len__(self):
-        return len(self.pairs)
+        return self.pairs.shape[0] # Number of query
 
     def __getitem__(self, index):
-        # image paths (relative to scene_root)
-        im_path_tar, list_im_path_ref = self.get_pair_path(self.pairs[index, :])
-        
-        im_path_tar_full = os.path.join(str(self.scene_root), im_path_tar)
-        list_im_path_ref_full = [os.path.join(str(self.scene_root), im_path_ref) for im_path_ref in list_im_path_ref]
+        """
+        Retrieves the data for a specific index in the dataset.
 
-        # # load color images
-        # image_tar = read_color_image(self.scene_root / im_path_tar,
-        #                              self.resize, augment_fn=self.transforms)
-        # list_image_ref = [read_color_image(self.scene_root / im_path_ref, 
-        #                                    self.resize, augment_fn=self.transforms)
-        #                   for im_path_ref in list_im_path_ref]
+        Args:
+            index (int): The index of the data to retrieve.
+
+        Returns:
+            dict: A dictionary containing the following data:
+                - 'list_image0_path': List of image paths for reference images.
+                - 'image1_path': Image path for the target image.
+                
+                - 'list_K_color0': List of intrinsic matrices for reference images.
+                - 'K_color1': Intrinsic matrix for the target image.
+                - 'list_Kori_color0': List of original intrinsic matrices for reference images.
+                - 'Kori_color1': Original intrinsic matrix for the target image.
+
+                - 'list_image0_pose': List of pose matrices for reference images.
+                - 'image1_pose': Pose matrix for the target image.
+
+                - 'list_im_size0':
+                - 'im_size1':
+                - 'list_im_size_ori0':
+                - 'im_size_ori1':
+
+                - 'dataset_name': Name of the dataset.
+                - 'scene_id': ID of the scene.
+                - 'scene_root': Root directory of the scene.
+                - 'pair_id': ID of the pair.
+        """
+        
+        im_path_tar, list_im_path_ref = self.get_pair_path(self.pairs[index, :])
 
         # load intrinsics
         list_K_ref = [torch.from_numpy(self.K[im_path_ref]) for im_path_ref in list_im_path_ref]
         list_K_ori_ref = [torch.from_numpy(self.K_ori[im_path_ref]) for im_path_ref in list_im_path_ref]
-        K_tar = self.K[im_path_tar]
-        K_ori_tar = self.K_ori[im_path_tar]
+        list_im_size_ref = [torch.from_numpy(self.im_size[im_path_ref]) for im_path_ref in list_im_path_ref]
+        list_im_size_ori_ref = [torch.from_numpy(self.im_size_ori[im_path_ref]) for im_path_ref in list_im_path_ref]
 
-        # get absolute pose of reference_images and target_image
+        K_tar = torch.from_numpy(self.K[im_path_tar])
+        K_ori_tar = torch.from_numpy(self.K_ori[im_path_tar])
+        im_size_tar = torch.from_numpy(self.im_size[im_path_tar])
+        im_size_ori_tar = torch.from_numpy(self.im_size_ori[im_path_tar])
+
+        # Get absolute pose of reference_images and target_image
         if self.test_scene:
             list_img_ref_pose = []
             for im_path in list_im_path_ref:
@@ -174,20 +203,26 @@ class MapFreeScene(data.Dataset):
             img_tar_pose = torch.from_numpy(T)
 
         data = {
-            'list_image0_path_full': list_im_path_ref_full,  # list of paths of reference images
-            'image1_path_full': im_path_tar_full, # path of target image
+            'list_image0_path': list_im_path_ref,
+            'image1_path': im_path_tar,
+
             'list_K_color0': list_K_ref,  # list of (3, 3)
             'K_color1': K_tar,  # (3, 3)
             'list_Kori_color0': list_K_ori_ref,  # list of (3, 3)
             'Kori_color1': K_ori_tar,  # (3, 3)
+
             'list_image0_pose': list_img_ref_pose,  # list of (4, 4)
             'image1_pose': img_tar_pose,
-            'top_K': torch.tensor(len(list_im_path_ref)),
+
+            'list_im_size0': list_im_size_ref, # list of (2,)
+            'im_size1': im_size_tar,
+            'list_im_size_ori0': list_im_size_ori_ref,
+            'im_size_ori1': im_size_ori_tar,
+
             'dataset_name': 'Mapfree',
             'scene_id': self.scene_root.stem,
             'scene_root': str(self.scene_root),
             'pair_id': index,
-            'pair_names': (list_im_path_ref, im_path_tar),
         }
 
         return data
@@ -199,12 +234,7 @@ class MapFreeDataset(data.ConcatDataset):
         assert cfg.DATASET.N_QUERY >= 1 # At least 1 query for localization
 
         data_root = Path(cfg.DATASET.DATA_ROOT) / mode
-
-        if mode == 'test':
-            test_scene = True
-        else:
-            test_scene = False
-
+        test_scene = (mode == 'test')
         scenes = cfg.DATASET.SCENES
         if scenes is None:
             # Locate all scenes of the current dataset
@@ -213,6 +243,7 @@ class MapFreeDataset(data.ConcatDataset):
         # Init dataset objects for each scene
         data_srcs = [
             MapFreeScene(
-                data_root / scene, resize=None, overlap_limits=None, N_query=cfg.DATASET.N_QUERY, top_K=cfg.DATASET.TOP_K, 
-                transforms=None, test_scene=False) for scene in scenes]
+                data_root / scene, resize=None, overlap_limits=None, 
+                N_query=cfg.DATASET.N_QUERY, top_K=cfg.DATASET.TOP_K, 
+                transforms=None, test_scene=test_scene) for scene in scenes]
         super().__init__(data_srcs)

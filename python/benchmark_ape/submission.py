@@ -14,25 +14,22 @@ from zipfile import ZipFile
 import time
 import numpy as np
 from tqdm import tqdm
+from colorama import Fore, Back, Style
 
 from transforms3d.quaternions import mat2quat
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../pose_estimation_models"))
 from estimator import available_models, get_estimator
+
+from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
 
 from ape_default import cfg
 from datamodules import DataModule
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map_free_reloc"))
-from lib.utils.data import data_to_model_device
-
-from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
-
 @dataclass
 class Pose:
     top_K: int
-    list_ref_image_name: list
-    tar_image_name: str
+    list_img0_name: list
+    img1_name: str
     q: np.ndarray
     t: np.ndarray
     loss: float
@@ -46,8 +43,8 @@ class Pose:
         t_str = np.array2string(
             self.t, formatter=formatter, max_line_width=max_line_width
         )[1:-1]
-        str_ref_image_names = " ".join(ref_image_name for ref_image_name in self.list_ref_image_name)
-        return f"{self.top_K} {self.tar_image_name} {str_ref_image_names} {q_str} {t_str} {self.loss:.3f}"
+        str_img0_names = " ".join(img0_name for img0_name in self.list_img0_name)
+        return f"{self.top_K} {self.img1_name} {str_img0_names} {q_str} {t_str} {self.loss:.3f}"
 
 def predict(loader, estimator, str_estimator, cfg):
     results_dict = defaultdict(list)
@@ -55,29 +52,32 @@ def predict(loader, estimator, str_estimator, cfg):
     save_indice = 0
     for data in tqdm(loader):
         # try:
-            # data = data_to_model_device(data, estimator)
-            top_K = data['top_K'].detach().cpu().item()
-            list_ref_img_path_full = [path[0] for path in data['list_image0_path_full']]
-            tar_img_path_full = data['image1_path_full']
+            scene_root = Path(data['scene_root'][0])
 
-            list_ref_img_K = [K.squeeze(0) for K in data['list_K_color0']]
-            # list_ref_img_Kori = [K.squeeze(0) for K in data['list_Kori_color0']]
-            list_ref_img_pose = [pose.squeeze(0) for pose in data['list_image0_pose']]
+            list_img0_name = [name[0] for name in data['list_image0_path']]
+            list_img0_poses = [pose.squeeze(0) for pose in data['list_image0_pose']]
+            list_img0_intr = [{'K': K.squeeze(0), 'im_size': im_size.squeeze(0)} \
+                              for K, im_size in zip(data['list_K_color0'], data['list_im_size0'])]
 
-            tar_img_K = data['K_color1'].squeeze(0)
-            # tar_img_Kori = data['Kori_color1'].squeeze(0)
-            init_img1_pose = data['image1_pose'].squeeze(0)
+            img1_name = data['image1_path'][0]
+            img1_intr = {'K': data['K_color1'].squeeze(0), 'im_size': data['im_size1'].squeeze(0)}
+
+            print(Fore.GREEN + f'Scene Root: {scene_root}' + Style.RESET_ALL)
+            print(Fore.GREEN + f'Loading Reference Image:', ', '.join(list_img0_name) + Style.RESET_ALL)
+            print(Fore.GREEN + f'Loading Target Image: {img1_name}' + Style.RESET_ALL)
 
             """Absolute Pose Estimation"""
             start_time = time.time()
-            option = {
+            est_opts = {
+                'known_extrinsics': True,
+                'known_intrinsics': True,
                 'resize': 512,
-                'opt_cam': 'single'
             }
-            est_result = estimator(list_ref_img_path_full, tar_img_path_full, 
-                                   list_ref_img_pose, init_img1_pose, 
-                                   list_ref_img_K, tar_img_K, 
-                                   option)
+            est_result = estimator(scene_root,
+                                   list_img0_name, img1_name, 
+                                   list_img0_poses, 
+                                   list_img0_intr, img1_intr,
+                                   est_opts)
             est_time = time.time() - start_time
             running_time.append(est_time)
 
@@ -85,30 +85,28 @@ def predict(loader, estimator, str_estimator, cfg):
             # Rwc (numpy.ndarray): Estimated rotation matrix from world (reference frame) to camera
             # twc (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate depth_img1 to depth_img0.
             im_pose, loss = est_result["im_pose"], est_result["loss"]
-            Rwc, twc = im_pose[:3, :3], im_pose[:3, 3].reshape(3, 1)
-            Twc = np.eye(4); Twc[:3, :3] = Rwc; Twc[:3,  3] = twc.reshape(3)
+            Twc = np.eye(4); Twc[:3, :3] = im_pose[:3, :3]; Twc[:3, 3] = im_pose[:3, 3]
             Tcw = np.linalg.inv(Twc); Rcw = Tcw[:3, :3]; tcw = Tcw[:3,  3].reshape(3, 1)
 
             """Save Results"""
-            scene = data['scene_id'][0]
+            scene_id = data['scene_id'][0]
             if np.isnan(im_pose).any():
                 raise ValueError("Estimated pose is NaN or infinite.")
 
             # populate results_dict
-            tar_img_name = data['pair_names'][1][0]
-            list_ref_img_name = [name[0] for name in data['pair_names'][0]]
+            top_K = len(list_img0_name)
             estimated_pose = Pose(top_K=top_K,
-                                  list_ref_image_name=list_ref_img_name, 
-                                  tar_image_name=tar_img_name,
+                                  list_img0_name=list_img0_name, 
+                                  img1_name=img1_name,
                                   q=mat2quat(Rcw).reshape(-1),
                                   t=tcw.reshape(-1),
                                   loss=loss)
-            results_dict[scene].append(estimated_pose)
+            results_dict[scene_id].append(estimated_pose)
 
             if args.debug:
-                print(tcw.T)
-                if args.viz:
-                    estimator.scene.show(cam_size=cfg.DATASET.VIZ_CAM_SIZE)
+                print(Fore.GREEN + f'Estimated Pose: {tcw.T}' + Style.RESET_ALL)
+                estimator.save_results()
+                if args.viz: estimator.show_reconstruction(cam_size=cfg.DATASET.VIZ_CAM_SIZE)
                 out_est_dir = Path(os.path.join(args.out_dir, f"{str_estimator}"))
                 out_est_dir.mkdir(parents=True, exist_ok=True)
                 Path(out_est_dir / "preds").mkdir(parents=True, exist_ok=True)
@@ -147,10 +145,14 @@ def eval(args):
     if args.split == 'test':
         cfg.TRAINING.BATCH_SIZE = 1
         cfg.TRAINING.NUM_WORKERS = 1
+        cfg.DATASET.TOP_K = args.top_k
+        cfg.DATASET.N_QUERY = args.n_query
         dataloader = DataModule(cfg).test_dataloader()
     elif args.split == 'val':
         cfg.TRAINING.BATCH_SIZE = 1
         cfg.TRAINING.NUM_WORKERS = 1
+        cfg.DATASET.TOP_K = args.top_k
+        cfg.DATASET.N_QUERY = args.n_query        
         dataloader = DataModule(cfg).val_dataloader()
     else:
         raise NotImplemented(f'Invalid split: {args.split}')
@@ -160,9 +162,11 @@ def eval(args):
     with open(output_root / "runtime_results.txt", "w") as f:
         # for model in args.models:
         for model in args.models:
-            estimator = get_estimator(model, device=args.device)
-            print(f"Running APE Method: {model}")
+            estimator = get_estimator(model, 
+                                      device=args.device, 
+                                      out_dir=os.path.join(args.out_dir, f'{model}/preds'))
             results_dict, avg_runtime = predict(dataloader, estimator, model, cfg)
+            print(Fore.GREEN + f"Running APE Method: {model}" + Style.RESET_ALL)
 
             # Save runtimes to txt
             runtime_str = f"{model}: {avg_runtime:.3f}s"
@@ -170,7 +174,7 @@ def eval(args):
             tqdm.write(runtime_str)
 
             # Save predictions to txt per scene within zip
-            log_dir = Path(os.path.join(output_root, f"{model}"))
+            log_dir = Path(output_root / f"{model}")
             log_dir.mkdir(parents=True, exist_ok=True)
             save_submission(results_dict, log_dir / "submission.zip")
 
@@ -184,13 +188,6 @@ if __name__ == "__main__":
         default="all",
         choices=available_models
     )
-    # parser.add_argument(
-    #     "--pose_solvers",
-    #     type=str,
-    #     nargs="+",
-    #     default="all",
-    #     choices=available_solvers,
-    # )
     parser.add_argument(
         "--device", type=str, default="cuda", choices=["cpu", "cuda"]
     )
@@ -219,6 +216,8 @@ if __name__ == "__main__":
         default="test",
         help="Dataset split to use for evaluation. Choose from test or val. Default: test",
     )
+    parser.add_argument('--top_k', type=int, default=2, help='Number of randomly selected reference images for localization')
+    parser.add_argument('--n_query', type=int, default=1, help='Number of query images for localization')
     args = parser.parse_args()
     if args.models == "all":
         args.models = available_models
