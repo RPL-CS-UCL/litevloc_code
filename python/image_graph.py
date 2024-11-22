@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 import os
 import numpy as np
 
@@ -13,7 +15,7 @@ class ImageGraphLoader:
 		pass
 
 	@staticmethod
-	def load_data(graph_path, resize, depth_scale, normalized=False):
+	def load_data(graph_path, resize, depth_scale, load_rgb=False, load_depth=False, normalized=False):
 		image_graph = ImageGraph()
 		
 		poses = np.loadtxt(os.path.join(graph_path, 'poses.txt'))
@@ -27,10 +29,13 @@ class ImageGraphLoader:
 
 		for idx in range(poses.shape[0]):
 			rgb_img_path = os.path.join(graph_path, 'seq', f'{idx:06}.color.jpg')
-			rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
+			if load_rgb:
+				rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
+			else:
+				rgb_image = None
 			
 			depth_img_path = os.path.join(graph_path, 'seq', f'{idx:06}.depth.png')
-			if os.path.exists(depth_img_path):
+			if load_depth:
 				depth_image = load_depth_image(depth_img_path, depth_scale=depth_scale)
 			else:
 				depth_image = None

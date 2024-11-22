@@ -43,7 +43,7 @@ def main(args):
 	model = initialize_vpr_model(args.method, args.backbone, args.descriptors_dimension, args.device)
 
 	"""Load images"""
-	image_graph = ImageGraphLoader.load_data(args.dataset_path, args.image_size, depth_scale=0.001, normalized=True)
+	image_graph = ImageGraphLoader.load_data(args.dataset_path, args.image_size, depth_scale=0.001, load_rgb=True, load_depth=False, normalized=True)
 
 	# Extract VPR descriptors for all nodes in the map
 	start_time = time.time()

@@ -11,56 +11,6 @@ import matplotlib.pyplot as plt
 
 from matching import viz2d, get_matcher, available_models
 
-def parse_arguments():
-    """Setup command-line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Batch Image Matching Test",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument(
-        "--dataset_path", type=str, default="matterport3d", help="path to dataset_path"
-    )
-    parser.add_argument(
-        "--matcher",
-        type=str,
-        default="sift-lg",
-        choices=available_models,
-        help="choose your matcher",
-    )
-    parser.add_argument(
-        "--image_size",
-        type=int,
-        default=512,
-        nargs="+",
-        help="Resizing shape for images (HxW). If a single int is passed, set the"
-        "smallest edge of all images to this value, while keeping aspect ratio",
-    )
-    parser.add_argument("--n_kpts", type=int, default=2048, help="max num keypoints")
-    parser.add_argument("--device", type=str, default="cuda", choices=["cpu", "cuda"])
-    parser.add_argument(
-        "--no_viz",
-        action="store_true",
-        help="pass --no_viz to avoid saving visualizations",
-    )
-    parser.add_argument(
-        "--depth_scale", type=float, default=0.001, help="habitat: 0.039, anymal: 0.001"
-    )
-    parser.add_argument(
-        "--min_depth_pro",
-        type=float,
-        default=0.1,
-        help="pixels are processed only if depth > min_depth_pro",
-    )
-    parser.add_argument(
-        "--max_depth_pro",
-        type=float,
-        default=5.5,
-        help="pixels are processed only if depth < min_depth_pro",
-    )
-    args = parser.parse_args()
-    return args
-
-
 def setup_logging(log_dir, stdout_level="info"):
     os.makedirs(log_dir, exist_ok=True)
     log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -73,14 +23,11 @@ def setup_logging(log_dir, stdout_level="info"):
         ],
     )
 
-
 def setup_log_environment(out_dir, args):
     """Setup logging and directories."""
     os.makedirs(out_dir, exist_ok=True)
     start_time = datetime.now()
-    log_dir = os.path.join(
-        out_dir, f"outputs_{args.matcher}", start_time.strftime("%Y-%m-%d_%H-%M-%S")
-    )
+    log_dir = os.path.join(out_dir, f"outputs_{args.matcher}", start_time.strftime("%Y-%m-%d_%H-%M-%S"))
     setup_logging(log_dir, stdout_level="info")
     logging.info(" ".join(sys.argv))
     logging.info(f"Arguments: {args}")
@@ -93,7 +40,6 @@ def setup_log_environment(out_dir, args):
         f"ln -s {log_dir} {os.path.join(out_dir, f'outputs_{args.matcher}', 'latest')}"
     )
     return log_dir
-
 
 def initialize_img_matcher(matcher, device, n_kpts):
     """Initialize the matcher with provided arguments."""
@@ -283,3 +229,52 @@ def save_image(image: np.array, save_path: str):
     image = image.astype(np.uint8)
     pil_image = Image.fromarray(image)
     pil_image.save(save_path)
+
+def parse_arguments():
+    """Setup command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Batch Image Matching Test",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--dataset_path", type=str, default="matterport3d", help="path to dataset_path"
+    )
+    parser.add_argument(
+        "--matcher",
+        type=str,
+        default="sift-lg",
+        choices=available_models,
+        help="choose your matcher",
+    )
+    parser.add_argument(
+        "--image_size",
+        type=int,
+        default=512,
+        nargs="+",
+        help="Resizing shape for images (HxW). If a single int is passed, set the"
+        "smallest edge of all images to this value, while keeping aspect ratio",
+    )
+    parser.add_argument("--n_kpts", type=int, default=2048, help="max num keypoints")
+    parser.add_argument("--device", type=str, default="cuda", choices=["cpu", "cuda"])
+    parser.add_argument(
+        "--no_viz",
+        action="store_true",
+        help="pass --no_viz to avoid saving visualizations",
+    )
+    parser.add_argument(
+        "--depth_scale", type=float, default=0.001, help="habitat: 0.039, anymal: 0.001"
+    )
+    parser.add_argument(
+        "--min_depth_pro",
+        type=float,
+        default=0.1,
+        help="pixels are processed only if depth > min_depth_pro",
+    )
+    parser.add_argument(
+        "--max_depth_pro",
+        type=float,
+        default=5.5,
+        help="pixels are processed only if depth < min_depth_pro",
+    )
+    args = parser.parse_args()
+    return args

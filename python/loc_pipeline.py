@@ -42,7 +42,7 @@ from utils.utils_vpr_method import save_visualization as save_vpr_visualization
 from utils.utils_image_matching_method import initialize_img_matcher
 from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
 from utils.utils_image import load_rgb_image, load_depth_image
-from utils.utils_pipeline import *
+# from utils.utils_pipeline import *
 from utils.pose_solver import get_solver
 from utils.pose_solver_default import cfg
 from image_graph import ImageGraphLoader as GraphLoader

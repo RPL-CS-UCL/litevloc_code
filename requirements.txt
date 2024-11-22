@@ -24,7 +24,6 @@ vispy
 xformers
 pyglet==1.5.28
 tensorboard
-scipy
 trimesh
 e2cnn
 scikit-learn
@@ -33,3 +32,24 @@ roma
 huggingface_hub
 open3d
 pytorch_lightning
+# duster
+gradio
+huggingface-hub[torch]>=0.22
+# hloc
+torch>=1.1
+torchvision>=0.3
+tqdm>=4.36.0
+matplotlib
+plotly
+h5py
+pycolmap==0.6.0
+kornia>=0.6.11
+gdown
+lightglue @ git+https://github.com/cvg/LightGlue
+# ROS
+empy==4.2
+catkin_pkg
+# Others
+yacs
+colorama
+gtsam
