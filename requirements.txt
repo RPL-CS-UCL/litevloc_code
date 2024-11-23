@@ -49,6 +49,7 @@ lightglue @ git+https://github.com/cvg/LightGlue
 # ROS
 empy==4.2
 catkin_pkg
+rospkg
 # Others
 yacs
 colorama

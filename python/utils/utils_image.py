@@ -11,8 +11,21 @@ def load_rgb_image(
     resize: Union[int, Tuple] = None,
     normalized: bool = False,
 ) -> torch.Tensor:
+    """
+    Load an RGB image from the given path and apply transformations.
+
+    Args:
+        path (Union[str, Path]): The path to the image file.
+        resize (Union[int, Tuple], optional): The desired size of the image. 
+        normalized (bool, optional): Whether to normalize the image. If True, the image will be normalized using the mean and standard deviation values specified in the code. Defaults to False.
+
+    Returns:
+        torch.Tensor: The transformed image as a tensor (3, H, W)
+
+    """
     if isinstance(resize, int):
         resize = (resize, resize)
+    
     # Set up transformations: - Convert to tensor, - Normalize, - Resize
     transformations = [tfm.ToTensor()]
     if normalized:

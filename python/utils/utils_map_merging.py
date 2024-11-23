@@ -11,6 +11,8 @@ import faiss
 
 import vpr_models
 from estimator import get_estimator, available_models
+from estimator.utils import to_numpy
+import matplotlib.pyplot as plt
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
@@ -48,14 +50,17 @@ def initialize_pose_estimator(model, device):
 	"""Initialize and return the model."""
 	return get_estimator(model, device=device)
 
-def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):
-	"""Perform kNN search and return predictions."""
-	faiss_index = faiss.IndexFlatL2(descriptors_dimension)
-	faiss_index.add(database_descriptors)
-	del database_descriptors
-	logging.info("Calculating recalls")
-	distances, predictions = faiss_index.search(queries_descriptors, max(recall_values))
-	return distances, predictions
+def save_vis_coarse_loc(log_dir, db_submap, db_submap_id, query_submap, query_submap_id, preds):
+	db_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in db_submap.nodes.items()]
+	query_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in query_submap.nodes.items()]
+	fig, axes = plt.subplots(preds.shape[0], preds.shape[1]+1, figsize=(20, 2 * (preds.shape[1]+1)))
+	for query_id in range(preds.shape[0]):
+		axes[query_id, 0].imshow(query_images[query_id])
+		axes[query_id, 0].set_title(f'Q{query_id + 1}')
+		for i in range(preds.shape[1]):
+			axes[query_id, i + 1].imshow(db_images[preds[query_id, i]])
+			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i] + 1}')
+	plt.savefig(os.path.join(log_dir, f"preds/results_{db_submap_id}_{query_submap_id}_coarse_loc.png"))
 
 def save_visualization(log_dir, query_index, list_of_images_paths, preds_correct):
 	# """Save visualization to files."""
@@ -82,7 +87,8 @@ def parse_arguments():
 											"smallest edge of all images to this value, while keeping aspect ratio")
 	parser.add_argument("--num_submap", type=int, default=2, help="number of submaps for merging")
 	
-	parser.add_argument("--pose_estimation_method", type=str, default="master")
+	parser.add_argument("--pose_estimation_method", type=str, default="master",
+						help="master, duster")
 
 	# parser.add_argument("--positive_dist_threshold", type=int, default=25,
 	# 										help="distance (in meters) for a prediction to be considered a positive")
@@ -99,8 +105,6 @@ def parse_arguments():
 	# 										help="_")
 	# parser.add_argument("--batch_size", type=int, default=4,
 	# 										help="set to 1 if database images may have different resolution")
-	parser.add_argument("--log_dir", type=str, default="default", 
-					 help="experiment name, output logs will be saved under logs/log_dir")
 	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="_")
 	# parser.add_argument("--recall_values", type=int, nargs="+", default=[1, 5, 10, 20],
 	# 										help="values for recall (e.g. recall@1, recall@5)")
