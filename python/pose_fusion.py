@@ -1,7 +1,6 @@
 """
 Usage:
-python pose_fusion.py \
---data_path /Rocket_ssd/dataset/data_litevloc/17DRP5sb8fy/
+python pose_fusion.py data_path /Rocket_ssd/dataset/data_litevloc/17DRP5sb8fy/
 """
 
 import os
@@ -14,6 +13,7 @@ from nav_msgs.msg import Odometry, Path
 from geometry_msgs.msg import PoseStamped
 
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
+from pycpptools.src.python.utils_algorithm.gtsam_poes_graph import PoseGraph
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description="Pose Fusion", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -24,14 +24,10 @@ def parse_arguments():
 	args, unknown = parser.parse_known_args()
 	return args	
 
-class PoseFusion:
+class PoseFusion(PoseGraph):
 	def __init__(self, args):
-		"""Initialize gtsam factor graph and isam"""
-		self.graph = gtsam.NonlinearFactorGraph()
-		self.initail_estimate = gtsam.Values()
-		self.current_estimate = gtsam.Values()
+		super().__init__()
 		self.timestamp = dict()
-
 		if args.isam_params:
 			params = gtsam.ISAM2Params()
 			params.setRelinearizeThreshold(0.1)
@@ -40,39 +36,13 @@ class PoseFusion:
 		else:
 			self.isam = gtsam.ISAM2()
 
-	def add_prior_factor(self, key: int, pose: gtsam.Pose3, sigma: np.ndarray):
-		prior_cov = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
-		self.graph.add(gtsam.PriorFactorPose3(key, pose, prior_cov))
-
-	def add_odometry_factor(self, 
-							prev_key: int, prev_pose: gtsam.Pose3, 
-							curr_key: int, curr_pose: gtsam.Pose3, 
-							sigma: np.ndarray):
-		odometry_cov = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
-		delta_pose = prev_pose.between(curr_pose)
-		self.graph.add(gtsam.BetweenFactorPose3(prev_key, curr_key, delta_pose, odometry_cov))
-
 	def add_init_estimate(self, key: int, timestamp: float, pose: gtsam.Pose3):
-		if self.initail_estimate.exists(key):
-			self.initail_estimate.erase(key)
-			self.initail_estimate.insert(key, pose)
+		if self.initial_estimate.exists(key):
+			self.initial_estimate.erase(key)
+			self.initial_estimate.insert(key, pose)
 		else:
-			self.initail_estimate.insert(key, pose)
+			self.initial_estimate.insert(key, pose)
 			self.timestamp[key] = timestamp
-
-	def perform_optimization(self):
-		self.isam.update(self.graph, self.initail_estimate)
-		self.current_estimate = self.isam.calculateEstimate()
-		self.graph.resize(0)
-		self.initail_estimate.clear()
-		result = {'current_estimate': self.current_estimate}
-		return result
-
-	def get_margin_covariance(self, key: int):
-		if self.current_estimate.exists(key):
-			return self.isam.marginalCovariance(key)
-		else:
-			return None
 
 	def initalize_ros(self):
 		self.pub_odom = rospy.Publisher('/pose_fusion/odometry', Odometry, queue_size=10)
