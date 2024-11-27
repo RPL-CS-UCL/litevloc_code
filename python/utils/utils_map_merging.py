@@ -65,7 +65,7 @@ def save_vis_coarse_loc(log_dir, db_submap, db_submap_id, query_submap, query_su
 			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i] + 1}')
 	plt.savefig(os.path.join(log_dir, f"preds/results_{db_submap_id}_{query_submap_id}_coarse_loc.png"))
 
-def save_pg_coarse_loc(log_dir, db_submap, db_submap_id, query_submap, query_submap_id, edges_nodeA_to_nodeB):
+def save_vis_pose_graph(log_dir, db_submap, db_submap_id, query_submap, query_submap_id, edges_nodeA_to_nodeB):
 	"""Save visualization of graph-based map with nodes and edges."""
 	fig, ax = plt.subplots(figsize=(10, 10))
 	# Plot submap
@@ -90,22 +90,6 @@ def save_pg_coarse_loc(log_dir, db_submap, db_submap_id, query_submap, query_sub
 	ax.grid(ls='--', color='0.7')
 	plt.axis('equal')
 	plt.savefig(os.path.join(log_dir, f"preds/results_{db_submap_id}_{query_submap_id}_coarse_loc_connection.png"))
-
-def save_visualization(log_dir, query_index, list_of_images_paths, preds_correct):
-	# """Save visualization to files."""
-	# logging.debug(f"Saving the visualization in {log_dir}")
-	# prediction_image = build_prediction_image(list_of_images_paths, preds_correct)
-	# pred_image_path = os.path.join(log_dir, 'preds', f"vpr_{query_index:06d}.jpg")
-	# prediction_image.save(pred_image_path)
-
-	# save_file_with_paths(
-	# 	query_path=list_of_images_paths[0],
-	# 	preds_paths=list_of_images_paths[1:],
-	# 	positives_paths=None,
-	# 	output_path=os.path.join(log_dir, 'preds', f"vpr_{query_index:06d}.txt"),
-	# 	use_labels=False
-	# )
-	pass
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
