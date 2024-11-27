@@ -11,6 +11,8 @@ import faiss
 
 import vpr_models
 from estimator import get_estimator, available_models
+from estimator.utils import to_numpy
+import matplotlib.pyplot as plt
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
@@ -39,23 +41,55 @@ def setup_log_environment(out_dir, args):
     os.system(f"ln -s {log_dir} {os.path.join(out_dir, f'outputs_{args.pose_estimation_method}', 'latest')}")
     return log_dir
 
-def initialize_vpr_model(method, backbone, descriptors_dimension, device):
-	"""Initialize and return the model."""
-	model = vpr_models.get_model(method, backbone, descriptors_dimension)
-	return model.eval().to(device)
+# def initialize_vpr_model(method, backbone, descriptors_dimension, device):
+# 	"""Initialize and return the model."""
+# 	model = vpr_models.get_model(method, backbone, descriptors_dimension)
+# 	return model.eval().to(device)
 
 def initialize_pose_estimator(model, device):
 	"""Initialize and return the model."""
 	return get_estimator(model, device=device)
 
-def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):
-	"""Perform kNN search and return predictions."""
-	faiss_index = faiss.IndexFlatL2(descriptors_dimension)
-	faiss_index.add(database_descriptors)
-	del database_descriptors
-	logging.info("Calculating recalls")
-	distances, predictions = faiss_index.search(queries_descriptors, max(recall_values))
-	return distances, predictions
+"""
+Visualization
+"""
+def save_vis_coarse_loc(log_dir, db_submap, db_submap_id, query_submap, query_submap_id, preds):
+	db_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in db_submap.nodes.items()]
+	query_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in query_submap.nodes.items()]
+	fig, axes = plt.subplots(preds.shape[0], preds.shape[1]+1, figsize=(20, 2 * (preds.shape[1]+1)))
+	for query_id in range(preds.shape[0]):
+		axes[query_id, 0].imshow(query_images[query_id])
+		axes[query_id, 0].set_title(f'Q{query_id + 1}')
+		for i in range(preds.shape[1]):
+			axes[query_id, i + 1].imshow(db_images[preds[query_id, i]])
+			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i] + 1}')
+	plt.savefig(os.path.join(log_dir, f"preds/results_{db_submap_id}_{query_submap_id}_coarse_loc.png"))
+
+def save_pg_coarse_loc(log_dir, db_submap, db_submap_id, query_submap, query_submap_id, edges_nodeA_to_nodeB):
+	"""Save visualization of graph-based map with nodes and edges."""
+	fig, ax = plt.subplots(figsize=(10, 10))
+	# Plot submap
+	for node_id, node in db_submap.nodes.items():
+		ax.plot(node.trans_gt[0], node.trans_gt[1], 'bo', markersize=5)
+		ax.text(node.trans_gt[0], node.trans_gt[1], f'DB{node_id}', fontsize=13, color='k')
+		for edge in node.edges:
+			next_node = edge[0]
+			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
+
+	for node_id, node in query_submap.nodes.items():			
+		ax.plot(node.trans_gt[0], node.trans_gt[1], 'go', markersize=5)
+		ax.text(node.trans_gt[0], node.trans_gt[1], f'Q{node_id}', fontsize=13, color='k')		
+		for edge in node.edges:
+			next_node = edge[0]
+			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
+	# Plot connections
+	for edge in edges_nodeA_to_nodeB:
+		nodeA, nodeB, _ = edge
+		ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
+	fig.tight_layout()
+	ax.grid(ls='--', color='0.7')
+	plt.axis('equal')
+	plt.savefig(os.path.join(log_dir, f"preds/results_{db_submap_id}_{query_submap_id}_coarse_loc_connection.png"))
 
 def save_visualization(log_dir, query_index, list_of_images_paths, preds_correct):
 	# """Save visualization to files."""
@@ -82,7 +116,8 @@ def parse_arguments():
 											"smallest edge of all images to this value, while keeping aspect ratio")
 	parser.add_argument("--num_submap", type=int, default=2, help="number of submaps for merging")
 	
-	parser.add_argument("--pose_estimation_method", type=str, default="master")
+	parser.add_argument("--pose_estimation_method", type=str, default="master",
+						help="master, duster")
 
 	# parser.add_argument("--positive_dist_threshold", type=int, default=25,
 	# 										help="distance (in meters) for a prediction to be considered a positive")

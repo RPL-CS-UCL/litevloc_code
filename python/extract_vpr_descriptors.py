@@ -48,17 +48,19 @@ def main(args):
 	# Extract VPR descriptors for all nodes in the map
 	start_time = time.time()
 	db_descriptors_id = image_graph.get_all_id()
-	db_descriptors = np.empty((image_graph.get_num_node(), args.descriptors_dimension), dtype="float32")
+	db_descriptors = np.empty((image_graph.get_num_node(), args.descriptors_dimension + 1), dtype=object)
 	for indices, (_, map_node) in enumerate(image_graph.nodes.items()):
 		with torch.no_grad():
 			desc = model(map_node.rgb_image.unsqueeze(0).to(args.device)).cpu().numpy()
-			db_descriptors[indices, :] = desc[0]
+			vec = np.empty((1, args.descriptors_dimension + 1), dtype=object)
+			vec[0, 0], vec[0, 1:] = map_node.rgb_img_name, desc[0]
+			db_descriptors[indices, :] = vec[0, :]
 	print(f"IDs: {db_descriptors_id} extracted {db_descriptors.shape} VPR descriptors.")
 	print(f'Extract each VPR descriptor costs: {(time.time() - start_time) / len(db_descriptors):.3f}s')
 
 	"""Save image descriptors"""
 	if args.save_descriptors:
-		np.save(os.path.join(log_dir, 'preds', "database_descriptors.npy"), db_descriptors)
+		np.savetxt(os.path.join(log_dir, 'preds', f'database_descriptors.txt'), db_descriptors, fmt='%s ' + '%.9f ' * args.descriptors_dimension)
 
 if __name__ == "__main__":
 	args = parse_arguments()

@@ -6,63 +6,132 @@ import numpy as np
 from utils.utils_image import load_rgb_image, load_depth_image
 from image_node import ImageNode
 
-from pycpptools.src.python.utils_algorithm.shortest_path import dijk_shortest_path
 from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
 from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
+
+def read_poses(file_path):
+	if not os.path.exists(file_path):
+		print(f"Poses not found in {file_path}")
+		return None
+
+	poses = dict()
+	with open(file_path, 'r') as f:
+		for line_id, line in enumerate(f):
+			if line.startswith('#'): 
+				continue
+			if line.startswith('seq'):
+				img_name = line.strip().split(' ')[0]
+				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, time, tx, ty, tz, qx, qy, qz, qw
+			else:
+				img_name = f'seq/{line_id:06}.color.jpg'
+				data = [float(p) for p in line.strip().split(' ')] # Each row: time, tx, ty, tz, qx, qy, qz, qw
+			poses[img_name] = np.array(data)
+	return poses
+
+def read_intrinsics(file_path):
+	if not os.path.exists(file_path):
+		print(f"Intrinsics not found in {file_path}")
+		return None
+
+	intrinsics = dict()
+	with open(file_path, 'r') as f:
+		for line_id, line in enumerate(f):
+			if line.startswith('#'): 
+				continue
+			if line.startswith('seq'):
+				img_name = line.strip().split(' ')[0]
+				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, fx fy cx cy width height
+			else:
+				img_name = f'{line_id:06}.color.jpg'
+				data = [float(p) for p in line.strip().split(' ')] # Each row: fx fy cx cy width height
+			intrinsics[img_name] = np.array(data)
+	return intrinsics
+
+def read_descriptors(file_path):
+	if not os.path.exists(file_path):
+		print(f"Descriptors not found in {file_path}")
+		return None
+	
+	descs = dict()
+	with open(file_path, 'r') as f:
+		for line_id, line in enumerate(f):
+			if line.startswith('seq'):
+				img_name = line.strip().split(' ')[0]
+				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, descriptor (a vector)
+				descs[img_name] = np.array(data)
+			else:
+				img_name = f'seq/{line_id:06}.color.jpg'
+				descs[img_name] = np.array([float(p) for p in line.strip().split(' ')])
+	return descs		
 
 class ImageGraphLoader:
 	def __init__(self):
 		pass
 
 	@staticmethod
-	def load_data(graph_path, resize, depth_scale, load_rgb=False, load_depth=False, normalized=False):
+	def load_data(map_root, resize, depth_scale, load_rgb=False, load_depth=False, normalized=False):
 		image_graph = ImageGraph()
-		
-		poses = np.loadtxt(os.path.join(graph_path, 'poses.txt'))
-		intrinsics = np.loadtxt(os.path.join(graph_path, 'intrinsics.txt'))
-		descs_path = os.path.join(graph_path, 'database_descriptors.npy')
-		if os.path.exists(descs_path):
-			descs = np.load(descs_path)
-		else:
-			print(f"Descriptors not found in {descs_path}")
-			descs = None
+		image_graph.map_root = map_root
+	
+		poses = read_poses(os.path.join(map_root, 'poses.txt'))
+		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
+		intrinsics = read_intrinsics(os.path.join(map_root, 'intrinsics.txt'))
+		descs = read_descriptors(os.path.join(map_root, 'database_descriptors.txt'))
 
-		for idx in range(poses.shape[0]):
-			rgb_img_path = os.path.join(graph_path, 'seq', f'{idx:06}.color.jpg')
-			if load_rgb:
-				rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
+		# NOTE(gogojjh): guarantee that each image has a corresponding pose
+		for key in poses.keys():
+			rgb_img_name = key
+			rgb_img_path = os.path.join(map_root, rgb_img_name)
+			if os.path.exists(rgb_img_path):
+				rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized) if load_rgb else None
 			else:
-				rgb_image = None
-			
-			depth_img_path = os.path.join(graph_path, 'seq', f'{idx:06}.depth.png')
-			if load_depth:
-				depth_image = load_depth_image(depth_img_path, depth_scale=depth_scale)
+				continue
+
+			depth_img_name = key.replace('color.jpg', 'depth.png')
+			depth_img_path = os.path.join(map_root, depth_img_name)
+			if os.path.exists(depth_img_path):
+				depth_image = load_depth_image(os.path.join(map_root, depth_img_name), depth_scale=depth_scale) if load_depth else None
 			else:
-				depth_image = None
+				continue
 
-			# Each row: time, tx, ty, tz, qx, qy, qz, qw
-			time, trans, quat = poses[idx, 0], poses[idx, 1:4], poses[idx, 4:]
+			# Extrinsics
+			time, trans, quat = poses[key][0], poses[key][1:4], poses[key][4:]
 
-			# Each row: fx fy cx cy width height
-			raw_K = np.array([intrinsics[idx, 0], 0, intrinsics[idx, 2], 
-						      0, intrinsics[idx, 1], intrinsics[idx, 3], 
-						      0, 0, 1], dtype=np.float32).reshape(3, 3)
-			raw_img_size = (int(intrinsics[idx, 4]), int(intrinsics[idx, 5])) # width, height
+			# Intrinsics
+			if key in intrinsics:
+				fx, fy, cx, cy, width, height = \
+					intrinsics[key][0], intrinsics[key][1], intrinsics[key][2], \
+					intrinsics[key][3], int(intrinsics[key][4]), int(intrinsics[key][5])
+			else:
+				continue
+			raw_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
+			raw_img_size = np.array([width, height])
 			K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
-			img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
-			
+			img_size = np.array([int(resize[0]), int(resize[1])]) if resize is not None else raw_img_size
+
+			# Descriptors
+			if descs is not None:
+				if key in descs:
+					desc = descs[key]
+				else:
+					continue
+			else:
+				desc = None
+
 			# Create observation node
-			desc = descs[idx, :] if descs is not None else None
-			node = ImageNode(idx, rgb_image, depth_image, desc,
+			node_id = image_graph.get_num_node()
+			node = ImageNode(node_id, rgb_image, depth_image, desc,
 							 time, trans, quat, 
 							 K, img_size,
-							 rgb_img_path, depth_img_path)
+							 rgb_img_name, depth_img_name)
 			node.set_raw_intrinsics(raw_K, raw_img_size)
-			node.set_pose_gt(trans, quat)
-
+			node.set_pose(trans, quat)
+			if poses_abs_gt is not None and key in poses_abs_gt:
+				time, trans, quat = poses_abs_gt[key][0], poses_abs_gt[key][1:4], poses_abs_gt[key][4:]
+				node.set_pose_gt(trans, quat)
 			image_graph.add_node(node)
 
-		edge_list_path = os.path.join(graph_path, 'edge_list.txt')
+		edge_list_path = os.path.join(map_root, 'edge_list.txt')
 		image_graph.read_edge_list(edge_list_path)
 
 		return image_graph
@@ -109,6 +178,7 @@ class TestImageGraph():
 		print(f"Image Descriptor of Node 2: {node.global_descriptor}")
 
 		# Find the shortest path from node 1 to node 4
+		from pycpptools.src.python.utils_algorithm.shortest_path import dijk_shortest_path
 		distance, path = dijk_shortest_path(graph, graph.get_node(1), graph.get_node(4))
 		print(f"Shortest Path from Node 1 to Node 4 with distance {distance}")
 		print(' -> '.join([str(node.id) for node in path]))

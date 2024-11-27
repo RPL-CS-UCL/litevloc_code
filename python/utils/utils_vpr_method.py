@@ -50,7 +50,6 @@ def perform_knn_search(database_descriptors, queries_descriptors, descriptors_di
 	"""Perform kNN search and return predictions."""
 	faiss_index = faiss.IndexFlatL2(descriptors_dimension)
 	faiss_index.add(database_descriptors)
-	del database_descriptors
 	logging.info("Calculating recalls")
 	distances, predictions = faiss_index.search(queries_descriptors, max(recall_values))
 	return distances, predictions
