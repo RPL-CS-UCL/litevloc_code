@@ -8,6 +8,22 @@ from image_node import ImageNode
 
 from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
 from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
+from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix, convert_matrix_to_vec
+
+def read_timestamps(file_path):
+	times = dict()
+	with open(file_path, 'r') as f:
+		for line_id, line in enumerate(f):
+			if line.startswith('#'): 
+				continue
+			if line.startswith('seq'):
+				img_name = line.strip().split(' ')[0]
+				data = float(line.strip().split(' ')[1]) # Each row: image_name, timestamp
+			else:
+				img_name = f'seq/{line_id:06}.color.jpg'
+				data = float(line.strip().split(' ')[1]) # Each row: qw, qx, qy, tx, ty, tz
+			times[img_name] = np.array(data)
+	return times
 
 def read_poses(file_path):
 	if not os.path.exists(file_path):
@@ -21,10 +37,10 @@ def read_poses(file_path):
 				continue
 			if line.startswith('seq'):
 				img_name = line.strip().split(' ')[0]
-				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, time, tx, ty, tz, qx, qy, qz, qw
+				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, qw, qx, qy, tx, ty, tz
 			else:
 				img_name = f'seq/{line_id:06}.color.jpg'
-				data = [float(p) for p in line.strip().split(' ')] # Each row: time, tx, ty, tz, qx, qy, qz, qw
+				data = [float(p) for p in line.strip().split(' ')] # Each row: qw, qx, qy, tx, ty, tz
 			poses[img_name] = np.array(data)
 	return poses
 
@@ -73,9 +89,10 @@ class ImageGraphLoader:
 		image_graph = ImageGraph()
 		image_graph.map_root = map_root
 	
+		timestamps = read_timestamps(os.path.join(map_root, 'timestamps.txt'))		
+		intrinsics = read_intrinsics(os.path.join(map_root, 'intrinsics.txt'))
 		poses = read_poses(os.path.join(map_root, 'poses.txt'))
 		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
-		intrinsics = read_intrinsics(os.path.join(map_root, 'intrinsics.txt'))
 		descs = read_descriptors(os.path.join(map_root, 'database_descriptors.txt'))
 
 		# NOTE(gogojjh): guarantee that each image has a corresponding pose
@@ -95,7 +112,9 @@ class ImageGraphLoader:
 				continue
 
 			# Extrinsics
-			time, trans, quat = poses[key][0], poses[key][1:4], poses[key][4:]
+			time, quat, trans = timestamps[key], poses[key][:4], poses[key][4:]
+			Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
+			trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
 
 			# Intrinsics
 			if key in intrinsics:
@@ -127,7 +146,9 @@ class ImageGraphLoader:
 			node.set_raw_intrinsics(raw_K, raw_img_size)
 			node.set_pose(trans, quat)
 			if poses_abs_gt is not None and key in poses_abs_gt:
-				time, trans, quat = poses_abs_gt[key][0], poses_abs_gt[key][1:4], poses_abs_gt[key][4:]
+				quat, trans = poses_abs_gt[key][:4], poses_abs_gt[key][4:]
+				Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
+				trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
 				node.set_pose_gt(trans, quat)
 			image_graph.add_node(node)
 
