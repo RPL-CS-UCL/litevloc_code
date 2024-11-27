@@ -99,8 +99,8 @@ def parse_arguments():
 	# 										help="_")
 	# parser.add_argument("--batch_size", type=int, default=4,
 	# 										help="set to 1 if database images may have different resolution")
-	parser.add_argument("--log_dir", type=str, default="default", 
-					 help="experiment name, output logs will be saved under logs/log_dir")
+	# parser.add_argument("--log_dir", type=str, default="default", 
+	# 				 help="experiment name, output logs will be saved under logs/log_dir")
 	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="_")
 	# parser.add_argument("--recall_values", type=int, nargs="+", default=[1, 5, 10, 20],
 	# 										help="values for recall (e.g. recall@1, recall@5)")
