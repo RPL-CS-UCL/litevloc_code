@@ -2,6 +2,7 @@
 
 import os
 import numpy as np
+import pathlib
 
 from utils.utils_image import load_rgb_image, load_depth_image
 from image_node import ImageNode
@@ -161,6 +162,11 @@ class ImageGraphLoader:
 class ImageGraph(BaseGraph):
 	def __init__(self):
 		super().__init__()
+
+	# TODO(gogojjh):
+	# def save_to_file(self):
+	# 	os.makedirs(os.path.join(self.map_root, "seq"), exist_ok=True)
+		
 
 class TestImageGraph():
 	def __init__(self):
