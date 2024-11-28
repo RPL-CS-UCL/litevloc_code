@@ -199,11 +199,11 @@ class ImageGraph(BaseGraph):
 
 			descs[line_id, 0], descs[line_id, 1:] = img_name, node.get_descriptor()
 
-		np.savetxt(os.path.join(self.map_root, "timestamps.txt"), times, fmt='%s %.9f')
-		np.savetxt(os.path.join(self.map_root, "intrinsics.txt"), intrinsics, fmt='%s %.9f %.9f %.9f %.9f %d %d')
-		np.savetxt(os.path.join(self.map_root, "poses.txt"), poses, fmt='%s %.9f %.9f %.9f %.9f %.9f %.9f %.9f')
-		np.savetxt(os.path.join(self.map_root, "poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.9f %.9f %.9f %.9f %.9f %.9f %.9f')
-		np.savetxt(os.path.join(self.map_root, "database_descriptors.txt"), descs, fmt='%s ' + '%.9f ' * (descs.shape[1] - 1))
+		np.savetxt(os.path.join(self.map_root, "timestamps.txt"), times, fmt='%s %.6f')
+		np.savetxt(os.path.join(self.map_root, "intrinsics.txt"), intrinsics, fmt='%s %.6f %.6f %.6f %.6f %d %d')
+		np.savetxt(os.path.join(self.map_root, "poses.txt"), poses, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
+		np.savetxt(os.path.join(self.map_root, "poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
+		np.savetxt(os.path.join(self.map_root, "database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
 		self.write_edge_list(os.path.join(self.map_root, 'edge_list.txt'))
 
 class TestImageGraph():
