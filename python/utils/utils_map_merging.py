@@ -27,19 +27,22 @@ def setup_logging(log_dir, stdout_level='info'):
 	)
 
 def setup_log_environment(out_dir, args):
-    """Setup logging and directories."""
-    os.makedirs(out_dir, exist_ok=True)
-    start_time = datetime.now()
-    log_dir = os.path.join(out_dir, f"outputs_{args.pose_estimation_method}", start_time.strftime("%Y-%m-%d_%H-%M-%S"))
-    setup_logging(log_dir, stdout_level="info")
-    logging.info(" ".join(sys.argv))
-    logging.info(f"Arguments: {args}")
-    logging.info(f"Testing with {args.pose_estimation_method} with image size {args.image_size}")
-    logging.info(f"The outputs are being saved in {log_dir}")
-    os.makedirs(os.path.join(log_dir, "preds"))
-    os.system(f"rm {os.path.join(out_dir, f'outputs_{args.pose_estimation_method}', 'latest')}")
-    os.system(f"ln -s {log_dir} {os.path.join(out_dir, f'outputs_{args.pose_estimation_method}', 'latest')}")
-    return log_dir
+	"""Setup logging and directories."""
+	os.makedirs(out_dir, exist_ok=True)
+	os.makedirs(os.path.join(out_dir, "seq"), exist_ok=True)
+	os.makedirs(os.path.join(out_dir, "preds"), exist_ok=True)
+	# start_time = datetime.now()
+	# log_dir = os.path.join(out_dir, f"outputs_{args.pose_estimation_method}", start_time.strftime("%Y-%m-%d_%H-%M-%S"))
+	# setup_logging(log_dir, stdout_level="info")
+	# logging.info(" ".join(sys.argv))
+	# logging.info(f"Arguments: {args}")
+	# logging.info(f"Testing with {args.pose_estimation_method} with image size {args.image_size}")
+	# logging.info(f"The outputs are being saved in {log_dir}")
+	# os.makedirs(os.path.join(log_dir, "preds"))
+	# os.system(f"rm {os.path.join(out_dir, f'outputs_{args.pose_estimation_method}', 'latest')}")
+	# os.system(f"ln -s {log_dir} {os.path.join(out_dir, f'outputs_{args.pose_estimation_method}', 'latest')}")
+	# return log_dir
+	return out_dir
 
 # def initialize_vpr_model(method, backbone, descriptors_dimension, device):
 # 	"""Initialize and return the model."""
@@ -53,7 +56,7 @@ def initialize_pose_estimator(model, device):
 """
 Visualization
 """
-def save_vis_coarse_loc(log_dir, db_submap, db_submap_id, query_submap, query_submap_id, preds):
+def save_vis_coarse_loc(log_dir, db_submap, query_submap, query_submap_id, preds):
 	db_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in db_submap.nodes.items()]
 	query_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in query_submap.nodes.items()]
 	fig, axes = plt.subplots(preds.shape[0], preds.shape[1]+1, figsize=(20, 2 * (preds.shape[1]+1)))
@@ -63,9 +66,9 @@ def save_vis_coarse_loc(log_dir, db_submap, db_submap_id, query_submap, query_su
 		for i in range(preds.shape[1]):
 			axes[query_id, i + 1].imshow(db_images[preds[query_id, i]])
 			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i] + 1}')
-	plt.savefig(os.path.join(log_dir, f"preds/results_{db_submap_id}_{query_submap_id}_coarse_loc.png"))
+	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc.png"))
 
-def save_vis_pose_graph(log_dir, db_submap, db_submap_id, query_submap, query_submap_id, edges_nodeA_to_nodeB):
+def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges_nodeA_to_nodeB):
 	"""Save visualization of graph-based map with nodes and edges."""
 	fig, ax = plt.subplots(figsize=(10, 10))
 	# Plot submap
@@ -89,7 +92,7 @@ def save_vis_pose_graph(log_dir, db_submap, db_submap_id, query_submap, query_su
 	fig.tight_layout()
 	ax.grid(ls='--', color='0.7')
 	plt.axis('equal')
-	plt.savefig(os.path.join(log_dir, f"preds/results_{db_submap_id}_{query_submap_id}_coarse_loc_connection.png"))
+	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc_connection.png"))
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
