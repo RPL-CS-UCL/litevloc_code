@@ -5,6 +5,37 @@ from point_node import PointNode
 
 from pycpptools.src.python.utils_algorithm.shortest_path import dijk_shortest_path
 from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
+from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix, convert_matrix_to_vec
+
+def read_timestamps(file_path):
+	times = dict()
+	with open(file_path, 'r') as f:
+		for line_id, line in enumerate(f):
+			if line.startswith('#'): 
+				continue
+			if line.startswith('seq'):
+				data = float(line.strip().split(' ')[1]) # Each row: image_name, timestamp
+			else:
+				data = float(line.strip().split(' ')[1]) # Each row: qw, qx, qy, tx, ty, tz
+			times[line_id] = np.array(data)
+	return times
+
+def read_poses(file_path):
+	if not os.path.exists(file_path):
+		print(f"Poses not found in {file_path}")
+		return None
+
+	poses = dict()
+	with open(file_path, 'r') as f:
+		for line_id, line in enumerate(f):
+			if line.startswith('#'): 
+				continue
+			if line.startswith('seq'):
+				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, qw, qx, qy, tx, ty, tz
+			else:
+				data = [float(p) for p in line.strip().split(' ')] # Each row: qw, qx, qy, tx, ty, tz
+			poses[line_id] = np.array(data)
+	return poses
 
 class PointGraphLoader:
 	def __init__(self):
@@ -13,16 +44,22 @@ class PointGraphLoader:
 	@staticmethod
 	def load_data(graph_path):
 		point_graph = PointGraph()
-		poses = np.loadtxt(os.path.join(graph_path, 'poses.txt'))
-		for i in range(0, poses.shape[0]):
-			# Each row: time, tx, ty, tz, qx, qy, qz, qw
-			time, trans, quat = poses[i, 0], poses[i, 1:4], poses[i, 4:] 
-			node = PointNode(i, f'point node {i}', time, trans, quat, None, None)
-			node.set_pose_gt(trans, quat)				
+		times = read_timestamps(os.path.join(graph_path, 'timestamps.txt'))
+		poses = read_poses(os.path.join(graph_path, 'poses.txt'))
+
+		for key in poses.keys():	
+			# Each row: time, qw, qx, qy, tx, ty, tz
+			time, quat, trans = times[key], poses[key][:4], poses[key][4:] 
+			Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
+			trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
+			
+			node_id = point_graph.get_num_node()
+			node = PointNode(node_id, f'point node {node_id}', time, trans, quat, None, None)
 			point_graph.add_node(node)
+
 		edge_file = os.path.join(graph_path, 'edge_list.txt')
-		if os.path.exists(edge_file):
-			point_graph.read_edge_list(edge_file)
+		point_graph.read_edge_list(edge_file)
+		
 		return point_graph
 
 # Image Graph Class

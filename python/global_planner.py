@@ -4,8 +4,8 @@
 Usage: 
 python ros_global_planner.py \
 --dataset_path /Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_17DRP5sb8fy/out_map \
---image_size 288 512 --device=cuda \
---vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors \
+--image_size 288 512 --device cuda \
+--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 512 --save_descriptors \
 --num_preds_to_save 3 
 """
 
@@ -20,6 +20,9 @@ from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PointStamped
 from std_msgs.msg import Int16
 
+import cv2
+import threading
+
 from point_graph import PointGraphLoader as GraphLoader
 from image_node import ImageNode
 from point_node import PointNode
@@ -30,8 +33,6 @@ from utils.utils_pipeline import parse_arguments, setup_log_environment
 
 import pycpptools.src.python.utils_algorithm as pytool_alg
 import pycpptools.src.python.utils_ros as pytool_ros
-import threading
-import cv2
 
 class GlobalPlanner:
 	def __init__(self, args):
@@ -69,7 +70,6 @@ class GlobalPlanner:
 
 	def read_map_from_file(self):
 		data_path = self.args.dataset_path
-		print(data_path)
 		self.point_graph = GraphLoader.load_data(data_path)
 		self.map_node_position = np.array([node.trans for _, node in self.point_graph.nodes.items()])
 		rospy.loginfo(f"Loaded {self.point_graph} from {data_path}")
