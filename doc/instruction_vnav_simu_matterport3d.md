@@ -46,6 +46,21 @@
       git clone https://github.com/RPL-CS-UCL/navigation_interface.git
       catkin build navigation_interface
       ```
+6. Install other dependencies
+    ```
+    sudo apt install ros-noetic-diagnostic-aggregator
+    ```
+7. Build ROS packages
+    ```
+    catkin build \
+    sensor_scan_generation velodyne_simulator vehicle_simulator joy ps3joy \
+    terrain_analysis terrain_analysis_ext \
+    local_planner visualization_tools \
+    waypoint_example waypoint_rviz_plugin teleop_rviz_plugin \
+    iplanner_path_follow \
+    navigation_interface \
+    -DPYTHON_EXECUTABLE=$(which python)    
+    ```
 ### Running the CMU Navigation Stack in Matterport3d
 1. Start the environment
     ```

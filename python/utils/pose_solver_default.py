@@ -89,6 +89,7 @@ _CN.DATASET.ESTIMATED_DEPTH = None  # Use 'estimated' predictions of depth map, 
                                     # For Mapfree: suffix to add to depthpath when loading depth maps;  if None, no depth
 _CN.DATASET.QUERY_FRAME_COUNT = 1   # number of query frames to infer from. 1 or 9
 _CN.DATASET.MAX_DEPTH = None
+_CN.DATASET.VIZ_CAM_SIZE = None
 
 ############# TRAINING #############
 _CN.TRAINING = CN()

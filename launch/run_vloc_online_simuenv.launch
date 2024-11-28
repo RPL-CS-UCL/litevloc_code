@@ -55,8 +55,8 @@
 	<group if="$(arg setup_simu_env)">
 		<node name="ros_global_planner" pkg="litevloc" type="ros_global_planner.py" output="log"
 			args="--dataset_path $(arg map_path) \
-						--image_size 512 288 --device=cuda \
-						--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256" >
+						--image_size 512 288 --device cuda \
+						--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256" >
 			<param name="frame_id_map" value="vloc_map" />
 			<param name="main_freq" value="1" />
 			<param name="conv_dist" value="0.5" />
@@ -71,9 +71,9 @@
 	<node name="ros_loc_pipeline" pkg="litevloc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
 					--image_size 512 288
-					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 
+					--device cuda --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 
 					--img_matcher master --pose_solver pnp 
-					--config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml --viz
+					--config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml
 					--ros_rgb_img_type raw
 					--global_pos_threshold $(arg global_pos_threshold)
 					--min_master_conf_thre 1.5

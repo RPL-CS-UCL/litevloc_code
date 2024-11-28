@@ -18,7 +18,7 @@ conda env create -f environment.yaml
 conda activate litevloc && pip install -r requirements.txt
 ```
 Set this in the bash: 
-```bash
+```
 export PYTHONPATH=$PYTHONPATH:~/robohike_ws/src
 export TORCH_HOME=path_torch_hub
 ```
