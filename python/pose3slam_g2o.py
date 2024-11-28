@@ -44,7 +44,8 @@ def main():
     print("Adding prior to g2o file ")
     priorModel = gtsam.noiseModel.Diagonal.Variances(vector6(1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4))
     firstKey = initial.keys()[0]
-    graph.add(gtsam.PriorFactorPose3(firstKey, gtsam.Pose3(), priorModel))
+    init_estimate = initial.atPose3(firstKey)
+    graph.add(gtsam.PriorFactorPose3(firstKey, init_estimate, priorModel))
 
     # Set up the optimizer
     params = gtsam.LevenbergMarquardtParams()
@@ -71,8 +72,9 @@ def main():
         ax = fig.add_subplot(111, projection='3d')
         for i in range(resultPoses.size()):
             plot.plot_pose3(1, resultPoses.atPose3(i))
-        ax.view_init(elev=0, azim=90)
+        ax.view_init(elev=90, azim=90)
         plt.tight_layout()
+        plt.axis('equal')
         plt.show()
 
 if __name__ == "__main__":
