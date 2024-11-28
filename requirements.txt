@@ -50,6 +50,8 @@ lightglue @ git+https://github.com/cvg/LightGlue
 empy==4.2
 catkin_pkg
 rospkg
+defusedxml
+netifaces
 # Others
 yacs
 colorama

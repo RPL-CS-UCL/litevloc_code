@@ -10,10 +10,9 @@ import argparse
 import numpy as np
 import rospy
 from nav_msgs.msg import Odometry, Path
-from geometry_msgs.msg import PoseStamped
 
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
-from pycpptools.src.python.utils_algorithm.gtsam_poes_graph import PoseGraph
+from pycpptools.src.python.utils_algorithm.gtsam_pose_graph import PoseGraph
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description="Pose Fusion", formatter_class=argparse.ArgumentDefaultsHelpFormatter)

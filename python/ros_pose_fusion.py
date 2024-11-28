@@ -1,12 +1,9 @@
 #!/usr/bin/env python
 
-import logging
-
 # ROS
 import rospy
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseStamped
 import tf2_ros
 
 import queue
@@ -16,7 +13,7 @@ import threading
 
 from pose_fusion import parse_arguments, PoseFusion
 from pycpptools.src.python.utils_algorithm.stamped_poses import StampedPoses
-from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3, convert_matrix_to_vec, convert_vec_to_matrix
+from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3, convert_matrix_to_vec
 from pycpptools.src.python.utils_ros import ros_msg
 
 args = parse_arguments()
