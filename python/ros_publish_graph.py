@@ -23,14 +23,13 @@ class ROSPublishGraph:
 		self.br = tf2_ros.TransformBroadcaster()
 
 	def read_map_from_file(self):
-		data_path = self.args.map_path
-		self.point_graph = GraphLoader.load_data(data_path)
-		print('Loaded point graph from {}'.format(data_path))
+		self.point_graph = GraphLoader.load_data(self.args.map_path)
+		print('Loaded point graph from {}'.format(self.args.map_path))
 		print('Number of nodes: {}'.format(len(self.point_graph.nodes)))
 
 	def publish_message(self):
 		header = Header(stamp=rospy.Time.now(), frame_id='map')
-		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, 'map_graph')
+		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 2.0, 0.0]), np.array([0, 0, 0, 1]), header, 'map_graph')
 		self.br.sendTransform(tf_msg)
 
 		header = Header(stamp=rospy.Time.now(), frame_id='map_graph')
