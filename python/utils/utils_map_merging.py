@@ -69,29 +69,33 @@ def save_vis_coarse_loc(log_dir, db_submap, query_submap, query_submap_id, preds
 	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc.png"))
 
 def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges_nodeA_to_nodeB):
-	"""Save visualization of graph-based map with nodes and edges."""
+	"""
+	Save visualization of graph-based map with nodes and edges.
+	Plot the trajectory onto the X-Z plane.
+	"""
 	fig, ax = plt.subplots(figsize=(10, 10))
 	# Plot submap
 	for node_id, node in db_submap.nodes.items():
-		ax.plot(node.trans_gt[0], node.trans_gt[1], 'bo', markersize=5)
-		ax.text(node.trans_gt[0], node.trans_gt[1], f'DB{node_id}', fontsize=13, color='k')
+		ax.plot(node.trans_gt[0], node.trans_gt[2], 'bo', markersize=5)
+		ax.text(node.trans_gt[0], node.trans_gt[2], f'DB{node_id}', fontsize=8, color='k')
 		for edge in node.edges:
 			next_node = edge[0]
-			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
+			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[2], next_node.trans_gt[2]], 'k-')
 
 	for node_id, node in query_submap.nodes.items():			
-		ax.plot(node.trans_gt[0], node.trans_gt[1], 'go', markersize=5)
-		ax.text(node.trans_gt[0], node.trans_gt[1], f'Q{node_id}', fontsize=13, color='k')		
+		ax.plot(node.trans_gt[0], node.trans_gt[2], 'go', markersize=5)
+		ax.text(node.trans_gt[0], node.trans_gt[2], f'Q{node_id}', fontsize=8, color='k')		
 		for edge in node.edges:
 			next_node = edge[0]
-			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
+			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[2], next_node.trans_gt[2]], 'k-')
 	# Plot connections
 	for edge in edges_nodeA_to_nodeB:
 		nodeA, nodeB, _ = edge
-		ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
+		ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[2], nodeB.trans_gt[2]], 'r-')
 	fig.tight_layout()
 	ax.grid(ls='--', color='0.7')
 	plt.axis('equal')
+	plt.xlabel('X-axis'); plt.ylabel('Z-axis')
 	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc_connection.png"))
 
 def parse_arguments():
