@@ -85,10 +85,16 @@ class ImageGraphLoader:
 	def __init__(self):
 		pass
 
+	def __str__(self):
+		num_edge = 0
+		for node_id, node in self.nodes.items():
+			num_edge += len(node.edges)
+		out_str = f"Graph has {len(self.nodes)} nodes with {num_edge} edges, load data from {self.map_root}"
+		return out_str
+
 	@staticmethod
 	def load_data(map_root, resize, depth_scale, load_rgb=False, load_depth=False, normalized=False):
-		image_graph = ImageGraph()
-		image_graph.map_root = map_root
+		image_graph = ImageGraph(map_root)
 	
 		timestamps = read_timestamps(os.path.join(map_root, 'timestamps.txt'))		
 		intrinsics = read_intrinsics(os.path.join(map_root, 'intrinsics.txt'))
@@ -160,13 +166,45 @@ class ImageGraphLoader:
 
 # Image Graph Class
 class ImageGraph(BaseGraph):
-	def __init__(self):
+	def __init__(self, map_root):
 		super().__init__()
-
-	# TODO(gogojjh):
-	# def save_to_file(self):
-	# 	os.makedirs(os.path.join(self.map_root, "seq"), exist_ok=True)
+		self.map_root = map_root
 		
+	def save_to_file(self):
+		num_node = self.get_num_node()
+		times = np.empty((num_node, 2), dtype=object)
+		intrinsics = np.empty((num_node, 7), dtype=object)
+		poses = np.empty((num_node, 8), dtype=object)
+		poses_abs_gt = np.empty((num_node, 8), dtype=object)
+		first_node = next(iter(self.nodes.values()))
+		descs = np.empty((num_node, len(first_node.get_descriptor()) + 1), dtype=object)
+		for line_id, (node_id, node) in enumerate(self.nodes.items()):
+			img_name = f"seq/{node_id:06d}.color.jpg"
+			times[line_id, 0], times[line_id, 1] = img_name, node.time
+
+			fx, fy, cx, cy, width, height = \
+				node.raw_K[0, 0], node.raw_K[1, 1], node.raw_K[0, 2], node.raw_K[1, 2], \
+				node.raw_img_size[0], node.raw_img_size[1]
+			intrinsics[line_id, 0], intrinsics[line_id, 1:] = img_name, np.array([fx, fy, cx, cy, width, height])
+			
+			Tw2c = convert_vec_to_matrix(node.trans, node.quat, 'xyzw')
+			Tc2w = np.linalg.inv(Tw2c)
+			trans, quat = convert_matrix_to_vec(Tc2w, 'wxyz')
+			poses[line_id, 0], poses[line_id, 1:5], poses[line_id, 5:] = img_name, quat, trans
+
+			Tw2c = convert_vec_to_matrix(node.trans_gt, node.quat_gt, 'xyzw')
+			Tc2w = np.linalg.inv(Tw2c)
+			trans, quat = convert_matrix_to_vec(Tc2w, 'wxyz')
+			poses_abs_gt[line_id, 0], poses_abs_gt[line_id, 1:5], poses_abs_gt[line_id, 5:] = img_name, quat, trans
+
+			descs[line_id, 0], descs[line_id, 1:] = img_name, node.get_descriptor()
+
+		np.savetxt(os.path.join(self.map_root, "timestamps.txt"), times, fmt='%s %.9f')
+		np.savetxt(os.path.join(self.map_root, "intrinsics.txt"), intrinsics, fmt='%s %.9f %.9f %.9f %.9f %d %d')
+		np.savetxt(os.path.join(self.map_root, "poses.txt"), poses, fmt='%s %.9f %.9f %.9f %.9f %.9f %.9f %.9f')
+		np.savetxt(os.path.join(self.map_root, "poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.9f %.9f %.9f %.9f %.9f %.9f %.9f')
+		np.savetxt(os.path.join(self.map_root, "database_descriptors.txt"), descs, fmt='%s ' + '%.9f ' * (descs.shape[1] - 1))
+		self.write_edge_list(os.path.join(self.map_root, 'edge_list.txt'))
 
 class TestImageGraph():
 	def __init__(self):
