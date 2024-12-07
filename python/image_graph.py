@@ -96,7 +96,7 @@ class ImageGraphLoader:
 	def load_data(map_root, resize, depth_scale, load_rgb=False, load_depth=False, normalized=False):
 		image_graph = ImageGraph(map_root)
 	
-		timestamps = read_timestamps(os.path.join(map_root, 'timestamps.txt'))		
+		timestamps = read_timestamps(os.path.join(map_root, 'timestamps.txt'))
 		intrinsics = read_intrinsics(os.path.join(map_root, 'intrinsics.txt'))
 		poses = read_poses(os.path.join(map_root, 'poses.txt'))
 		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
@@ -106,15 +106,19 @@ class ImageGraphLoader:
 		for key in poses.keys():
 			rgb_img_name = key
 			rgb_img_path = os.path.join(map_root, rgb_img_name)
-			if os.path.exists(rgb_img_path):
-				rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized) if load_rgb else None
+			if not load_rgb:
+				rgb_image = None
+			elif load_rgb and os.path.exists(rgb_img_path):
+				rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
 			else:
 				continue
 
 			depth_img_name = key.replace('color.jpg', 'depth.png')
 			depth_img_path = os.path.join(map_root, depth_img_name)
-			if os.path.exists(depth_img_path):
-				depth_image = load_depth_image(os.path.join(map_root, depth_img_name), depth_scale=depth_scale) if load_depth else None
+			if not load_depth:
+				depth_image = None
+			elif load_depth and os.path.exists(depth_img_path):
+				depth_image = load_depth_image(os.path.join(map_root, depth_img_name), depth_scale=depth_scale)
 			else:
 				continue
 
@@ -130,6 +134,7 @@ class ImageGraphLoader:
 					intrinsics[key][3], int(intrinsics[key][4]), int(intrinsics[key][5])
 			else:
 				continue
+
 			raw_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
 			raw_img_size = np.array([width, height])
 			K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K

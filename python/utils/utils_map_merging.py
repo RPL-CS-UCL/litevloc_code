@@ -62,10 +62,10 @@ def save_vis_coarse_loc(log_dir, db_submap, query_submap, query_submap_id, preds
 	fig, axes = plt.subplots(preds.shape[0], preds.shape[1]+1, figsize=(20, 2 * (preds.shape[1]+1)))
 	for query_id in range(preds.shape[0]):
 		axes[query_id, 0].imshow(query_images[query_id])
-		axes[query_id, 0].set_title(f'Q{query_id + 1}')
+		axes[query_id, 0].set_title(f'Q{query_id}')
 		for i in range(preds.shape[1]):
 			axes[query_id, i + 1].imshow(db_images[preds[query_id, i]])
-			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i] + 1}')
+			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i]}')
 	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc.png"))
 
 def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges_nodeA_to_nodeB):
