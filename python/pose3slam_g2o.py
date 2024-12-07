@@ -68,11 +68,17 @@ def main():
 
     if args.plot:
         resultPoses = gtsam.utilities.allPose3s(result)
+        x_coords = [resultPoses.atPose3(i).translation()[0] for i in range(resultPoses.size())]
+        y_coords = [resultPoses.atPose3(i).translation()[1] for i in range(resultPoses.size())]
+        z_coords = [resultPoses.atPose3(i).translation()[2] for i in range(resultPoses.size())]
+
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        for i in range(resultPoses.size()):
-            plot.plot_pose3(1, resultPoses.atPose3(i))
-        ax.view_init(elev=90, azim=90)
+        plt.plot(x_coords, y_coords, z_coords, 'o-', color='b', label='Est. Trajectory')
+        ax.set_xlabel('X [m]')
+        ax.set_ylabel('Y [m]')
+        ax.set_zlabel('Z [m]')
+        ax.view_init(elev=0, azim=90)
         plt.tight_layout()
         plt.axis('equal')
         plt.show()
