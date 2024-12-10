@@ -14,10 +14,12 @@ def read_timestamps(file_path):
 			if line.startswith('#'): 
 				continue
 			if line.startswith('seq'):
+				img_name = line.strip().split(' ')[0]
 				data = float(line.strip().split(' ')[1]) # Each row: image_name, timestamp
 			else:
+				img_name = f'seq/{line_id:06}.color.jpg'
 				data = float(line.strip().split(' ')[1]) # Each row: qw, qx, qy, tx, ty, tz
-			times[line_id] = np.array(data)
+			times[img_name] = np.array(data)
 	return times
 
 def read_poses(file_path):
@@ -31,10 +33,12 @@ def read_poses(file_path):
 			if line.startswith('#'): 
 				continue
 			if line.startswith('seq'):
+				img_name = line.strip().split(' ')[0]
 				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, qw, qx, qy, tx, ty, tz
 			else:
+				img_name = f'seq/{line_id:06}.color.jpg'
 				data = [float(p) for p in line.strip().split(' ')] # Each row: qw, qx, qy, tx, ty, tz
-			poses[line_id] = np.array(data)
+			poses[img_name] = np.array(data)
 	return poses
 
 class PointGraphLoader:
@@ -46,6 +50,7 @@ class PointGraphLoader:
 		point_graph = PointGraph()
 		times = read_timestamps(os.path.join(graph_path, 'timestamps.txt'))
 		poses = read_poses(os.path.join(graph_path, 'poses.txt'))
+		poses_abs_gt = read_poses(os.path.join(graph_path, 'poses_abs_gt.txt'))
 
 		for key in poses.keys():	
 			# Each row: time, qw, qx, qy, tx, ty, tz
@@ -55,6 +60,12 @@ class PointGraphLoader:
 			
 			node_id = point_graph.get_num_node()
 			node = PointNode(node_id, f'point node {node_id}', time, trans, quat, None, None)
+			node.set_pose(trans, quat)
+			if poses_abs_gt is not None and key in poses_abs_gt:
+				quat, trans = poses_abs_gt[key][:4], poses_abs_gt[key][4:]
+				Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
+				trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
+				node.set_pose_gt(trans, quat)
 			point_graph.add_node(node)
 
 		edge_file = os.path.join(graph_path, 'edge_list.txt')
