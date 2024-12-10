@@ -92,8 +92,6 @@ def parse_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 	parser.add_argument("--dataset_path", type=str, default="matterport3d", help="path to dataset_path")
-	parser.add_argument("--sample_map", type=int, default=1, help="sample of map")
-	parser.add_argument("--sample_obs", type=int, default=1, help="sample of observation")
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
 											help="Resizing shape for images (WxH). If a single int is passed, set the"
 											"smallest edge of all images to this value, while keeping aspect ratio")
