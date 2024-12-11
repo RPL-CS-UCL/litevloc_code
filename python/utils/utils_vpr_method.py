@@ -12,6 +12,7 @@ from visualizations import build_prediction_image, save_file_with_paths
 
 import argparse
 import faiss
+from matplotlib import pyplot as plt
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
@@ -79,7 +80,6 @@ def save_visualization(log_dir, query_index, list_of_images_paths, preds_correct
 	prediction_image = build_prediction_image(list_of_images_paths, preds_correct)
 	pred_image_path = os.path.join(log_dir, 'preds', f"vpr_{query_index:06d}.jpg")
 	prediction_image.save(pred_image_path)
-
 	save_file_with_paths(
 		query_path=list_of_images_paths[0],
 		preds_paths=list_of_images_paths[1:],
@@ -87,6 +87,30 @@ def save_visualization(log_dir, query_index, list_of_images_paths, preds_correct
 		output_path=os.path.join(log_dir, 'preds', f"vpr_{query_index:06d}.txt"),
 		use_labels=False
 	)
+
+def save_vis_brief_function(log_dir, belief, niter):
+	ids = np.arange(len(belief))
+	plt.figure(figsize=(10, 6))
+	plt.bar(ids, belief, width=0.6, alpha=0.7, label='Belief Probability')
+	plt.xlabel('Frame ID', fontsize=12)
+	plt.ylabel('Probability', fontsize=12)
+	plt.title(f'Belief Distribution at {niter} Query', fontsize=14)
+	plt.xticks(ids, fontsize=10)
+	plt.yticks(fontsize=10)
+	plt.legend(fontsize=12)
+	plt.grid(axis='y', linestyle='--', alpha=0.7)    
+	pred_belief_path = os.path.join(log_dir, 'preds', f"belief_{niter}.png")
+	plt.savefig(pred_belief_path)
+
+def save_vis_diff_matrix(log_dir, diff_matrix):
+	plt.figure(figsize=(8, 8))
+	plt.imshow(diff_matrix, cmap='viridis', aspect='auto')
+	plt.colorbar(label='Difference')
+	plt.xlabel('Database Descriptor Index')
+	plt.ylabel('Query Descriptor Index')
+	plt.title('Difference Matrix')
+	diff_matrix_path = os.path.join(log_dir, 'preds', "diff_matrix.png")
+	plt.savefig(diff_matrix_path)
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)

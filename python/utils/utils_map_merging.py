@@ -56,7 +56,7 @@ def initialize_pose_estimator(model, device):
 """
 Visualization
 """
-def save_vis_coarse_loc(log_dir, db_submap, query_submap, query_submap_id, preds):
+def save_vis_coarse_loc(log_dir, db_submap, query_submap, query_submap_id, preds, suffex=''):
 	db_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in db_submap.nodes.items()]
 	query_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in query_submap.nodes.items()]
 	fig, axes = plt.subplots(preds.shape[0], preds.shape[1]+1, figsize=(20, 2 * (preds.shape[1]+1)))
@@ -66,7 +66,10 @@ def save_vis_coarse_loc(log_dir, db_submap, query_submap, query_submap_id, preds
 		for i in range(preds.shape[1]):
 			axes[query_id, i + 1].imshow(db_images[preds[query_id, i]])
 			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i]}')
-	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc.png"))
+	if suffex == '':
+		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc.png"))
+	else:
+		plt.savefig(os.path.join(log_dir, f"preds/results_{suffex}_{query_submap_id}_coarse_loc.png"))
 
 def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges_nodeA_to_nodeB):
 	"""

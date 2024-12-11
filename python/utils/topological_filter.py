@@ -1,3 +1,7 @@
+'''
+More sequential matching models are available: https://github.com/mingu6/ProbFiltersVPR/tree/master/src/models
+'''
+
 import numpy as np
 import torch
 from typing import Tuple
@@ -6,6 +10,7 @@ class PlaceRecognitionTopologicalFilter:
     '''
     Adapted from https://github.com/mingu6/ProbFiltersVPR/blob/master/src/models/TopologicalFilter.py
     '''
+    # NOTE(gogojjh): the windonw_lower and window_upper change the performance significantly
     def __init__(self, db_descriptors, delta=5, window_lower=-2, window_upper=10, recall_values=5):        
         # get map descriptors
         self.db_descriptors = db_descriptors
@@ -32,7 +37,8 @@ class PlaceRecognitionTopologicalFilter:
               could be concentrated on the start node
         '''
         # Distance between query descriptor and database descriptors
-        dists = np.sqrt(2 - 2 * np.dot(self.db_descriptors, query_desc))
+        # dists = np.sqrt(2 - 2 * np.dot(self.db_descriptors, query_desc))
+        dists = np.linalg.norm(self.db_descriptors - query_desc, axis=1)
         
         # Init for lambda1
         descriptor_quantiles = np.quantile(dists, [0.025, 0.975])
@@ -44,7 +50,7 @@ class PlaceRecognitionTopologicalFilter:
         self.belief = np.exp(-self.lambda1 * dists)
         self.belief /= self.belief.sum()
 
-        recall_preds = np.argsort(self.belief)[-5:][::-1]
+        recall_preds = np.argsort(self.belief)[-self.recall_values:][::-1]
 
         pred = np.argmax(self.belief)
         score = self.belief[pred]
@@ -53,9 +59,10 @@ class PlaceRecognitionTopologicalFilter:
 
     def obs_lhood(self, descriptor: np.ndarray) -> np.ndarray:
         '''Observation likelihood of the query descriptor'''
-        vsim = np.exp(
-            -self.lambda1 * np.sqrt(2 - 2 * np.dot(self.db_descriptors, descriptor))
-        )
+        ##### Option 1: cosine similarity
+        # vsim = np.exp(-self.lambda1 * np.sqrt(2 - 2 * np.dot(self.db_descriptors, descriptor)))
+        ##### Option 2: euclidean distance
+        vsim = np.exp(-self.lambda1 * np.linalg.norm(self.db_descriptors - descriptor, axis=1))
         return vsim
 
     def match(self, query_desc: torch.Tensor) -> Tuple[int, float]:
@@ -105,7 +112,7 @@ class PlaceRecognitionTopologicalFilter:
         self.belief *= obs_lhood
         self.belief /= self.belief.sum()
         
-        recall_preds = np.argsort(self.belief)[-5:][::-1]
+        recall_preds = np.argsort(self.belief)[-self.recall_values:][::-1]
         
         # Argmax of the belief
         pred = np.argmax(self.belief)
