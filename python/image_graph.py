@@ -207,7 +207,6 @@ class ImageGraph(BaseGraph):
 		np.savetxt(os.path.join(self.map_root, "timestamps.txt"), times, fmt='%s %.6f')
 		np.savetxt(os.path.join(self.map_root, "intrinsics.txt"), intrinsics, fmt='%s %.6f %.6f %.6f %.6f %d %d')
 		# NOTE(gogojjh): poses.txt is not updated and used
-		# np.savetxt(os.path.join(self.map_root, "poses.txt"), poses, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
 		np.savetxt(os.path.join(self.map_root, "poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
 		np.savetxt(os.path.join(self.map_root, "database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
 		self.write_edge_list(os.path.join(self.map_root, 'edge_list.txt'))

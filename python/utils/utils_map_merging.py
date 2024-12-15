@@ -14,6 +14,8 @@ from estimator import get_estimator, available_models
 from estimator.utils import to_numpy
 import matplotlib.pyplot as plt
 
+import pycpptools.src.python.utils_math as pytool_math
+
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
 	log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -56,7 +58,7 @@ def initialize_pose_estimator(model, device):
 """
 Visualization
 """
-def save_vis_coarse_loc(log_dir, db_submap, query_submap, query_submap_id, preds, suffex=''):
+def save_vis_vpr(log_dir, db_submap, query_submap, query_submap_id, preds, suffix=''):
 	db_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in db_submap.nodes.items()]
 	query_images = [to_numpy(node.rgb_image.permute(1, 2, 0)) for _, node in query_submap.nodes.items()]
 	fig, axes = plt.subplots(preds.shape[0], preds.shape[1]+1, figsize=(20, 2 * (preds.shape[1]+1)))
@@ -66,40 +68,71 @@ def save_vis_coarse_loc(log_dir, db_submap, query_submap, query_submap_id, preds
 		for i in range(preds.shape[1]):
 			axes[query_id, i + 1].imshow(db_images[preds[query_id, i]])
 			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i]}')
-	if suffex == '':
-		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc.png"))
+	if suffix == '':
+		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_vpr.png"))
 	else:
-		plt.savefig(os.path.join(log_dir, f"preds/results_{suffex}_{query_submap_id}_coarse_loc.png"))
+		plt.savefig(os.path.join(log_dir, f"preds/results_{suffix}_{query_submap_id}_vpr.png"))
 
-def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges_nodeA_to_nodeB):
+def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges_nodeA_to_nodeB, suffix=''):
 	"""
 	Save visualization of graph-based map with nodes and edges.
 	Plot the trajectory onto the X-Z plane.
 	"""
 	fig, ax = plt.subplots(figsize=(10, 10))
+	
 	# Plot submap
 	for node_id, node in db_submap.nodes.items():
-		ax.plot(node.trans_gt[0], node.trans_gt[2], 'bo', markersize=5)
-		ax.text(node.trans_gt[0], node.trans_gt[2], f'DB{node_id}', fontsize=8, color='k')
+		ax.plot(node.trans_gt[0], node.trans_gt[1], 'bo', markersize=5)
+		ax.text(node.trans_gt[0], node.trans_gt[1], f'DB{node_id}', fontsize=8, color='k')
 		for edge in node.edges:
 			next_node = edge[0]
-			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[2], next_node.trans_gt[2]], 'k-')
+			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
 
 	for node_id, node in query_submap.nodes.items():			
-		ax.plot(node.trans_gt[0], node.trans_gt[2], 'go', markersize=5)
-		ax.text(node.trans_gt[0], node.trans_gt[2], f'Q{node_id}', fontsize=8, color='k')		
+		ax.plot(node.trans_gt[0], node.trans_gt[1], 'go', markersize=5)
+		ax.text(node.trans_gt[0], node.trans_gt[1], f'Q{node_id}', fontsize=8, color='k')		
 		for edge in node.edges:
 			next_node = edge[0]
-			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[2], next_node.trans_gt[2]], 'k-')
+			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
+	
 	# Plot connections
 	for edge in edges_nodeA_to_nodeB:
-		nodeA, nodeB, _ = edge
-		ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[2], nodeB.trans_gt[2]], 'r-')
-	fig.tight_layout()
+		nodeA, nodeB, _, prob = edge
+		# Identify correct and wrong connections
+		# DEBUG(gogojjh):
+		dis_tsl, dis_angle = pytool_math.tools_eigen.compute_relative_dis(\
+			nodeA.trans_gt, nodeA.quat_gt, \
+			nodeB.trans_gt, nodeB.quat_gt)								
+		if dis_tsl < 10.0 and dis_angle < 90.0:
+			ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-')
+			ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+		else:
+			ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
+			ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+	
 	ax.grid(ls='--', color='0.7')
 	plt.axis('equal')
-	plt.xlabel('X-axis'); plt.ylabel('Z-axis')
-	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_coarse_loc_connection.png"))
+	plt.xlabel('X-axis'); plt.ylabel('Y-axis')
+	fig.tight_layout()
+	if suffix == '':
+		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_posegraph.png"))
+	else:
+		plt.savefig(os.path.join(log_dir, f"preds/results_{suffix}_{query_submap_id}_posegraph.png"))
+
+def save_query_result(log_dir, query_result_info, query_submap_id):
+	fig, ax = plt.subplots(1, 2, figsize=(4, 10))
+	for i in range(query_result_info.shape[0]):
+		query_id, prob, score, succ = i, query_result_info[i, 0], query_result_info[i, 1], query_result_info[i, 2]
+		if succ > 0:
+			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='Belief Probability', color='g')
+			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Score', color='g')
+		else:
+			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='Belief Probability', color='r')
+			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Score', color='r')
+	ax[0].grid(ls='--', color='0.7')
+	ax[1].grid(ls='--', color='0.7')
+	fig.tight_layout()
+	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_query_result.png"))
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -110,8 +143,8 @@ def parse_arguments():
 											"smallest edge of all images to this value, while keeping aspect ratio")
 	parser.add_argument("--num_submap", type=int, default=2, help="number of submaps for merging")
 	
-	parser.add_argument("--pose_estimation_method", type=str, default="master",
-						help="master, duster")
+	parser.add_argument("--pose_estimation_method", type=str, default="master", help="master, duster")
+	parser.add_argument("--vpr_match_model", type=str, default="topo_filter", help="single_match, topo_filter")
 
 	# parser.add_argument("--positive_dist_threshold", type=int, default=25,
 	# 										help="distance (in meters) for a prediction to be considered a positive")
