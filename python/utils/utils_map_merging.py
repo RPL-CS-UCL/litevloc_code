@@ -120,7 +120,7 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 		plt.savefig(os.path.join(log_dir, f"preds/results_{suffix}_{query_submap_id}_posegraph.png"))
 
 def save_query_result(log_dir, query_result_info, query_submap_id):
-	fig, ax = plt.subplots(1, 2, figsize=(4, 10))
+	fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 	for i in range(query_result_info.shape[0]):
 		query_id, prob, score, succ = i, query_result_info[i, 0], query_result_info[i, 1], query_result_info[i, 2]
 		if succ > 0:
