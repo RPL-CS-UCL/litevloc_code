@@ -100,7 +100,7 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 	for edge in edges_nodeA_to_nodeB:
 		nodeA, nodeB, T_rel, prob = edge
 		# Identify correct and wrong connections
-		if suffix == 'coarse':
+		if 'coarse' in suffix:
 			dis_tsl, dis_angle = pytool_math.tools_eigen.compute_relative_dis(\
 				nodeA.trans_gt, nodeA.quat_gt, nodeB.trans_gt, nodeB.quat_gt)
 			if dis_tsl < 10.0:
@@ -110,7 +110,7 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 			else:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
-		elif suffix == 'refine':
+		elif 'refine' in suffix:
 			T_nodeA = pytool_math.tools_eigen.convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
 			T_nodeB = pytool_math.tools_eigen.convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
 			T_rel_gt = np.linalg.inv(T_nodeA) @ T_nodeB
