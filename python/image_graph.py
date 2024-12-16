@@ -162,6 +162,7 @@ class ImageGraphLoader:
 				Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
 				trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
 				node.set_pose_gt(trans, quat)
+		
 			image_graph.add_node(node)
 
 		edge_list_path = os.path.join(map_root, 'edge_list.txt')
