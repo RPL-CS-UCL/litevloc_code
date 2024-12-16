@@ -82,18 +82,18 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 	
 	# Plot submap
 	for node_id, node in db_submap.nodes.items():
-		ax.plot(node.trans_gt[0], node.trans_gt[1], 'bo', markersize=5)
-		ax.text(node.trans_gt[0], node.trans_gt[1], f'DB{node_id}', fontsize=8, color='k')
+		ax.plot(node.trans_gt[0], node.trans_gt[1], 'ko', markersize=5)
+		# ax.text(node.trans_gt[0], node.trans_gt[1], f'DB{node_id}', fontsize=12, color='k')
 		for edge in node.edges:
 			next_node = edge[0]
-			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
+			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-', linewidth=1)
 
 	for node_id, node in query_submap.nodes.items():			
-		ax.plot(node.trans_gt[0], node.trans_gt[1], 'go', markersize=5)
-		ax.text(node.trans_gt[0], node.trans_gt[1], f'Q{node_id}', fontsize=8, color='k')		
+		ax.plot(node.trans_gt[0], node.trans_gt[1], 'bo', markersize=5)
+		ax.text(node.trans_gt[0], node.trans_gt[1], f'Q{node_id}', fontsize=12, color='k')		
 		for edge in node.edges:
 			next_node = edge[0]
-			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
+			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-', linewidth=1)
 	
 	# Plot connections
 	succ_cnt = 0
@@ -101,34 +101,36 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 		nodeA, nodeB, T_rel, prob = edge
 		# Identify correct and wrong connections
 		if 'coarse' in suffix:
-			dis_tsl, dis_angle = pytool_math.tools_eigen.compute_relative_dis(\
-				nodeA.trans_gt, nodeA.quat_gt, nodeB.trans_gt, nodeB.quat_gt)
+			dis_tsl, dis_angle = \
+				pytool_math.tools_eigen.compute_relative_dis(nodeA.trans_gt, nodeA.quat_gt, nodeB.trans_gt, nodeB.quat_gt)
 			if dis_tsl < 10.0:
-				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-')
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=4)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 				succ_cnt += 1
 			else:
-				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=4)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+				print(f"Wrong Connection: Query {nodeB.id} - DB {nodeA.id} with distance {dis_tsl:.2f}m")
 		elif 'refine' in suffix:
 			T_nodeA = pytool_math.tools_eigen.convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
 			T_nodeB = pytool_math.tools_eigen.convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
 			T_rel_gt = np.linalg.inv(T_nodeA) @ T_nodeB
-			dis_tsl, dis_angle = pytool_math.tools_eigen.compute_relative_dis_TF(T_rel, T_rel_gt)
-			if dis_tsl < 3.0 and dis_angle < 45.0:
-				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-')
+			dis_tsl, dis_angle = \
+				pytool_math.tools_eigen.compute_relative_dis_TF(T_rel, T_rel_gt)
+			if dis_tsl < 1.0 and dis_angle < 45.0:
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=4)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 				succ_cnt += 1
 			else:
-				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=4)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 	
+	ax.grid(ls='--', color='0.7')
 	fig.tight_layout()
 	plt.axis('equal')
 	plt.xlabel('X-axis')
 	plt.ylabel('Y-axis')
 	plt.title(f"Pose Graph with {succ_cnt}/{len(edges_nodeA_to_nodeB)} Succ. Con.")
-	ax.grid(ls='--', color='0.7')
 	if suffix == '':
 		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_posegraph.png"))
 	else:
