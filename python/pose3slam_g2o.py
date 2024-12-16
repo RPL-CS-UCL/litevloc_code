@@ -1,3 +1,5 @@
+#! /usr/bin/env python
+
 """
  * @file Pose3SLAMExample_initializePose3.cpp
  * @brief A 3D Pose SLAM example that reads input from g2o, and initializes the
@@ -78,7 +80,7 @@ def main():
         ax.set_xlabel('X [m]')
         ax.set_ylabel('Y [m]')
         ax.set_zlabel('Z [m]')
-        ax.view_init(elev=0, azim=90)
+        ax.view_init(elev=55, azim=60)
         plt.tight_layout()
         plt.axis('equal')
         plt.show()

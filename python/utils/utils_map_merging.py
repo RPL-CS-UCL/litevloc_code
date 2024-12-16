@@ -96,24 +96,39 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-')
 	
 	# Plot connections
+	succ_cnt = 0
 	for edge in edges_nodeA_to_nodeB:
-		nodeA, nodeB, _, prob = edge
+		nodeA, nodeB, T_rel, prob = edge
 		# Identify correct and wrong connections
-		# DEBUG(gogojjh):
-		dis_tsl, dis_angle = pytool_math.tools_eigen.compute_relative_dis(\
-			nodeA.trans_gt, nodeA.quat_gt, \
-			nodeB.trans_gt, nodeB.quat_gt)								
-		if dis_tsl < 10.0 and dis_angle < 90.0:
-			ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-')
-			ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
-		else:
-			ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
-			ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+		if suffix == 'coarse':
+			dis_tsl, dis_angle = pytool_math.tools_eigen.compute_relative_dis(\
+				nodeA.trans_gt, nodeA.quat_gt, nodeB.trans_gt, nodeB.quat_gt)
+			if dis_tsl < 10.0:
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-')
+				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+				succ_cnt += 1
+			else:
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
+				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+		elif suffix == 'refine':
+			T_nodeA = pytool_math.tools_eigen.convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
+			T_nodeB = pytool_math.tools_eigen.convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
+			T_rel_gt = np.linalg.inv(T_nodeA) @ T_nodeB
+			dis_tsl, dis_angle = pytool_math.tools_eigen.compute_relative_dis_TF(T_rel, T_rel_gt)
+			if dis_tsl < 3.0 and dis_angle < 45.0:
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-')
+				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+				succ_cnt += 1
+			else:
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-')
+				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 	
-	ax.grid(ls='--', color='0.7')
-	plt.axis('equal')
-	plt.xlabel('X-axis'); plt.ylabel('Y-axis')
 	fig.tight_layout()
+	plt.axis('equal')
+	plt.xlabel('X-axis')
+	plt.ylabel('Y-axis')
+	plt.title(f"Pose Graph with {succ_cnt}/{len(edges_nodeA_to_nodeB)} Succ. Con.")
+	ax.grid(ls='--', color='0.7')
 	if suffix == '':
 		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_posegraph.png"))
 	else:
@@ -125,23 +140,25 @@ def save_query_result(log_dir, query_result_info, query_submap_id):
 		query_id, prob, score, succ = i, query_result_info[i, 0], query_result_info[i, 1], query_result_info[i, 2]
 		if succ > 0:
 			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='Belief Probability', color='g')
-			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Score', color='g')
+			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score', color='g')
 		else:
 			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='Belief Probability', color='r')
-			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Score', color='r')
+			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score', color='r')
 	ax[0].grid(ls='--', color='0.7')
+	ax[0].set_title('Belief Probability')
 	ax[1].grid(ls='--', color='0.7')
+	ax[1].set_title('Edge Score')
 	fig.tight_layout()
 	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_query_result.png"))
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-	parser.add_argument("--dataset_path", type=str, default="matterport3d", help="path to dataset_path")
+	parser.add_argument("--input_submap_path", type=str, default=None, nargs="+", help="Path to input submaps")
+	parser.add_argument("--output_map_path", type=str, default=None, help="Path to output final map")
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
-											help="Resizing shape for images (WxH). If a single int is passed, set the"
-											"smallest edge of all images to this value, while keeping aspect ratio")
-	parser.add_argument("--num_submap", type=int, default=2, help="number of submaps for merging")
+										help="Resizing shape for images (WxH). If a single int is passed, set the"
+											 "smallest edge of all images to this value, while keeping aspect ratio")
 	
 	parser.add_argument("--pose_estimation_method", type=str, default="master", help="master, duster")
 	parser.add_argument("--vpr_match_model", type=str, default="topo_filter", help="single_match, topo_filter")
