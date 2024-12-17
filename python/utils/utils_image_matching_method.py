@@ -157,7 +157,8 @@ def plot_images(image1, image2, title1="Image 1", title2="Image 2", save_path=No
 def save_visualization(image0, image1, mkpts0, mkpts1, out_dir, index, n_viz=1, line_width=0.2, text=None):
     """Save visualization of the matching results."""
     viz2d.plot_images([image0, image1])
-    viz2d.plot_matches(mkpts0[::n_viz], mkpts1[::n_viz], color="lime", lw=line_width)
+    if len(mkpts0) and len(mkpts1) > 0:
+        viz2d.plot_matches(mkpts0[::n_viz], mkpts1[::n_viz], color="lime", lw=line_width)
     if text is not None:
         viz2d.add_text(0, text, fs=20)
     else:

@@ -93,16 +93,39 @@ class ImageGraphLoader:
 		return out_str
 
 	@staticmethod
-	def load_data(map_root, resize, depth_scale, load_rgb=False, load_depth=False, normalized=False):
+	def load_data(map_root, resize, depth_scale, 
+					load_rgb=False, load_depth=False, normalized=False,
+					edge_type='odometry'):
+		"""
+		Load data from the specified map directory and create an image graph.
+
+		Args:
+			map_root (str): The root directory of the map.
+			resize (tuple): The desired size to resize the images to.
+			depth_scale (float): The scale factor to apply to the depth images.
+			load_rgb (bool, optional): Whether to load RGB images. Defaults to False.
+			load_depth (bool, optional): Whether to load depth images. Defaults to False.
+			normalized (bool, optional): Whether to normalize the RGB images. Defaults to False.
+			edge_type (str, optional): The type of edges to read from the map directory. 
+										Can be 'odometry', 'covisible', or 'traversable'. 
+										Defaults to 'odometry'.
+
+		Returns:
+			ImageGraph: The created image graph.
+
+		Raises:
+			FileNotFoundError: If any of the required files are not found in the map directory.
+		"""
 		image_graph = ImageGraph(map_root)
-	
+
+		# Read timestamps, intrinsics, poses, poses_abs_gt, and descriptors
 		timestamps = read_timestamps(os.path.join(map_root, 'timestamps.txt'))
 		intrinsics = read_intrinsics(os.path.join(map_root, 'intrinsics.txt'))
 		poses = read_poses(os.path.join(map_root, 'poses.txt'))
 		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
 		descs = read_descriptors(os.path.join(map_root, 'database_descriptors.txt'))
 
-		# NOTE(gogojjh): guarantee that each image has a corresponding pose
+		# Iterate over each image and create observation nodes
 		for key in poses.keys():
 			rgb_img_name = key
 			rgb_img_path = os.path.join(map_root, rgb_img_name)
@@ -122,12 +145,12 @@ class ImageGraphLoader:
 			else:
 				continue
 
-			# Extrinsics
+			# Extract extrinsics
 			time, quat, trans = timestamps[key], poses[key][:4], poses[key][4:]
 			Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
 			trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
 
-			# Intrinsics
+			# Extract intrinsics
 			if key in intrinsics:
 				fx, fy, cx, cy, width, height = \
 					intrinsics[key][0], intrinsics[key][1], intrinsics[key][2], \
@@ -140,7 +163,7 @@ class ImageGraphLoader:
 			K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
 			img_size = np.array([int(resize[0]), int(resize[1])]) if resize is not None else raw_img_size
 
-			# Descriptors
+			# Extract descriptors
 			if descs is not None:
 				if key in descs:
 					desc = descs[key]
@@ -152,9 +175,9 @@ class ImageGraphLoader:
 			# Create observation node
 			node_id = image_graph.get_num_node()
 			node = ImageNode(node_id, rgb_image, depth_image, desc,
-							 time, trans, quat, 
-							 K, img_size,
-							 rgb_img_name, depth_img_name)
+								time, trans, quat, 
+								K, img_size,
+								rgb_img_name, depth_img_name)
 			node.set_raw_intrinsics(raw_K, raw_img_size)
 			node.set_pose(trans, quat)
 			if poses_abs_gt is not None and key in poses_abs_gt:
@@ -165,7 +188,13 @@ class ImageGraphLoader:
 		
 			image_graph.add_node(node)
 
-		edge_list_path = os.path.join(map_root, 'edge_list.txt')
+		# Read edge list based on the specified edge type
+		if edge_type == 'odometry':
+			edge_list_path = os.path.join(map_root, 'odometry_edge_list.txt')
+		elif edge_type == 'covisible':
+			edge_list_path = os.path.join(map_root, 'covisible_edge_list.txt')
+		elif edge_type == 'traversable':
+			edge_list_path = os.path.join(map_root, 'traversable_edge_list.txt')
 		image_graph.read_edge_list(edge_list_path)
 
 		return image_graph
