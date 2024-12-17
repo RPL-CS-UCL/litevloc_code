@@ -94,8 +94,8 @@ class ImageGraphLoader:
 
 	@staticmethod
 	def load_data(map_root, resize, depth_scale, 
-					load_rgb=False, load_depth=False, normalized=False,
-					edge_type='odometry'):
+		load_rgb=False, load_depth=False, normalized=False,
+		edge_type='odometry'):
 		"""
 		Load data from the specified map directory and create an image graph.
 
@@ -239,7 +239,7 @@ class ImageGraph(BaseGraph):
 		# NOTE(gogojjh): poses.txt is not updated and used
 		np.savetxt(os.path.join(self.map_root, "poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
 		np.savetxt(os.path.join(self.map_root, "database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
-		self.write_edge_list(os.path.join(self.map_root, 'edge_list.txt'))
+		self.write_edge_list(os.path.join(self.map_root, 'odometry_edge_list.txt'))
 
 class TestImageGraph():
 	def __init__(self):
