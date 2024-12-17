@@ -4,12 +4,10 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation/third_party/deep-image-retrieval'))
 
 import argparse
-from datetime import datetime
+# from datetime import datetime
 import logging
 import numpy as np
-import faiss
 
-import vpr_models
 from estimator import get_estimator, available_models
 from estimator.utils import to_numpy
 import matplotlib.pyplot as plt
@@ -43,7 +41,6 @@ def setup_log_environment(out_dir, args):
 	# os.makedirs(os.path.join(log_dir, "preds"))
 	# os.system(f"rm {os.path.join(out_dir, f'outputs_{args.pose_estimation_method}', 'latest')}")
 	# os.system(f"ln -s {log_dir} {os.path.join(out_dir, f'outputs_{args.pose_estimation_method}', 'latest')}")
-	# return log_dir
 	return out_dir
 
 # def initialize_vpr_model(method, backbone, descriptors_dimension, device):
