@@ -13,7 +13,7 @@ from image_graph import ImageGraphLoader as GraphLoader
 from utils_image_matching_method import initialize_img_matcher, save_visualization
 from tqdm import tqdm
 
-from pycpptools.src.python.utils_math.tools_eigen import compute_relative_dis
+from pycpptools.src.python.utils_math.tools_eigen import compute_relative_dis_TF, convert_vec_to_matrix
 
 SUFF_EDGE_THRE = 100
 EDGE_THRE_NOR = 300
@@ -24,6 +24,7 @@ def parse_args():
 	parser.add_argument('--matcher', type=str, default='sift', nargs='+', help='Image matching method')
 	parser.add_argument('--device', type=str, default='cuda', help='Cuda or CPU')
 	parser.add_argument('--n_kpts', type=int, default=2048, help='Number of keypoints')
+	parser.add_argument('--radius', type=float, default=7.5, help='Radius for search nearest neighbors')
 	return parser.parse_args()
 
 def generate_covisible_graph(args):
@@ -56,11 +57,11 @@ def generate_covisible_graph(args):
 		img_matcher.DEFAULT_REPROJ_THRESH = 8
 
 		# Iterate over each node and find nearest neighbors
-		cnt, total_comp_time, total_inliers = 0, 0, 0
+		total_match_cnt, total_comp_time, total_inliers = 0, 0, 0
 		edge_str_set = set()
 		for node in tqdm(image_graph.nodes.values()):
 			try:
-				_, _, recall_preds = pose_faiss_index.range_search(node.trans.reshape(1, -1), 7.5**2)
+				_, _, recall_preds = pose_faiss_index.range_search(node.trans.reshape(1, -1), args.radius**2)
 				recall_preds = recall_preds[recall_preds != node.id]
 
 				for pred in recall_preds:
@@ -68,11 +69,15 @@ def generate_covisible_graph(args):
 					# Remove depulicate computation
 					if f"{node.id}_{nei_node.id}" in edge_str_set: continue
 					if f"{nei_node.id}_{node.id}" in edge_str_set: continue
+					edge_str_set.add(f"{node.id}_{nei_node.id}")			
+					edge_str_set.add(f"{nei_node.id}_{node.id}")
 					# Remove unnecessary camera
-					dis_tsl, dis_angle = compute_relative_dis(\
-						node.trans, node.quat, \
-						nei_node.trans, nei_node.quat)
+					T1 = convert_vec_to_matrix(node.trans, node.quat)
+					T2 = convert_vec_to_matrix(nei_node.trans, nei_node.quat)
+					rel_T = np.linalg.inv(T1) @ T2
+					_, dis_angle = compute_relative_dis_TF(rel_T, np.eye(4))
 					if dis_angle > 75.0: continue
+					if rel_T[3, 3] < 0.0: continue
 					# Perform image matching				
 					start_time = time.time()
 					result = img_matcher(node.rgb_image, nei_node.rgb_image)
@@ -85,28 +90,24 @@ def generate_covisible_graph(args):
 					if num_inliers > SUFF_EDGE_THRE:
 						weight = min(num_inliers / EDGE_THRE_NOR, 1.0)
 						node.edges.append((nei_node, weight))
-						edge_str_set.add(f"{node.id}_{nei_node.id}")			
 						nei_node.edges.append((node, weight))
-						edge_str_set.add(f"{nei_node.id}_{node.id}")
-						log_dir = os.path.join(args.map_path, "output_matcher")
+						# log_dir = os.path.join(args.map_path, "output_matcher")
 						# _ = save_visualization(node.rgb_image, nei_node.rgb_image,
 						# 	mkpts0, mkpts1, log_dir, int(len(edge_str_set)/2), n_viz=20)
+					elif f"{node.id}_{nei_node.id}" in odom_edge_str_set:
+						weight = 0.1
+						node.edges.append((nei_node, weight))
+						nei_node.edges.append((node, weight))
 
 					total_inliers += num_inliers
-					cnt += 1
+					total_match_cnt += 1
 					# print(f"Node {node.id} and Node {nei_node.id} with inliers {num_inliers}")
 			except:
 				pass
-		for pair in odom_edge_str_set - edge_str_set:
-			node_id, nei_id = map(int, pair.split("_"))
-			node, nei_node = image_graph.get_node(node_id), image_graph.get_node(nei_id)
-			weight = 0.1
-			node.edges.append((nei_node, weight))
-			nei_node.edges.append((node, weight))
 		
-		print(f"Matching Methods: {matcher}:")
-		print(f"Average computation time: {1000.0 * total_comp_time / cnt:.3f} ms.")
-		print(f"Average number of inliers: {total_inliers / cnt:.3f}.")
+		print(f"Matching Methods: {matcher}")
+		print(f"Average computation time: {1000.0 * total_comp_time / total_match_cnt:.3f} ms.")
+		print(f"Average number of inliers: {total_inliers / total_match_cnt:.3f}.")
 		if len(args.matcher) == 1:
 			cov_edge_path = os.path.join(args.map_path, f"covisible_edge_list.txt")
 			image_graph.write_edge_list(cov_edge_path)
