@@ -8,14 +8,13 @@ from evo.tools import plot
 from evo.tools import file_interface
 
 def align_trajectory(traj_ref, traj_est):
-    R, t, _ = traj_est.align(traj_ref, correct_scale=False)
-    # print(R)
-    # print(t)
-
+    align_R_t_s = traj_est.align(traj_ref, correct_scale=False)
+    
     data = (traj_ref, traj_est)
     ape_metric = metrics.APE(metrics.PoseRelation.translation_part)
     ape_metric.process_data(data)
-    return traj_ref, traj_est, ape_metric
+    
+    return traj_ref, traj_est, ape_metric, align_R_t_s
 
 def plot_aligned_traj(traj_ref, traj_est, ape_metric):
     ape_statistics = ape_metric.get_all_statistics()
