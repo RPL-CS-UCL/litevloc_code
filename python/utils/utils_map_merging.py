@@ -123,11 +123,10 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 	
 	ax.grid(ls='--', color='0.7')
-	fig.tight_layout()
 	plt.axis('equal')
 	plt.xlabel('X-axis')
 	plt.ylabel('Y-axis')
-	plt.title(f"Pose Graph with {succ_cnt}/{len(edges_nodeA_to_nodeB)} Succ. Con.")
+	plt.title(f"Pose Graph with {succ_cnt}/{len(edges_nodeA_to_nodeB)} Connected Edges")
 	if suffix == '':
 		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_posegraph.png"))
 	else:
@@ -159,8 +158,10 @@ def parse_arguments():
 										help="Resizing shape for images (WxH). If a single int is passed, set the"
 											 "smallest edge of all images to this value, while keeping aspect ratio")
 	
-	parser.add_argument("--pose_estimation_method", type=str, default="master", help="master, duster")
-	parser.add_argument("--vpr_match_model", type=str, default="topo_filter", help="single_match, topo_filter")
+	parser.add_argument("--pose_estimation_method", type=str, default="master", 
+													help="master, duster")
+	parser.add_argument("--vpr_match_model", type=str, default="sequence_match", 
+											 help="single_match, topo_filter, sequence_match")
 
 	# parser.add_argument("--positive_dist_threshold", type=int, default=25,
 	# 										help="distance (in meters) for a prediction to be considered a positive")
@@ -179,7 +180,7 @@ def parse_arguments():
 	# 										help="set to 1 if database images may have different resolution")
 	# parser.add_argument("--log_dir", type=str, default="default", 
 	# 				 help="experiment name, output logs will be saved under logs/log_dir")
-	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="_")
+	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="cuda (gpu) or cpu")
 	# parser.add_argument("--recall_values", type=int, nargs="+", default=[1, 5, 10, 20],
 	# 										help="values for recall (e.g. recall@1, recall@5)")
 	# parser.add_argument("--no_labels", action="store_true",

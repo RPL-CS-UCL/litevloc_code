@@ -8,6 +8,7 @@ from evo.tools import plot
 from evo.tools import file_interface
 import copy
 
+# TODO(gogojjh): improve this implementation
 def align_trajectory(traj_ref, traj_est):
     traj_est_aligned = copy.deepcopy(traj_est)
     align_R_t_s = traj_est_aligned.align(traj_ref, correct_scale=False, correct_only_scale=False)
