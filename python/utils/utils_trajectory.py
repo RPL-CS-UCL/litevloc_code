@@ -6,15 +6,15 @@ from evo.core.metrics import APE, PoseRelation
 from evo.core import trajectory, sync, metrics
 from evo.tools import plot
 from evo.tools import file_interface
+import copy
 
 def align_trajectory(traj_ref, traj_est):
-    align_R_t_s = traj_est.align(traj_ref, correct_scale=False)
-    
-    data = (traj_ref, traj_est)
-    ape_metric = metrics.APE(metrics.PoseRelation.translation_part)
+    traj_est_aligned = copy.deepcopy(traj_est)
+    align_R_t_s = traj_est_aligned.align(traj_ref, correct_scale=False, correct_only_scale=False)
+    data = (traj_ref, traj_est_aligned)
+    ape_metric = metrics.APE(pose_relation=metrics.PoseRelation.translation_part)
     ape_metric.process_data(data)
-    
-    return traj_ref, traj_est, ape_metric, align_R_t_s
+    return traj_ref, traj_est_aligned, ape_metric, align_R_t_s
 
 def plot_aligned_traj(traj_ref, traj_est, ape_metric):
     ape_statistics = ape_metric.get_all_statistics()
