@@ -137,13 +137,13 @@ def save_query_result(log_dir, query_result_info, query_submap_id):
 	for i in range(query_result_info.shape[0]):
 		query_id, prob, score, succ = i, query_result_info[i, 0], query_result_info[i, 1], query_result_info[i, 2]
 		if succ > 0:
-			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='Belief Probability', color='g')
+			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='VPR Score', color='g')
 			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score', color='g')
 		else:
-			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='Belief Probability', color='r')
+			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='VPR Score', color='r')
 			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score', color='r')
 	ax[0].grid(ls='--', color='0.7')
-	ax[0].set_title('Belief Probability')
+	ax[0].set_title('VPR Score')
 	ax[1].grid(ls='--', color='0.7')
 	ax[1].set_title('Edge Score')
 	fig.tight_layout()
