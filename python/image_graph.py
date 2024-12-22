@@ -188,6 +188,7 @@ class ImageGraphLoader:
 		
 			image_graph.add_node(node)
 
+		# TODO(gogojjh):
 		# Read edge list based on the specified edge type
 		if edge_type == 'odometry':
 			edge_list_path = os.path.join(map_root, 'odometry_edge_list.txt')

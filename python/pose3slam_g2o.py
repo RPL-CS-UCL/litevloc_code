@@ -13,12 +13,12 @@ from __future__ import print_function
 
 import argparse
 
-import gtsam
 import matplotlib.pyplot as plt
 import numpy as np
-from gtsam.utils import plot
 from mpl_toolkits.mplot3d import Axes3D
 
+import gtsam
+from gtsam.utils import plot
 
 def vector6(x, y, z, a, b, c):
     """Create 6d double numpy array."""
