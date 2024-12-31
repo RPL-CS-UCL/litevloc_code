@@ -54,6 +54,7 @@ def main():
     params.setVerbosity("Termination")  # this will show info about stopping conds
     optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial, params)
     result = optimizer.optimize()
+    # result = initial
     # Output the results
     print("Optimization complete")
     print("initial error = ", graph.error(initial))

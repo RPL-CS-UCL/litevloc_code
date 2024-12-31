@@ -14,6 +14,10 @@ import matplotlib.pyplot as plt
 
 import pycpptools.src.python.utils_math as pytool_math
 
+RMSE_THRESHOLD = 3.0
+VPR_MATCH_THRESHOLD = 0.90
+REFINE_EDGE_SCORE_THRESHOLD = 10.0 # threshold to select good refinement: out-of-range image, wrong coarse localization
+
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
 	log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -136,16 +140,18 @@ def save_query_result(log_dir, query_result_info, query_submap_id):
 	fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 	for i in range(query_result_info.shape[0]):
 		query_id, prob, score, succ = i, query_result_info[i, 0], query_result_info[i, 1], query_result_info[i, 2]
-		if succ > 0:
+		if prob < VPR_MATCH_THRESHOLD:
 			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='VPR Score', color='g')
-			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score', color='g')
 		else:
 			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='VPR Score', color='r')
-			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score', color='r')
+		if score > REFINE_EDGE_SCORE_THRESHOLD:
+			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score/Loss', color='g')
+		else:
+			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score/Loss', color='r')
 	ax[0].grid(ls='--', color='0.7')
-	ax[0].set_title('VPR Score')
+	ax[0].set_title('VPR Score/Loss')
 	ax[1].grid(ls='--', color='0.7')
-	ax[1].set_title('Edge Score')
+	ax[1].set_title('Edge Score (Green: High Score. Red: Low Score)')
 	fig.tight_layout()
 	plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_query_result.png"))
 
