@@ -175,9 +175,9 @@ class ImageGraphLoader:
 			# Create observation node
 			node_id = image_graph.get_num_node()
 			node = ImageNode(node_id, rgb_image, depth_image, desc,
-								time, trans, quat, 
-								K, img_size,
-								rgb_img_name, depth_img_name)
+							 time, trans, quat, 
+							 K, img_size,
+							 rgb_img_name, depth_img_name)
 			node.set_raw_intrinsics(raw_K, raw_img_size)
 			node.set_pose(trans, quat)
 			if poses_abs_gt is not None and key in poses_abs_gt:
