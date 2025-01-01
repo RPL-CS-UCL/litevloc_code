@@ -16,7 +16,8 @@ import pycpptools.src.python.utils_math as pytool_math
 
 RMSE_THRESHOLD = 3.0
 VPR_MATCH_THRESHOLD = 0.90
-REFINE_EDGE_SCORE_THRESHOLD = 10.0 # threshold to select good refinement: out-of-range image, wrong coarse localization
+REFINE_GV_SCORE_THRESHOLD = 200.0
+REFINE_EDGE_SCORE_THRESHOLD = 15.0 # threshold to select good refinement: out-of-range image, wrong coarse localization
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
@@ -104,14 +105,13 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 		if 'coarse' in suffix:
 			dis_tsl, dis_angle = \
 				pytool_math.tools_eigen.compute_relative_dis(nodeA.trans_gt, nodeA.quat_gt, nodeB.trans_gt, nodeB.quat_gt)
-			if dis_tsl < 10.0:
-				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=4)
+			if dis_tsl < 20.0:
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 				succ_cnt += 1
 			else:
-				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=4)
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
-				print(f"Wrong Connection: Query {nodeB.id} - DB {nodeA.id} with distance {dis_tsl:.2f}m")
 		elif 'refine' in suffix:
 			T_nodeA = pytool_math.tools_eigen.convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
 			T_nodeB = pytool_math.tools_eigen.convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
@@ -119,11 +119,11 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 			dis_tsl, dis_angle = \
 				pytool_math.tools_eigen.compute_relative_dis_TF(T_rel, T_rel_gt)
 			if dis_tsl < 1.0 and dis_angle < 45.0:
-				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=4)
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 				succ_cnt += 1
 			else:
-				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=4)
+				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 	
 	ax.grid(ls='--', color='0.7')
