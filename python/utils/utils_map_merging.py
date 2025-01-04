@@ -17,7 +17,7 @@ import pycpptools.src.python.utils_math as pytool_math
 RMSE_THRESHOLD = 3.0
 VPR_MATCH_THRESHOLD = 0.90
 REFINE_GV_SCORE_THRESHOLD = 200.0
-REFINE_EDGE_SCORE_THRESHOLD = 15.0 # threshold to select good refinement: out-of-range image, wrong coarse localization
+REFINE_EDGE_SCORE_THRESHOLD = 20.0 # threshold to select good refinement: out-of-range image, wrong coarse localization
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
