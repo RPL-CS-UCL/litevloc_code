@@ -71,9 +71,9 @@ def save_vis_vpr(log_dir, db_submap, query_submap, query_submap_id, preds, suffi
 			axes[query_id, i + 1].imshow(db_images[preds[query_id, i]])
 			axes[query_id, i + 1].set_title(f'DB{preds[query_id, i]}')
 	if suffix == '':
-		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_vpr.png"))
+		plt.savefig(os.path.join(log_dir, f"results_{query_submap_id}_vpr.png"))
 	else:
-		plt.savefig(os.path.join(log_dir, f"preds/results_{suffix}_{query_submap_id}_vpr.png"))
+		plt.savefig(os.path.join(log_dir, f"results_{suffix}_{query_submap_id}_vpr.png"))
 
 def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges_nodeA_to_nodeB, suffix=''):
 	"""
@@ -132,9 +132,9 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 	plt.ylabel('Y-axis')
 	plt.title(f"Pose Graph with {succ_cnt}/{len(edges_nodeA_to_nodeB)} Connected Edges")
 	if suffix == '':
-		plt.savefig(os.path.join(log_dir, f"preds/results_{query_submap_id}_posegraph.png"))
+		plt.savefig(os.path.join(log_dir, f"results_{query_submap_id}_posegraph.png"))
 	else:
-		plt.savefig(os.path.join(log_dir, f"preds/results_{suffix}_{query_submap_id}_posegraph.png"))
+		plt.savefig(os.path.join(log_dir, f"results_{suffix}_{query_submap_id}_posegraph.png"))
 
 def save_query_result(log_dir, query_result_info, query_submap_id):
 	fig, ax = plt.subplots(1, 2, figsize=(10, 4))
