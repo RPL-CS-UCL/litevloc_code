@@ -56,8 +56,10 @@ def initialize_match_model(model_name):
 		match_model = PlaceRecognitionSingleMatching()
 	elif model_name == 'topo_filter':
 		match_model = PlaceRecognitionTopologicalFilter()
-	elif model_name == 'sequence_match' or model_name == 'sequence_match-ransac':
-		match_model = PlaceRecognitionSeqMatching()
+	elif model_name == 'sequence_match':
+		match_model = PlaceRecognitionSeqMatching(enable_ransac=True)
+	elif model_name == 'sequence_match-ransac':
+		match_model = PlaceRecognitionSeqMatching(enable_ransac=False)
 	return match_model
 
 def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):
