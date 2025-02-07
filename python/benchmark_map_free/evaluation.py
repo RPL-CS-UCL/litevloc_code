@@ -173,7 +173,6 @@ def main(args):
     output_json = json.dumps(output_metrics, indent=2)
     print(output_json)
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         'eval', description='Evaluate submissions for the MapFree dataset benchmark')
