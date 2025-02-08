@@ -1,85 +1,19 @@
 #! /usr/bin/env python
 
 import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import numpy as np
 import pathlib
 
 from utils.utils_image import load_rgb_image, load_depth_image
+from utils.utils_file import *
 from image_node import ImageNode
 
 from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
 from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix, convert_matrix_to_vec
-
-def read_timestamps(file_path):
-	times = dict()
-	with open(file_path, 'r') as f:
-		for line_id, line in enumerate(f):
-			if line.startswith('#'): 
-				continue
-			if line.startswith('seq'):
-				img_name = line.strip().split(' ')[0]
-				data = float(line.strip().split(' ')[1]) # Each row: image_name, timestamp
-			else:
-				img_name = f'seq/{line_id:06}.color.jpg'
-				data = float(line.strip().split(' ')[1]) # Each row: qw, qx, qy, tx, ty, tz
-			times[img_name] = np.array(data)
-	return times
-
-def read_poses(file_path):
-	if not os.path.exists(file_path):
-		print(f"Poses not found in {file_path}")
-		return None
-
-	poses = dict()
-	with open(file_path, 'r') as f:
-		for line_id, line in enumerate(f):
-			if line.startswith('#'): 
-				continue
-			if line.startswith('seq'):
-				img_name = line.strip().split(' ')[0]
-				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, qw, qx, qy, tx, ty, tz
-			else:
-				img_name = f'seq/{line_id:06}.color.jpg'
-				data = [float(p) for p in line.strip().split(' ')] # Each row: qw, qx, qy, tx, ty, tz
-			poses[img_name] = np.array(data)
-	return poses
-
-def read_intrinsics(file_path):
-	if not os.path.exists(file_path):
-		print(f"Intrinsics not found in {file_path}")
-		return None
-
-	intrinsics = dict()
-	with open(file_path, 'r') as f:
-		for line_id, line in enumerate(f):
-			if line.startswith('#'): 
-				continue
-			if line.startswith('seq'):
-				img_name = line.strip().split(' ')[0]
-				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, fx fy cx cy width height
-			else:
-				img_name = f'{line_id:06}.color.jpg'
-				data = [float(p) for p in line.strip().split(' ')] # Each row: fx fy cx cy width height
-			intrinsics[img_name] = np.array(data)
-	return intrinsics
-
-def read_descriptors(file_path):
-	if not os.path.exists(file_path):
-		print(f"Descriptors not found in {file_path}")
-		return None
-	
-	descs = dict()
-	with open(file_path, 'r') as f:
-		for line_id, line in enumerate(f):
-			if line.startswith('seq'):
-				img_name = line.strip().split(' ')[0]
-				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, descriptor (a vector)
-				descs[img_name] = np.array(data)
-			else:
-				img_name = f'seq/{line_id:06}.color.jpg'
-				descs[img_name] = np.array([float(p) for p in line.strip().split(' ')])
-	return descs		
 
 class ImageGraphLoader:
 	def __init__(self):
@@ -190,13 +124,14 @@ class ImageGraphLoader:
 
 		# TODO(gogojjh):
 		# Read edge list based on the specified edge type
-		if edge_type == 'odometry':
-			edge_list_path = os.path.join(map_root, 'odometry_edge_list.txt')
-		elif edge_type == 'covisible':
-			edge_list_path = os.path.join(map_root, 'covisible_edge_list.txt')
-		elif edge_type == 'traversable':
-			edge_list_path = os.path.join(map_root, 'traversable_edge_list.txt')
-		image_graph.read_edge_list(edge_list_path)
+		if edge_type is not None:
+			if edge_type == 'odometry':
+				edge_list_path = os.path.join(map_root, 'odometry_edge_list.txt')
+			elif edge_type == 'covisible':
+				edge_list_path = os.path.join(map_root, 'covisible_edge_list.txt')
+			elif edge_type == 'traversable':
+				edge_list_path = os.path.join(map_root, 'traversable_edge_list.txt')
+			image_graph.read_edge_list(edge_list_path)
 
 		return image_graph
 
