@@ -51,15 +51,15 @@ def initialize_vpr_model(model_name, backbone, descriptors_dimension, device):
 	model = vpr_models.get_model(model_name, backbone, descriptors_dimension)
 	return model.eval().to(device)
 
-def initialize_match_model(model_name):
+def initialize_match_model(model_name, seq_len):
 	if model_name == 'single_match':
 		match_model = PlaceRecognitionSingleMatching()
 	elif model_name == 'topo_filter':
 		match_model = PlaceRecognitionTopologicalFilter()
 	elif model_name == 'sequence_match':
-		match_model = PlaceRecognitionSeqMatching(enable_ransac=False)
+		match_model = PlaceRecognitionSeqMatching(seqLen=seq_len, enable_ransac=False)
 	elif model_name == 'sequence_match_ransac':
-		match_model = PlaceRecognitionSeqMatching(enable_ransac=True)
+		match_model = PlaceRecognitionSeqMatching(seqLen=seq_len, enable_ransac=True)
 	return match_model
 
 def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):
