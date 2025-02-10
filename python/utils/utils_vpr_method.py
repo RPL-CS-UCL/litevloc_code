@@ -103,7 +103,7 @@ def save_visualization(log_dir, query_index, list_of_images_paths, preds_correct
 		use_labels=False
 	)
 
-def save_vis_brief_function(log_dir, belief, niter):
+def save_vis_brief_function(save_dir, belief, niter):
 	ids = np.arange(len(belief))
 	plt.figure(figsize=(10, 6))
 	plt.bar(ids, belief, width=0.6, alpha=0.7, label='Belief Probability')
@@ -114,18 +114,33 @@ def save_vis_brief_function(log_dir, belief, niter):
 	plt.yticks(fontsize=10)
 	plt.legend(fontsize=12)
 	plt.grid(axis='y', linestyle='--', alpha=0.7)    
-	pred_belief_path = os.path.join(log_dir, 'preds', f"belief_{niter}.png")
+	pred_belief_path = os.path.join(save_dir, 'preds', f"belief_{niter}.jpg")
 	plt.savefig(pred_belief_path)
 
-def save_vis_diff_matrix(log_dir, diff_matrix):
+def save_vis_diff_matrix(save_dir, diff_matrix):
 	plt.figure(figsize=(8, 8))
 	plt.imshow(diff_matrix, cmap='viridis', aspect='auto')
 	plt.colorbar(label='Difference')
 	plt.xlabel('Database Descriptor Index')
 	plt.ylabel('Query Descriptor Index')
 	plt.title('Difference Matrix')
-	diff_matrix_path = os.path.join(log_dir, 'preds', "diff_matrix.png")
+	diff_matrix_path = os.path.join(save_dir, 'preds', "diff_matrix.jpg")
 	plt.savefig(diff_matrix_path)
+
+def save_prec_recall_curve(save_dir, precision_curve, recall_curve, avg_precision):
+	plt.figure(figsize=(8, 6))
+	plt.plot(recall_curve, precision_curve, 
+			 color='b', lw=2, 
+			 label=f'Precision-Recall Curve')
+	plt.xlim([0.0, 1.0])
+	plt.ylim([0.0, 1.05])
+	plt.xlabel('Recall')
+	plt.ylabel('Precision')
+	plt.title(f"Precision-Recall Curve with Average Precision: {avg_precision:.3f}")
+	plt.legend(loc="upper right")
+	plt.grid(axis='y', linestyle='--', alpha=0.7)
+	curve_path = os.path.join(save_dir, "prec_recall_curve.jpg")
+	plt.savefig(curve_path, dpi=300)
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
