@@ -8,22 +8,40 @@ git clone https://github.com/nianticlabs/map-free-reloc
 
 ### Download dataset
 We follow [Map-free reloc](https://github.com/nianticlabs/map-free-reloc) to structure the data
+```bash
+map_free_eval/
+├── test/
+├── s00000
+│   ├── intrinsics.txt
+│   ├── overlaps.npz
+│   ├── poses.txt
+│   ├── seq0
+│   │   ├── frame_00000.jpg
+│   │   ├── frame_00000.zed.png
+│   └── seq1
+│       ├── frame_00000.jpg
+│       ├── frame_00000.zed.png
+│       ├── frame_00001.jpg
+│       ├── frame_00001.zed.png
+│       └── ...
 ```
-matterport3d/
-├── map_free_eval/
-    ├── test/
-        ├── s00000
-            ├── intrinsics.txt
-            ├── poses.txt
-            ├── seq0
-            │   ├── frame_00000.jpg
-            │   ├── frame_00000.zed.png
-            └── seq1
-                ├── frame_00000.jpg
-                ├── frame_00001.jpg
-                ├── frame_00002.jpg
-                ├── ...
+
+**intrinsics.txt**
+Encodes per frame intrinsics with format
+```bash
+frame_path fx fy cx cy frame_width frame_height
 ```
+
+**poses.txt**
+Encodes per frame extrinsics with format
+```bash
+frame_path qw qx qy qz tx ty tz
+```
+where $q$ is the quaternion encoding rotation and $t$ is the **metric** translation vector. 
+
+Note:
+- The pose is given in world-to-camera format, i.e. $R(q), t$ transform a world point $p$ to the camera coordinate system as $Rp + t$.
+- The reference frame (`seq0/frame_00000.jpg`) always has identity pose and the pose of query frames (`seq1/frame_*.jpg`) are given relative to the reference frame. Thus, the absolute pose of a given query frame is equivalent to the relative pose between the reference and the query frames.
 
 ### Available Models
 You can choose any of the following methods (input to `get_matcher()`):
@@ -48,15 +66,15 @@ You can output a file named ```results/report_evaluation_025_5.txt``` with conte
 ```bash
 Evaluate matching methods: master_pnp
 {
-  "Maximum Translation Error [m]": 0.13964442928576778,
-  "Maximum Rotation Error [deg]": 3.3407354525107658,
-  "Average Median Translation Error [m]": 0.01410202978829861,
-  "Average Median Rotation Error [deg]": 0.3581160726250012,
-  "Average Median Reprojection Error [px]": 1.033202960307021,
-  "Precision @ Pose Error < (25.0cm, 5deg)": 0.9473684210526315,
-  "AUC @ Pose Error < (25.0cm, 5deg)": 0.9473684430122375,
-  "Precision @ VCRE < 90px": 0.9473684210526315,
-  "AUC @ VCRE < 90px": 0.9473684430122375,
-  "Estimates for % of frames": 0.9473684210526315
+	"Maximum Translation Error [m]": 0.13964442928576778,
+	"Maximum Rotation Error [deg]": 3.3407354525107658,
+	"Average Median Translation Error [m]": 0.01410202978829861,
+	"Average Median Rotation Error [deg]": 0.3581160726250012,
+	"Average Median Reprojection Error [px]": 1.033202960307021,
+	"Precision @ Pose Error < (25.0cm, 5deg)": 0.9473684210526315,
+	"AUC @ Pose Error < (25.0cm, 5deg)": 0.9473684430122375,
+	"Precision @ VCRE < 90px": 0.9473684210526315,
+	"AUC @ VCRE < 90px": 0.9473684430122375,
+	"Estimates for % of frames": 0.9473684210526315
 }
 ```
