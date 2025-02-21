@@ -18,6 +18,10 @@ conda env create -f environment.yaml
 conda install pytorch=2.0.1 torchvision=0.15.2 pytorch-cuda=11.8 numpy=1.24.3 -c pytorch -c nvidia # use the correct version of cuda for your system
 conda activate litevloc && pip install -r requirements.txt
 ```
+Enter this code to check whether torch-related packages are installed
+```bash
+python test_torch_install.py
+```
 Set this in the bash: 
 ```bash
 export PYTHONPATH=$PYTHONPATH:~/robohike_ws/src
