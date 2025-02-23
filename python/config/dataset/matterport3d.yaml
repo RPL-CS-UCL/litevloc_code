@@ -1,8 +1,7 @@
 MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
-  # DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/map_free_eval/matterport3d/map_free_eval'
-  DATA_ROOT: '/Titan/dataset/data_litevloc/map_free_eval/matterport3d/map_free_eval/'
+  DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/map_free_eval/matterport3d/map_free_eval'
   # Training
   # SCENES: [s00000, s00009, s00017]
   # Test
