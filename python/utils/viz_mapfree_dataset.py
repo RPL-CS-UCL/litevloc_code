@@ -314,7 +314,7 @@ def visualize_scenes(scene_data, cam_size=0.03, show_image=True):
             try:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
                 if 'seq0/frame_00000' in img_path:
-                    show_cam_size = cam_size * 3
+                    show_cam_size = cam_size * 5
                 else:
                     show_cam_size = cam_size
                 _add_scene_cam(
