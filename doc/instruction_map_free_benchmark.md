@@ -40,8 +40,9 @@ frame_path qw qx qy qz tx ty tz
 where $q$ is the quaternion encoding rotation and $t$ is the **metric** translation vector. 
 
 Note:
-- The pose is given in world-to-camera format, i.e. $R(q), t$ transform a world point $p$ to the camera coordinate system as $Rp + t$.
-- The reference frame (`seq0/frame_00000.jpg`) always has identity pose and the pose of query frames (`seq1/frame_*.jpg`) are given relative to the reference frame. Thus, the absolute pose of a given query frame is equivalent to the relative pose between the reference and the query frames.
+- The pose is given in world-to-camera format, i.e. $R(q), t$ transform a world point $p$ in seq0 to the camera coordinate system in seq1 as $Rp + t$.
+- The reference frame (`seq0/frame_00000.jpg`) always has identity pose and the pose of query frames (`seq1/frame_*.jpg`) are given relative to the reference frame. 
+<!-- Thus, the absolute pose of a given query frame is equivalent to the relative pose between the reference and the query frames. -->
 
 ### Available Models
 You can choose any of the following methods (input to `get_matcher()`):
