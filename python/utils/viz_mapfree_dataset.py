@@ -97,6 +97,15 @@ def load_scene_data(dataset_dir, target_scenes):
     Returns:
         dict: Scene data containing intrinsics, poses and images
     """
+    if len(target_scenes) == 1:
+        print("Showing single scene using poses.txt")
+        pose_file_name = 'poses.txt'
+        is_multi_frame = False
+    else:
+        print("Show multiple scenes using poses_abs.txt")
+        pose_file_name = 'poses_abs.txt'
+        is_multi_frame = True
+    
     scene_paths = []
     if 'all' in target_scenes:
         scene_paths = sorted(glob(os.path.join(dataset_dir, "s*")))
@@ -111,10 +120,10 @@ def load_scene_data(dataset_dir, target_scenes):
         scene_name = os.path.basename(path)
         scene_data[scene_name] = {
             'intrinsics': _load_intrinsics(os.path.join(path, 'intrinsics.txt')),
-            'poses': _load_poses(os.path.join(path, 'poses.txt')),
+            'poses': _load_poses(os.path.join(path, pose_file_name)),
             'images': _collect_images(path)
         }
-    return scene_data
+    return scene_data, is_multi_frame
 
 def _load_intrinsics(filepath):
     """Loads camera intrinsics from text file."""
@@ -123,7 +132,7 @@ def _load_intrinsics(filepath):
         for line in f:
             parts = line.strip().split()
             frame_path = os.path.join(os.path.dirname(filepath), parts[0])
-            intrinsics[frame_path] = np.array(list(map(float, parts[1:5])))
+            intrinsics[frame_path] = np.array(list(map(float, parts[1:])))
     return intrinsics
 
 def _load_poses(filepath):
@@ -290,7 +299,7 @@ def _add_scene_cam(scene, pose_w2c, color, image, focal, imsize, cam_size, show_
     cam.visual.face_colors[:, :3] = color
     scene.add_geometry(cam)
 
-def visualize_scenes(scene_data, cam_size=0.03, show_image=True):
+def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True):
     """Visualizes multiple scenes with cameras and images.
     
     Args:
@@ -308,25 +317,40 @@ def visualize_scenes(scene_data, cam_size=0.03, show_image=True):
 
             # Get camera parameters
             pose_w2c = data['poses'][img_path]
-            fx, fy, cx, cy = data['intrinsics'][img_path]
-            imsize = (int(2*cx), int(2*cy))
+            if is_multi_frame:
+                data_tmp = scene_data[next(iter(scene_data))]
+                pose_normalize = data_tmp['poses'][data_tmp['images'][0]]
+                pose_w2c = pose_w2c @ np.linalg.inv(pose_normalize) @ pose_w2c
+
+            fx, fy, cx, cy, width, height = data['intrinsics'][img_path]
+            imsize = (int(width), int(height))
             
             try:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
                 if 'seq0/frame_00000' in img_path:
                     show_cam_size = cam_size * 5
+                    _add_scene_cam(
+                        scene=scene,
+                        pose_w2c=pose_w2c,
+                        color=scene_color,
+                        image=image,
+                        focal=fx,
+                        imsize=imsize,
+                        cam_size=show_cam_size,
+                        show_image=True
+                    )
                 else:
                     show_cam_size = cam_size
-                _add_scene_cam(
-                    scene=scene,
-                    pose_w2c=pose_w2c,
-                    color=scene_color,
-                    image=image,
-                    focal=fx,
-                    imsize=imsize,
-                    cam_size=show_cam_size,
-                    show_image=show_image
-                )
+                    _add_scene_cam(
+                        scene=scene,
+                        pose_w2c=pose_w2c,
+                        color=scene_color,
+                        image=image,
+                        focal=fx,
+                        imsize=imsize,
+                        cam_size=show_cam_size,
+                        show_image=show_image
+                    )
             except Exception as e:
                 print(f"Error processing {img_path}: {str(e)}")
 
@@ -334,10 +358,10 @@ def visualize_scenes(scene_data, cam_size=0.03, show_image=True):
 
 if __name__ == '__main__':
     args = parse_arguments()
-    scene_data = load_scene_data(args.dataset_dir, args.scenes)
+    scene_data, is_multi_frame = load_scene_data(args.dataset_dir, args.scenes)
     
     if scene_data:
         print(f"Visualizing {len(scene_data)} scenes: {', '.join(scene_data.keys())}")
-        visualize_scenes(scene_data, args.cam_size, args.show_image)
+        visualize_scenes(scene_data, is_multi_frame, args.cam_size, args.show_image)
     else:
         print("No valid scenes found, exiting...")
