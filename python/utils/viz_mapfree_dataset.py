@@ -319,8 +319,9 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True)
             pose_w2c = data['poses'][img_path]
             if is_multi_frame:
                 data_tmp = scene_data[next(iter(scene_data))]
-                pose_normalize = data_tmp['poses'][data_tmp['images'][0]]
-                pose_w2c = pose_w2c @ np.linalg.inv(pose_normalize) @ pose_w2c
+                pose_w2c0 = data_tmp['poses'][data_tmp['images'][0]]
+                # T^ct_c0 = T^ct_w @ T^w_c0
+                pose_w2c = pose_w2c @ np.linalg.inv(pose_w2c0)
 
             fx, fy, cx, cy, width, height = data['intrinsics'][img_path]
             imsize = (int(width), int(height))
