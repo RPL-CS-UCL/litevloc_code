@@ -85,6 +85,10 @@ def parse_arguments():
         '--show_image', action="store_true",
         help="Show image"
     )
+    parser.add_argument(
+        '--step', type=int, default=1,
+        help="Sample step of data"
+    )
     return parser.parse_args()
 
 def load_scene_data(dataset_dir, target_scenes):
@@ -299,7 +303,7 @@ def _add_scene_cam(scene, pose_w2c, color, image, focal, imsize, cam_size, show_
     cam.visual.face_colors[:, :3] = color
     scene.add_geometry(cam)
 
-def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True):
+def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True, step=1):
     """Visualizes multiple scenes with cameras and images.
     
     Args:
@@ -311,14 +315,17 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True)
     for scene_name, data in scene_data.items():
         scene_color = _get_scene_color(scene_name)
         
-        for img_path in data['images']:
+        for idx, img_path in enumerate(data['images']):
             if img_path not in data['poses']:
+                continue
+            if idx % step != 0: 
                 continue
 
             # Get camera parameters
             pose_w2c = data['poses'][img_path]
             if is_multi_frame:
                 data_tmp = scene_data[next(iter(scene_data))]
+                # Normalize poses to the coordinate frame of the first camera c0
                 pose_w2c0 = data_tmp['poses'][data_tmp['images'][0]]
                 # T^ct_c0 = T^ct_w @ T^w_c0
                 pose_w2c = pose_w2c @ np.linalg.inv(pose_w2c0)
@@ -363,6 +370,6 @@ if __name__ == '__main__':
     
     if scene_data:
         print(f"Visualizing {len(scene_data)} scenes: {', '.join(scene_data.keys())}")
-        visualize_scenes(scene_data, is_multi_frame, args.cam_size, args.show_image)
+        visualize_scenes(scene_data, is_multi_frame, args.cam_size, args.show_image, args.step)
     else:
         print("No valid scenes found, exiting...")
