@@ -3,6 +3,7 @@ DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
   DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/map_free_eval/hkustgz_campus/map_free_eval'
   SCENES: [s00000]
+  # SCENES: [s00001]
   # SCENES: [s00001, s00003, s00004, s00005, s00007, s00008, s00009, s00010, s00011, s00013, s00014, s00015, s00016, s00017, s00019, 
   #          s00020, s00021, s00022, s00023, s00026, s00027, s00029, s00030, s00032, s00033, s00034, s00036, s00038, s00039]
   ESTIMATED_DEPTH: ray_neighbor   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
