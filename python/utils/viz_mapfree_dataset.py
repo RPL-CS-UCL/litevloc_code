@@ -36,6 +36,7 @@ import numpy as np
 import PIL.Image
 import trimesh
 from scipy.spatial.transform import Rotation
+from PIL import Image, ImageDraw, ImageFont
 
 # Predefined color palette for consistent scene coloring (RGB tuples 0-255)
 def spec(N):
@@ -101,15 +102,15 @@ def load_scene_data(dataset_dir, target_scenes):
     Returns:
         dict: Scene data containing intrinsics, poses and images
     """
-    if len(target_scenes) == 1:
-        print("Showing single scene using poses.txt")
-        pose_file_name = 'poses.txt'
-        is_multi_frame = False
-    else:
+    if 'all' in target_scenes or len(target_scenes) > 1:
         print("Show multiple scenes using poses_abs.txt")
         pose_file_name = 'poses_abs.txt'
         is_multi_frame = True
-    
+    else:
+        print("Showing single scene using poses.txt")
+        pose_file_name = 'poses.txt'
+        is_multi_frame = False
+
     scene_paths = []
     if 'all' in target_scenes:
         scene_paths = sorted(glob(os.path.join(dataset_dir, "s*")))
@@ -228,7 +229,7 @@ def _geotrf(Trf, pts, ncol=None, norm=False):
     res = pts[..., :ncol].reshape(*output_reshape, ncol)
     return res
 
-def _add_scene_cam(scene, pose_w2c, color, image, focal, imsize, cam_size, show_image=True):
+def _add_scene_cam(scene, scene_name, pose_w2c, color, image, focal, imsize, cam_size, show_image=True):
     """Adds a camera mesh to the scene using trimesh.
     
     Args:
@@ -240,6 +241,8 @@ def _add_scene_cam(scene, pose_w2c, color, image, focal, imsize, cam_size, show_
         imsize (tuple): Image dimensions (width, height)
         cam_size (float): Base size of camera frustum
     """
+
+    ##### Add image    
     if image is not None:
         image = np.asarray(image)
         if image.dtype != np.uint8:
@@ -274,6 +277,7 @@ def _add_scene_cam(scene, pose_w2c, color, image, focal, imsize, cam_size, show_
         img.visual.face_colors = [*[255, 255, 255], 0.3]  # RGBA with 10% opacity
     scene.add_geometry(img)
 
+    ##### Add camera
     # this is the camera mesh
     rot2 = np.eye(4)
     rot2[:3, :3] = Rotation.from_euler('z', np.deg2rad(2)).as_matrix()
@@ -302,6 +306,43 @@ def _add_scene_cam(scene, pose_w2c, color, image, focal, imsize, cam_size, show_
     cam = trimesh.Trimesh(vertices=vertices, faces=faces)
     cam.visual.face_colors[:, :3] = color
     scene.add_geometry(cam)
+
+    ##### Add text - scene_name
+    # TODO(gogojjh): cannnot visualize text
+    # Create text mesh with scaling based on camera size
+    camera_position = pose_c2w[:3, 3]
+    
+    text_size = cam_size * 0.5  # Adjust text size relative to camera
+    text_depth = text_size * 0.05  # Text extrusion depth
+        
+    # Create 3D text mesh (oriented to face default view)
+    img_text = Image.new('RGB', (256, 64), (255, 255, 255, 255))
+    try:
+        font = ImageFont.truetype("DejaVuSans.ttf", 40)
+    except:
+        font = ImageFont.load_default()
+    d = ImageDraw.Draw(img_text)
+    d.text((60, 10), scene_name, 
+           fill=(0, 0, 0, 255), 
+           font=font, 
+           stroke_fill=(0, 0, 0, 255))
+
+    text_mesh = trimesh.creation.box((text_size, text_size*0.5, 0.001))
+    text_mesh.visual = trimesh.visual.TextureVisuals(
+        uv=[[0,0], [1,0], [1,1], [0,1]],
+        image=img_text
+    )
+
+    text_offset = np.array([0, text_size*1.5, text_size*0.5])
+    text_transform = np.eye(4)
+    text_transform[:3, 3] = camera_position + text_offset
+
+    # Align text to face the camera's viewing direction
+    text_transform[:3, :3] = pose_c2w[:3, :3] @ Rotation.from_euler('x', -45).as_matrix()
+    text_mesh.apply_transform(text_transform)
+
+    # Add text to scene
+    scene.add_geometry(text_mesh)    
 
 def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True, step=1):
     """Visualizes multiple scenes with cameras and images.
@@ -339,6 +380,7 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
                     show_cam_size = cam_size * 5
                     _add_scene_cam(
                         scene=scene,
+                        scene_name=scene_name,
                         pose_w2c=pose_w2c,
                         color=scene_color,
                         image=image,
@@ -351,6 +393,7 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
                     show_cam_size = cam_size
                     _add_scene_cam(
                         scene=scene,
+                        scene_name=scene_name,
                         pose_w2c=pose_w2c,
                         color=scene_color,
                         image=image,
