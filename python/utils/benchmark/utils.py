@@ -8,7 +8,6 @@ from transforms3d.quaternions import qinverse, rotate_vector, qmult
 VARIANTS_ANGLE_SIN = 'sin'
 VARIANTS_ANGLE_COS = 'cos'
 
-
 def convert_world2cam_to_cam2world(q, t):
     qinv = qinverse(q)
     tinv = -rotate_vector(t, qinv)
@@ -20,7 +19,7 @@ def load_poses(file: typing.IO, load_score: bool = False, is_multi_frame: bool =
 
     The text file encodes world2cam poses with the format:
     is_multi_frame = True:
-        num_ref_img refimg_path1 ... refimg_pathN tarimg_path qw qx qy qz tx ty tz [loss]
+        num_ref_img refimg_path1 ... refimg_pathN tarimg_path qw qx qy qz tx ty tz [confidence]
     is_multi_frame = False:
         imgpath qw qx qy qz tx ty tz [confidence]
     where qw qx qy qz is the quaternion encoding rotation,
