@@ -16,7 +16,7 @@ import pycpptools.src.python.utils_math as pytool_math
 
 RMSE_THRESHOLD = 3.0
 VPR_MATCH_THRESHOLD = 0.90
-REFINE_GV_SCORE_THRESHOLD = 200.0
+REFINE_GV_SCORE_THRESHOLD = 50.0
 REFINE_EDGE_SCORE_THRESHOLD = 20.0 # threshold to select good refinement: out-of-range image, wrong coarse localization
 
 def setup_logging(log_dir, stdout_level='info'):
@@ -168,6 +168,8 @@ def parse_arguments():
 													help="master, duster")
 	parser.add_argument("--vpr_match_model", type=str, default="sequence_match", 
 											 help="single_match, topo_filter, sequence_match")
+	parser.add_argument("--vpr_match_seq_len", type=int, nargs="+", default=10, 
+											 help="Sequence length for VPR")
 
 	# parser.add_argument("--positive_dist_threshold", type=int, default=25,
 	# 										help="distance (in meters) for a prediction to be considered a positive")
