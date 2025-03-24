@@ -8,12 +8,12 @@ import numpy as np
 import pathlib
 
 from utils.utils_image import load_rgb_image, load_depth_image
-from utils.utils_file import *
+from python.utils.utils_geom import *
 from image_node import ImageNode
+from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec
 
 from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
 from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
-from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix, convert_matrix_to_vec
 
 class ImageGraphLoader:
 	def __init__(self):
