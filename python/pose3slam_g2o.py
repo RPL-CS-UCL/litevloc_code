@@ -7,18 +7,40 @@
  * @date Jan 17, 2019
  * @author Vikrant Shah based on CPP example by Luca Carlone
 """
-# pylint: disable=invalid-name, E1101
-
-from __future__ import print_function
 
 import argparse
-
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
-
 import gtsam
-from gtsam.utils import plot
+
+# Using GTSAM
+def optimize_pose_graph(graph, initial, verbose=False):
+    """
+    Optimizes a pose graph using the Levenberg-Marquardt algorithm.
+
+    This function adds a prior factor to the first key in the initial estimate to anchor the graph,
+    then optimizes the graph to minimize the error.
+
+    Args:
+        graph (gtsam.NonlinearFactorGraph): The pose graph containing factors (constraints).
+        initial (gtsam.Values): Initial estimates for the variables (poses) in the graph.
+
+    Returns:
+        gtsam.Values: The optimized values (poses) after the optimization process.
+    """    
+    priorModel = gtsam.noiseModel.Diagonal.Variances(vector6(1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4))
+    firstKey = initial.keys()[0]
+    init_estimate = initial.atPose3(firstKey)
+    graph.add(gtsam.PriorFactorPose3(firstKey, init_estimate, priorModel))
+
+    # Set up the optimizer
+    params = gtsam.LevenbergMarquardtParams()
+    if verbose:
+        params.setVerbosity("Termination")
+    optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial, params)
+    result = optimizer.optimize()
+    
+    return result
 
 def vector6(x, y, z, a, b, c):
     """Create 6d double numpy array."""
@@ -31,6 +53,7 @@ def parser_arugments():
     parser.add_argument('-i', '--input', help='input file g2o format')
     parser.add_argument('-o', '--output', help="the path to the output file with optimized graph")
     parser.add_argument("-p", "--plot", action="store_true", help="Flag to plot results")
+    parser.add_argument("--viz", action="store_true", help="Only visualize graph")
     args = parser.parse_args()
     return args
 
@@ -42,28 +65,20 @@ def main():
     is3D = True
     graph, initial = gtsam.readG2o(g2o_file, is3D)
 
-    # Add Prior on the first key
-    print("Adding prior to g2o file ")
-    priorModel = gtsam.noiseModel.Diagonal.Variances(vector6(1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4))
-    firstKey = initial.keys()[0]
-    init_estimate = initial.atPose3(firstKey)
-    graph.add(gtsam.PriorFactorPose3(firstKey, init_estimate, priorModel))
+    if args.viz:
+        result = initial
+        print("Only visualization")
+        print("initial error = ", graph.error(initial))
+    else:
+        result = optimize_pose_graph(graph, initial)
+        print("Optimization complete")
+        print("initial error = ", graph.error(initial))
+        print("final error = ", graph.error(result))
 
-    # Set up the optimizer
-    params = gtsam.LevenbergMarquardtParams()
-    params.setVerbosity("Termination")  # this will show info about stopping conds
-    optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial, params)
-    result = optimizer.optimize()
-    ######## DEBUG(gogojjh)
-    # result = initial
-    ########
-    # Output the results
-    print("Optimization complete")
-    print("initial error = ", graph.error(initial))
-    print("final error = ", graph.error(result))
 
     if args.output is None:
-        print("Final Result:\n{}".format(result))
+        # print("Final Result:\n{}".format(result))
+        pass
     else:
         outputFile = args.output
         print("Writing results to file: ", outputFile)

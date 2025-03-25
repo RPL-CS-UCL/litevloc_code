@@ -146,7 +146,7 @@ def save_query_result(log_dir, query_result_info, query_submap_id):
 			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='VPR Score', color='g')
 		else:
 			ax[0].bar(query_id, prob, width=0.6, alpha=0.7, label='VPR Score', color='r')
-		if score > REFINE_EDGE_SCORE_THRESHOLD:
+		if score > REFINE_CONF_THRESHOLD:
 			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score/Loss', color='g')
 		else:
 			ax[1].bar(query_id, score, width=0.6, alpha=0.7, label='Edge Score/Loss', color='r')
@@ -173,6 +173,8 @@ def parse_arguments():
 	parser.add_argument("--pose_estimation_method", type=str, default="master", help="master, duster")
 
 	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="cuda (gpu) or cpu")
+
+	parser.add_argument("--viz", action="store_true", help="Flag to plot results")
 
 	# parser.add_argument("--positive_dist_threshold", type=int, default=25,
 	# 										help="distance (in meters) for a prediction to be considered a positive")

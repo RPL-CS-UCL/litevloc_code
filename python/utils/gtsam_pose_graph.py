@@ -50,3 +50,33 @@ class PoseGraph:
 
 	def get_current_estimate(self):
 		return self.current_estimate
+	
+	@staticmethod
+	def plot_pose_graph(save_dir, graph, result):
+		import os
+		from matplotlib import pyplot as plt
+
+		fig = plt.figure()
+		ax = fig.add_subplot(111, projection='3d')
+
+		resultPoses = gtsam.utilities.allPose3s(result)
+		x_coords = [resultPoses.atPose3(i).translation()[0] for i in range(resultPoses.size())]
+		y_coords = [resultPoses.atPose3(i).translation()[1] for i in range(resultPoses.size())]
+		z_coords = [resultPoses.atPose3(i).translation()[2] for i in range(resultPoses.size())]
+		plt.plot(x_coords, y_coords, z_coords, 'o', color='b', label='Est. Trajectory')
+
+		for key in graph.keyVector():
+			factor = graph.at(key)
+			if isinstance(factor, gtsam.BetweenFactorPose3):
+				key1, key2 = factor.keys()
+				tsl1 = result.atPose3(key1).translation()
+				tsl2 = result.atPose3(key2).translation()
+				plt.plot([tsl1[0], tsl2[0]], [tsl1[1], tsl2[1]], [tsl1[2], tsl2[2]], '.-', color='g')
+
+		ax.set_xlabel('X [m]')
+		ax.set_ylabel('Y [m]')
+		ax.set_zlabel('Z [m]')
+		ax.view_init(elev=55, azim=60)
+		plt.tight_layout()
+		plt.axis('equal')
+		plt.savefig(os.path.join(save_dir, 'pose_graph_refined.png'))
