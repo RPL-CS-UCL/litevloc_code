@@ -1,19 +1,12 @@
 #! /usr/bin/env python
 
 import os
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import numpy as np
-import pathlib
 
+from utils.utils_geom import *
 from utils.utils_image import load_rgb_image, load_depth_image
-from python.utils.utils_geom import *
+from utils.base_graph import BaseGraph
 from image_node import ImageNode
-from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec
-
-from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
-from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
 
 class ImageGraphLoader:
 	def __init__(self):
@@ -214,7 +207,7 @@ class TestImageGraph():
 		print(f"Image Descriptor of Node 2: {node.global_descriptor}")
 
 		# Find the shortest path from node 1 to node 4
-		from pycpptools.src.python.utils_algorithm.shortest_path import dijk_shortest_path
+		from utils.utils_shortest_path import dijk_shortest_path
 		distance, path = dijk_shortest_path(graph, graph.get_node(1), graph.get_node(4))
 		print(f"Shortest Path from Node 1 to Node 4 with distance {distance}")
 		print(' -> '.join([str(node.id) for node in path]))

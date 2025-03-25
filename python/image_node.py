@@ -1,8 +1,9 @@
 import numpy as np
-from pycpptools.src.python.utils_algorithm.base_node import BaseNode
+from utils.base_node import BaseNode
 
 class ImageNode(BaseNode):
-	def __init__(self, node_id: int, 
+	def __init__(self, 
+			  	 node_id: int, 
 				 rgb_image: str,
 				 depth_image: str,
 				 global_descriptor: np.ndarray, 
@@ -44,7 +45,7 @@ class ImageNode(BaseNode):
 		self.inliers = None
 
 	def __str__(self):
-		out_str = f'Image Node ID: {self.node_id} with edge number: {len(self.edges)}'
+		out_str = f'Image Node ID: {self.id} with edge number: {len(self.edges)}'
 		out_str += f', intrinsics: [' + ', '.join([str(x) for x in self.raw_K.flatten()]) + ']'
 		return out_str
 
