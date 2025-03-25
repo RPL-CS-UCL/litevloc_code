@@ -12,12 +12,12 @@ from estimator import get_estimator, available_models
 from estimator.utils import to_numpy
 import matplotlib.pyplot as plt
 
-import pycpptools.src.python.utils_math as pytool_math
+from utils.utils_geom import convert_vec_to_matrix, compute_pose_error
 
 RMSE_THRESHOLD = 3.0
 VPR_MATCH_THRESHOLD = 0.90
-REFINE_GV_SCORE_THRESHOLD = 50.0
-REFINE_EDGE_SCORE_THRESHOLD = 20.0 # threshold to select good refinement: out-of-range image, wrong coarse localization
+REFINE_GV_SCORE_THRESHOLD = 100.0
+REFINE_CONF_THRESHOLD = 0.5 # threshold to select good refinement: out-of-range image, wrong coarse localization
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
@@ -103,8 +103,11 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 		nodeA, nodeB, T_rel, prob = edge
 		# Identify correct and wrong connections
 		if 'coarse' in suffix:
-			dis_tsl, dis_angle = \
-				pytool_math.tools_eigen.compute_relative_dis(nodeA.trans_gt, nodeA.quat_gt, nodeB.trans_gt, nodeB.quat_gt)
+			dis_tsl, dis_angle = compute_pose_error(
+				(nodeA.trans_gt, nodeA.quat_gt), 
+				(nodeB.trans_gt, nodeB.quat_gt),
+				mode='vector'
+			)
 			if dis_tsl < 20.0:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
@@ -113,11 +116,10 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
 		elif 'refine' in suffix:
-			T_nodeA = pytool_math.tools_eigen.convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
-			T_nodeB = pytool_math.tools_eigen.convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
+			T_nodeA = convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
+			T_nodeB = convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
 			T_rel_gt = np.linalg.inv(T_nodeA) @ T_nodeB
-			dis_tsl, dis_angle = \
-				pytool_math.tools_eigen.compute_relative_dis_TF(T_rel, T_rel_gt)
+			dis_tsl, dis_angle = compute_pose_error(T_rel, T_rel_gt, mode='matrix')
 			if dis_tsl < 1.0 and dis_angle < 45.0:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
@@ -163,13 +165,14 @@ def parse_arguments():
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
 										help="Resizing shape for images (WxH). If a single int is passed, set the"
 											 "smallest edge of all images to this value, while keeping aspect ratio")
-	
-	parser.add_argument("--pose_estimation_method", type=str, default="master", 
-													help="master, duster")
+
 	parser.add_argument("--vpr_match_model", type=str, default="sequence_match", 
-											 help="single_match, topo_filter, sequence_match")
-	parser.add_argument("--vpr_match_seq_len", type=int, nargs="+", default=10, 
-											 help="Sequence length for VPR")
+											 help="single_match, topo_filter, sequence_match, sequence_match_ransac")
+	parser.add_argument("--vpr_match_seq_len", type=int, default=10, help="Sequence length for VPR")
+
+	parser.add_argument("--pose_estimation_method", type=str, default="master", help="master, duster")
+
+	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="cuda (gpu) or cpu")
 
 	# parser.add_argument("--positive_dist_threshold", type=int, default=25,
 	# 										help="distance (in meters) for a prediction to be considered a positive")
@@ -188,7 +191,6 @@ def parse_arguments():
 	# 										help="set to 1 if database images may have different resolution")
 	# parser.add_argument("--log_dir", type=str, default="default", 
 	# 				 help="experiment name, output logs will be saved under logs/log_dir")
-	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="cuda (gpu) or cpu")
 	# parser.add_argument("--recall_values", type=int, nargs="+", default=[1, 5, 10, 20],
 	# 										help="values for recall (e.g. recall@1, recall@5)")
 	# parser.add_argument("--no_labels", action="store_true",

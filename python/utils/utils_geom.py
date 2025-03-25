@@ -1,4 +1,5 @@
-# utils_geom.py
+#! /usr/bin/env python
+
 """Geometric utility functions for SLAM and 3D vision tasks."""
 
 import os
@@ -88,13 +89,51 @@ def convert_vec_gtsam_pose3(
     quaternion, 
     mode='xyzw'
 ) -> gtsam.Pose3:
+    """Converts a translation vector and quaternion into a gtsam.Pose3 object.
+
+    Args:
+        translation (numpy.ndarray): A 3D translation vector with shape (3,) or (3,1).
+        quaternion (numpy.ndarray): A quaternion with shape (4,).
+        mode (str, optional): The quaternion representation mode, either 'xyzw' or 'wxyz'. Defaults to 'xyzw'.
+
+    Returns:
+        gtsam.Pose3: A gtsam.Pose3 object representing the pose.
+
+    Raises:
+        ValueError: If the provided quaternion mode is not supported.
+    """
     if mode not in QUAT_MODES:
         raise ValueError(f"Invalid quaternion mode: {mode}")
 
     if mode == 'xyzw':
-        quaternion = np.roll(quaternion, -1)
+        quaternion = np.roll(quaternion, 1)
 
-    pose3 = gtsam.Pose3(gtsam.Rot3(quaternion), translation.reshape(3, 1))
+    pose3 = gtsam.Pose3(
+        gtsam.Rot3(quaternion[0], quaternion[1], quaternion[2], quaternion[3]), 
+        translation.reshape(3, 1)
+    )
+    return pose3
+
+def convert_matrix_gtsam_pose3(
+    transform: np.ndarray,
+) -> gtsam.Pose3:
+    """Convert a 4x4 transformation matrix to a gtsam.Pose3 object.
+    
+    Args:
+        transform: 4x4 transformation matrix
+        
+    Returns:
+        gtsam.Pose3 object representing the transformation
+    """
+    if transform.shape != (4, 4):
+        raise ValueError("Input must be a 4x4 transformation matrix")
+    
+    # Extract rotation matrix and translation vector
+    rotation = transform[:3, :3]
+    translation = transform[:3, 3]
+    
+    # Create gtsam.Pose3 object
+    pose3 = gtsam.Pose3(gtsam.Rot3(rotation), translation.reshape(3, 1))
     return pose3
 
 def convert_vec_to_matrix(
@@ -157,7 +196,7 @@ def compute_pose_error(
     """Compute relative pose error between two transformations.
     
     Args:
-        pose1: First pose (4x4 matrix or translation+quaternion)
+        pose1: First pose (4x4 matrix or translation+quaternion as tuple)
         pose2: Second pose (same format as pose1)
         mode: Input format ('matrix' or 'vector')
         
@@ -193,6 +232,21 @@ def _compute_error_from_vectors(
     tf2 = convert_vec_to_matrix(trans2, quat2, mode)
     return _compute_error_from_matrices(tf1, tf2)
 
+def correct_intrinsic_scale(K, scale_x, scale_y):
+    """Given an intrinsic matrix (3x3) and two scale factors, returns the new intrinsic matrix corresponding to
+    the new coordinates x' = scale_x * x; y' = scale_y * y
+    Source: https://dsp.stackexchange.com/questions/6055/how-does-resizing-an-image-affect-the-intrinsic-camera-matrix
+    """
+
+    transform = np.eye(3)
+    transform[0, 0] = scale_x
+    transform[0, 2] = scale_x / 2 - 0.5
+    transform[1, 1] = scale_y
+    transform[1, 2] = scale_y / 2 - 0.5
+    Kprime = transform @ K
+
+    return Kprime
+
 if __name__ == "__main__":
     # Example usage
     tf = convert_vec_to_matrix(
@@ -205,3 +259,12 @@ if __name__ == "__main__":
     trans, quat = convert_matrix_to_vec(tf, mode='xyzw')
     print("Recovered translation:", trans)
     print("Recovered quaternion:", quat)
+
+    trans_error, rot_error = compute_pose_error((trans, quat), (trans, quat), mode='vector')
+    print(f"Trans error: {trans_error:.3f}, Rot error: {rot_error:.3f}")
+
+    gtpose = convert_vec_gtsam_pose3(np.zeros(3), np.array([0, 0, 0, 1]), mode='xyzw')
+    print(f"GTSAM Pose: ", gtpose)
+
+    gtpose = convert_matrix_gtsam_pose3(np.eye(4))
+    print(f"GTSAM Pose: ", gtpose)
