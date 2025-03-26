@@ -79,7 +79,7 @@ def parse_arguments():
         help='Space-separated list of scenes to visualize (e.g. s00000 s00001)'
     )
     parser.add_argument(
-        '--cam_size', type=float, default=0.03,
+        '--cam_size', type=float, default=0.2,
         help='Base size of camera frustums in meters'
     )
     parser.add_argument(
@@ -143,6 +143,8 @@ def _load_intrinsics(filepath):
 def _load_poses(filepath):
     """Loads camera poses from text file (world-to-camera format)."""
     poses = {}
+    if not os.path.exists(filepath) and 'poses_abs' in filepath:
+        filepath = filepath.replace('poses_abs', 'poses_abs_gt')
     with open(filepath) as f:
         for line in f:
             parts = line.strip().split()
@@ -159,7 +161,7 @@ def _load_poses(filepath):
 def _collect_images(scene_path):
     """Collects all image paths in a scene."""
     images = []
-    for seq in ['seq0', 'seq1']:
+    for seq in ['seq0', 'seq1', 'seq']:
         seq_path = os.path.join(scene_path, seq)
         if os.path.exists(seq_path):
             images.extend(glob(os.path.join(seq_path, '*.jpg')))
@@ -373,10 +375,10 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
 
             fx, fy, cx, cy, width, height = data['intrinsics'][img_path]
             imsize = (int(width), int(height))
-            
+
             try:
                 image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-                if 'seq0/frame_00000' in img_path:
+                if 'seq0/frame_000000' in img_path or 'seq/000000' in img_path:
                     show_cam_size = cam_size * 5
                     _add_scene_cam(
                         scene=scene,
