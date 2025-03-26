@@ -28,11 +28,6 @@ def optimize_pose_graph(graph, initial, verbose=False):
     Returns:
         gtsam.Values: The optimized values (poses) after the optimization process.
     """    
-    priorModel = gtsam.noiseModel.Diagonal.Variances(vector6(1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4))
-    firstKey = initial.keys()[0]
-    init_estimate = initial.atPose3(firstKey)
-    graph.add(gtsam.PriorFactorPose3(firstKey, init_estimate, priorModel))
-
     # Set up the optimizer
     params = gtsam.LevenbergMarquardtParams()
     if verbose:
@@ -65,16 +60,23 @@ def main():
     is3D = True
     graph, initial = gtsam.readG2o(g2o_file, is3D)
 
+    # Add prior factor
+    priorModel = gtsam.noiseModel.Diagonal.Variances(vector6(1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4))
+    firstKey = initial.keys()[0]
+    init_estimate = initial.atPose3(firstKey)
+    graph.add(gtsam.PriorFactorPose3(firstKey, init_estimate, priorModel))
+
     if args.viz:
         result = initial
         print("Only visualization")
         print("initial error = ", graph.error(initial))
     else:
-        result = optimize_pose_graph(graph, initial)
+        result = optimize_pose_graph(graph, initial, True)
         print("Optimization complete")
+        print(graph)
+        print(initial)
         print("initial error = ", graph.error(initial))
         print("final error = ", graph.error(result))
-
 
     if args.output is None:
         # print("Final Result:\n{}".format(result))
