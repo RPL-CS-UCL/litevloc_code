@@ -76,6 +76,8 @@ class BaseGraph:
 	# Return a list of all node ids in the graph
 	def get_all_id(self):
 		all_id = [id for id in self.nodes.keys()]
+		if all_id == []:
+			return [-1]
 		return all_id
 
 	def contain_node(self, query_node):

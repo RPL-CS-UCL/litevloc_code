@@ -73,8 +73,6 @@ def main():
     else:
         result = optimize_pose_graph(graph, initial, True)
         print("Optimization complete")
-        print(graph)
-        print(initial)
         print("initial error = ", graph.error(initial))
         print("final error = ", graph.error(result))
 
