@@ -12,7 +12,7 @@ from typing import Dict, Optional, Tuple
 DEFAULT_IMAGE_TEMPLATE = "seq/{frame_id:06d}.color.jpg"
 QUAT_MODES = ('xyzw', 'wxyz')
 
-def read_timestamps(file_path: str) -> Dict[str, float]:
+def read_timestamps(file_path: str) -> Dict[str, np.ndarray]:
     """Read timestamps from a file into a dictionary.
     
     Args:
@@ -56,11 +56,22 @@ def read_descriptors(file_path: str) -> Dict[str, np.ndarray]:
     """
     return _read_generic_file(file_path, data_dim=None)
 
+def read_gps(file_path: str) -> Dict[str, np.ndarray]:
+    """Read gps from file.
+    
+    Args:
+        file_path: Path to gps file
+        
+    Returns:
+        Dictionary mapping image names to gps data [latitude, longitude, altitude, speed, x, x]
+    """
+    return _read_generic_file(file_path, data_dim=5)
+
 def _read_generic_file(file_path: str, data_dim: Optional[int]) -> Dict[str, np.ndarray]:
     """Generic file reader helper function."""
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")
-        return {}
+        return None
 
     data_dict = {}
     with open(file_path, 'r') as f:
@@ -69,10 +80,12 @@ def _read_generic_file(file_path: str, data_dim: Optional[int]) -> Dict[str, np.
                 continue
 
             parts = line.strip().split()
-            if parts[0].startswith('seq'):
+            if 'jpg' in parts[0] or 'png' in parts[0]:
+                # provide img_name
                 img_name = parts[0]
                 data = list(map(float, parts[1:]))
             else:
+                # not provide img_name
                 img_name = DEFAULT_IMAGE_TEMPLATE.format(frame_id=line_id)
                 data = list(map(float, parts))
 

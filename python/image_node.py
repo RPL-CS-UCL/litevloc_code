@@ -13,7 +13,8 @@ class ImageNode(BaseNode):
 				 K: np.ndarray, 
 				 img_size: np.ndarray,
 				 rgb_img_name: str, 
-				 depth_img_name: str):
+				 depth_img_name: str,
+				 gps_data: np.ndarray):
 		super().__init__(node_id, trans, quat)
 
 		# RGB and depth images
@@ -37,12 +38,16 @@ class ImageNode(BaseNode):
 		self.raw_K = K
 		self.raw_img_size = img_size
 
+		# GPS data
+		self.gps_data = gps_data
+		
 		# Next node using in the shortest path
 		self.next_node = None
 
 		# Matched keypoints
 		self.mkpts = None
 		self.inliers = None
+
 
 	def __str__(self):
 		out_str = f'Image Node ID: {self.id} with edge number: {len(self.edges)}'

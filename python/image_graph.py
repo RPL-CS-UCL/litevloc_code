@@ -51,6 +51,7 @@ class ImageGraphLoader:
 		poses = read_poses(os.path.join(map_root, 'poses.txt'))
 		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
 		descs = read_descriptors(os.path.join(map_root, 'database_descriptors.txt'))
+		gps_datas = read_gps(os.path.join(map_root, 'gps_data.txt'))
 
 		# Iterate over each image and create observation nodes
 		for key in poses.keys():
@@ -99,12 +100,22 @@ class ImageGraphLoader:
 			else:
 				desc = None
 
+			# Extract GPS
+			if gps_datas is not None:
+				if key in gps_datas:
+					gps_data = gps_datas[key]
+				else:
+					continue
+			else:
+				gps_data = None
+
 			# Create observation node
 			node_id = image_graph.get_num_node()
 			node = ImageNode(node_id, rgb_image, depth_image, desc,
 							 time, trans, quat, 
 							 K, img_size,
-							 rgb_img_name, depth_img_name)
+							 rgb_img_name, depth_img_name,
+							 gps_data)
 			node.set_raw_intrinsics(raw_K, raw_img_size)
 			node.set_pose(trans, quat)
 			if poses_abs_gt is not None and key in poses_abs_gt:
@@ -142,6 +153,7 @@ class ImageGraph(BaseGraph):
 		poses_abs_gt = np.empty((num_node, 8), dtype=object)
 		first_node = next(iter(self.nodes.values()))
 		descs = np.empty((num_node, len(first_node.get_descriptor()) + 1), dtype=object)
+		gps_datas = np.empty((num_node, 6), dtype=object)
 		for line_id, (node_id, node) in enumerate(self.nodes.items()):
 			img_name = f"seq/{node_id:06d}.color.jpg"
 			times[line_id, 0], times[line_id, 1] = img_name, node.time
@@ -163,11 +175,14 @@ class ImageGraph(BaseGraph):
 
 			descs[line_id, 0], descs[line_id, 1:] = img_name, node.get_descriptor()
 
+			gps_datas[line_id, 0], gps_datas[line_id, 1:] = img_name, node.gps_data
+
 		np.savetxt(os.path.join(self.map_root, "timestamps.txt"), times, fmt='%s %.6f')
 		np.savetxt(os.path.join(self.map_root, "intrinsics.txt"), intrinsics, fmt='%s %.6f %.6f %.6f %.6f %d %d')
 		np.savetxt(os.path.join(self.map_root, "poses.txt"), poses, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
 		np.savetxt(os.path.join(self.map_root, "poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
 		np.savetxt(os.path.join(self.map_root, "database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
+		np.savetxt(os.path.join(self.map_root, "gps_data.txt"), gps_datas, fmt='%s %.6f %.6f %.6f %.6f %.6f')
 		self.write_edge_list(os.path.join(self.map_root, 'odometry_edge_list.txt'))
 
 class TestImageGraph():
