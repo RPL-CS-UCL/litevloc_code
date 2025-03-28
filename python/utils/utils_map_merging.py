@@ -100,7 +100,7 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 	# Plot connections
 	succ_cnt = 0
 	for edge in edges_nodeA_to_nodeB:
-		nodeA, nodeB, T_rel, prob = edge
+		nodeA, nodeB, T_rel, score = edge
 		# Identify correct and wrong connections
 		if 'coarse' in suffix:
 			dis_tsl, dis_angle = compute_pose_error(
@@ -110,11 +110,11 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 			)
 			if dis_tsl < 20.0:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
-				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
 				succ_cnt += 1
 			else:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=2)
-				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
 		elif 'refine' in suffix:
 			T_nodeA = convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
 			T_nodeB = convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
@@ -122,11 +122,11 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 			dis_tsl, dis_angle = compute_pose_error(T_rel, T_rel_gt, mode='matrix')
 			if dis_tsl < 1.0 and dis_angle < 45.0:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
-				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
 				succ_cnt += 1
 			else:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=2)
-				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={prob:.2f}', fontsize=12, color='k')
+				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
 	
 	ax.grid(ls='--', color='0.7')
 	plt.axis('equal')
