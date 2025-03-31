@@ -153,53 +153,6 @@ def save_point_cloud(pts3d, save_path, save_flag=False):
         o3d.io.write_point_cloud(save_path, pcd)
     return pcd
 
-def overlap_ratio_compute(pcdA, pcdB, dis_thre):
-    # def find_boundary(pointsA, pointsB):
-    #     # sort_distances = np.log(sorted(distances))
-    #     # Q1 = np.percentile(sort_distances, 15)
-    #     # Q3 = np.percentile(sort_distances, 80)
-    #     # IQR = Q3 - Q1
-    #     # boundary = Q1 + 0.1 * IQR
-
-    #     # Compute pairwise Euclidean distances between consecutive points for both clouds
-    #     diff_A = np.diff(pointsA, axis=0)
-    #     errors_A = np.linalg.norm(diff_A, axis=1)
-        
-    #     diff_B = np.diff(pointsB, axis=0)
-    #     errors_B = np.linalg.norm(diff_B, axis=1)
-        
-    #     combined_errors = np.sort(np.concatenate([errors_A, errors_B]))
-    #     boundary = np.percentile(combined_errors, 5) # allow noise for pairwise prediction
-
-    #     count_less_equal = np.searchsorted(combined_errors, boundary, side='right')
-    #     position_percentage = (count_less_equal / len(combined_errors)) * 100
-    #     print(f"Boundary value: {boundary:.4f}")
-    #     print(f"Position in sorted array: {position_percentage:.1f}% of values ≤ boundary")
-
-    #     return boundary
-
-    # Convert point clouds to NumPy arrays
-    pointsA = np.asarray(pcdA.points)
-    kdtree_B = o3d.geometry.KDTreeFlann(pcdB)
-
-    pointsB = np.asarray(pcdB.points)
-    kdtree_A = o3d.geometry.KDTreeFlann(pcdA)
-
-    # Compute distances from points in pcd1 to their nearest neighbors in pcdB
-    distances_A_to_B = [np.sqrt(kdtree_B.search_knn_vector_3d(point, 1)[2][0]) for point in pointsA]
-    distances_B_to_A = [np.sqrt(kdtree_A.search_knn_vector_3d(point, 1)[2][0]) for point in pointsB]
-    # dis_thre = find_boundary(pointsA, pointsB)
-
-    num_pointA_to_B = np.sum(np.array(distances_A_to_B) < dis_thre)
-    ratio_pointA_to_B = num_pointA_to_B / len(pointsA)
-    ratio_pointA_not_to_B = 1.0 - ratio_pointA_to_B
-
-    num_pointB_to_A = np.sum(np.array(distances_B_to_A) < dis_thre)
-    ratio_pointB_to_A = num_pointB_to_A / len(pointsB)
-    ratio_pointB_not_to_A = 1.0 - ratio_pointB_to_A
-    
-    return ratio_pointA_to_B, ratio_pointA_not_to_B, ratio_pointB_to_A, ratio_pointB_not_to_A
-
 def pre_compute(scene_path):
     """Enhanced pre-computation with structured submap handling"""
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
