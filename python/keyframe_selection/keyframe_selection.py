@@ -7,22 +7,93 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 import numpy as np
 import argparse
 from collections import OrderedDict
-from utils.utils_geom import read_intrinsics, read_poses, read_timestamps
 import pyiqa
 import torch
 import itertools
 from pathlib import Path
 import open3d as o3d
+from sklearn.mixture import GaussianMixture
+
+from utils.utils_geom import read_intrinsics, read_poses, read_timestamps, read_descriptors
+from utils.utils_vpr_method import *
+import torchvision.transforms as transforms
+from PIL import Image
 
 from estimator import get_estimator
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description='Keyframe Selection Algorithm')
-    parser.add_argument('--dataset_path', type=str, required=True, 
-                       help='Path to the dataset')
-    parser.add_argument('--scene', type=str, required=True, 
-                       help='Scene name to process')
-    return parser.parse_args()
+from landmark_selector import LandmarkSelector
+
+def inv(mat):
+    """ Invert a torch or numpy matrix
+    """
+    if isinstance(mat, torch.Tensor):
+        return torch.linalg.inv(mat)
+    if isinstance(mat, np.ndarray):
+        return np.linalg.inv(mat)
+    raise ValueError(f'bad matrix type = {type(mat)}')
+
+def geotrf(Trf, pts, ncol=None, norm=False):
+    """ Apply a geometric transformation to a list of 3-D points.
+
+    H: 3x3 or 4x4 projection matrix (typically a Homography)
+    p: numpy/torch/tuple of coordinates. Shape must be (...,2) or (...,3)
+
+    ncol: int. number of columns of the result (2 or 3)
+    norm: float. if != 0, the resut is projected on the z=norm plane.
+
+    Returns an array of projected 2d points.
+    """
+    assert Trf.ndim >= 2
+    if isinstance(Trf, np.ndarray):
+        pts = np.asarray(pts)
+    elif isinstance(Trf, torch.Tensor):
+        pts = torch.as_tensor(pts, dtype=Trf.dtype)
+
+    # adapt shape if necessary
+    output_reshape = pts.shape[:-1]
+    ncol = ncol or pts.shape[-1]
+
+    # optimized code
+    if (isinstance(Trf, torch.Tensor) and isinstance(pts, torch.Tensor) and
+            Trf.ndim == 3 and pts.ndim == 4):
+        d = pts.shape[3]
+        if Trf.shape[-1] == d:
+            pts = torch.einsum("bij, bhwj -> bhwi", Trf, pts)
+        elif Trf.shape[-1] == d + 1:
+            pts = torch.einsum("bij, bhwj -> bhwi", Trf[:, :d, :d], pts) + Trf[:, None, None, :d, d]
+        else:
+            raise ValueError(f'bad shape, not ending with 3 or 4, for {pts.shape=}')
+    else:
+        if Trf.ndim >= 3:
+            n = Trf.ndim - 2
+            assert Trf.shape[:n] == pts.shape[:n], 'batch size does not match'
+            Trf = Trf.reshape(-1, Trf.shape[-2], Trf.shape[-1])
+
+            if pts.ndim > Trf.ndim:
+                # Trf == (B,d,d) & pts == (B,H,W,d) --> (B, H*W, d)
+                pts = pts.reshape(Trf.shape[0], -1, pts.shape[-1])
+            elif pts.ndim == 2:
+                # Trf == (B,d,d) & pts == (B,d) --> (B, 1, d)
+                pts = pts[:, None, :]
+
+        if pts.shape[-1] + 1 == Trf.shape[-1]:
+            Trf = Trf.swapaxes(-1, -2)  # transpose Trf
+            pts = pts @ Trf[..., :-1, :] + Trf[..., -1:, :]
+        elif pts.shape[-1] == Trf.shape[-1]:
+            Trf = Trf.swapaxes(-1, -2)  # transpose Trf
+            pts = pts @ Trf
+        else:
+            pts = Trf @ pts.T
+            if pts.ndim >= 2:
+                pts = pts.swapaxes(-1, -2)
+
+    if norm:
+        pts = pts / pts[..., -1:]  # DONT DO /= BECAUSE OF WEIRD PYTORCH BUG
+        if norm != 1:
+            pts *= norm
+
+    res = pts[..., :ncol].reshape(*output_reshape, ncol)
+    return res
 
 class SubmapManager:
     def __init__(self, time_threshold=300.0):
@@ -57,7 +128,17 @@ class SubmapManager:
             self.current_submap['duration'] = \
                 self.current_submap['end_time'] - self.current_submap['start_time']
 
-def save_point_cloud(pts3d, save_path):
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Keyframe Selection Algorithm')
+    parser.add_argument('--dataset_path', type=str, required=True, 
+                       help='Path to the dataset')
+    parser.add_argument('--scene', type=str, required=True, 
+                       help='Scene name to process')
+    parser.add_argument('--method', type=str, required=True, 
+                       help='landmark, random')
+    return parser.parse_args()
+
+def save_point_cloud(pts3d, save_path, save_flag=False):
     """
     Save a point cloud to a file using Open3D.
     
@@ -68,40 +149,56 @@ def save_point_cloud(pts3d, save_path):
     pts3d_flat = pts3d.reshape(-1, 3)
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pts3d_flat)
-    o3d.io.write_point_cloud(save_path, pcd)
+    if save_flag:
+        o3d.io.write_point_cloud(save_path, pcd)
     return pcd
 
-def overlap_ratio_compute(pcd1, pcd2):
-    """
-    Compute overlap_ratio and nonoverlap_ratio between two Open3D point clouds.
-    
-    Args:
-        pcd1 (o3d.geometry.PointCloud): Point cloud A.
-        pcd2 (o3d.geometry.PointCloud): Point cloud B.
-    
-    Returns:
-        tuple: (overlap_ratio, nonoverlap_ratio)
-    """
-    def find_boundary(distances):
-        sort_distances = sorted(distances)
-        Q1 = np.percentile(sort_distances, 25)
-        Q3 = np.percentile(sort_distances, 75)
-        IQR = Q3 - Q1
-        boundary = Q1 + 0.1 * IQR
-        return boundary
+def overlap_ratio_compute(pcdA, pcdB, dis_thre):
+    # def find_boundary(pointsA, pointsB):
+    #     # sort_distances = np.log(sorted(distances))
+    #     # Q1 = np.percentile(sort_distances, 15)
+    #     # Q3 = np.percentile(sort_distances, 80)
+    #     # IQR = Q3 - Q1
+    #     # boundary = Q1 + 0.1 * IQR
+
+    #     # Compute pairwise Euclidean distances between consecutive points for both clouds
+    #     diff_A = np.diff(pointsA, axis=0)
+    #     errors_A = np.linalg.norm(diff_A, axis=1)
+        
+    #     diff_B = np.diff(pointsB, axis=0)
+    #     errors_B = np.linalg.norm(diff_B, axis=1)
+        
+    #     combined_errors = np.sort(np.concatenate([errors_A, errors_B]))
+    #     boundary = np.percentile(combined_errors, 5) # allow noise for pairwise prediction
+
+    #     count_less_equal = np.searchsorted(combined_errors, boundary, side='right')
+    #     position_percentage = (count_less_equal / len(combined_errors)) * 100
+    #     print(f"Boundary value: {boundary:.4f}")
+    #     print(f"Position in sorted array: {position_percentage:.1f}% of values ≤ boundary")
+
+    #     return boundary
 
     # Convert point clouds to NumPy arrays
-    points1 = np.asarray(pcd1.points)
-    kdtree_B = o3d.geometry.KDTreeFlann(pcd2)
-    
-    # Compute distances from points in pcd1 to their nearest neighbors in pcd2
-    distances_A_to_B = [np.sqrt(kdtree_B.search_knn_vector_3d(point, 1)[2][0]) for point in points1]
-    dis_thre = find_boundary(distances_A_to_B)
-    
-    overlap_ratio = np.sum([dist < dis_thre for dist in distances_A_to_B]) / len(points1)
-    nonoverlap_ratio = 1.0 - overlap_ratio
+    pointsA = np.asarray(pcdA.points)
+    kdtree_B = o3d.geometry.KDTreeFlann(pcdB)
 
-    return overlap_ratio, nonoverlap_ratio
+    pointsB = np.asarray(pcdB.points)
+    kdtree_A = o3d.geometry.KDTreeFlann(pcdA)
+
+    # Compute distances from points in pcd1 to their nearest neighbors in pcdB
+    distances_A_to_B = [np.sqrt(kdtree_B.search_knn_vector_3d(point, 1)[2][0]) for point in pointsA]
+    distances_B_to_A = [np.sqrt(kdtree_A.search_knn_vector_3d(point, 1)[2][0]) for point in pointsB]
+    # dis_thre = find_boundary(pointsA, pointsB)
+
+    num_pointA_to_B = np.sum(np.array(distances_A_to_B) < dis_thre)
+    ratio_pointA_to_B = num_pointA_to_B / len(pointsA)
+    ratio_pointA_not_to_B = 1.0 - ratio_pointA_to_B
+
+    num_pointB_to_A = np.sum(np.array(distances_B_to_A) < dis_thre)
+    ratio_pointB_to_A = num_pointB_to_A / len(pointsB)
+    ratio_pointB_not_to_A = 1.0 - ratio_pointB_to_A
+    
+    return ratio_pointA_to_B, ratio_pointA_not_to_B, ratio_pointB_to_A, ratio_pointB_not_to_A
 
 def pre_compute(scene_path):
     """Enhanced pre-computation with structured submap handling"""
@@ -142,54 +239,80 @@ def pre_compute(scene_path):
     print(f"{len(submap_data)} submaps are split")
        
     # Create iqa.txt
-    IQA_METRIC = 'musiq'
-    iqa_metric = pyiqa.create_metric(IQA_METRIC, device=device)
-    iqa_scores = np.empty((len(poses), 2), dtype=object)
-    for indice, (img_name, _) in enumerate(poses.items()):
-        img_path = os.path.join(original_scene_path, img_name)
-        score = iqa_metric(img_path).detach().squeeze(0).cpu().numpy()[0]
-        iqa_scores[indice, 0], iqa_scores[indice, 1] = img_name, score
-    np.savetxt(os.path.join(scene_path, 'iqa.txt'), iqa_scores, fmt="%s %.4f")
+    # IQA_METRIC = 'musiq'
+    # iqa_metric = pyiqa.create_metric(IQA_METRIC, device=device)
+    # iqa_scores = np.empty((len(poses), 2), dtype=object)
+    # for indice, (img_name, _) in enumerate(poses.items()):
+    #     img_path = os.path.join(original_scene_path, img_name)
+    #     score = iqa_metric(img_path).detach().squeeze(0).cpu().numpy()[0]
+    #     iqa_scores[indice, 0], iqa_scores[indice, 1] = img_name, score
+    # np.savetxt(os.path.join(scene_path, 'iqa.txt'), iqa_scores, fmt="%s %.4f")
 
-    # Create overlap matrix
+    # # Create descriptor.txt
+    # desc_dimenson = 256
+    # vpr_model = initialize_vpr_model('cosplace', 'ResNet18', desc_dimenson, device)    
+    # transformations = [
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    #     transforms.Resize(size=[512, 288], antialias=True)
+    # ]
+    # transform = transforms.Compose(transformations)
+    # all_descriptors = np.empty((len(poses), desc_dimenson + 1), dtype=object)
+    # for indice, (img_name, _) in enumerate(poses.items()):
+    #     img_path = os.path.join(original_scene_path, img_name)
+    #     pil_img = Image.open(img_path).convert("RGB")
+    #     normalized_img = transform(pil_img)
+    #     descriptors = vpr_model(normalized_img.unsqueeze(0).to(device))
+    #     descriptors = descriptors.detach().cpu().numpy()
+    #     all_descriptors[indice, 0], all_descriptors[indice, 1:] = img_name, descriptors
+    # np.savetxt(os.path.join(scene_path, 'descriptors.txt'), all_descriptors, fmt="%s" + " %.9f" * desc_dimenson)
+
+    # Create information reduction and information gain
     estimator = get_estimator('master', device)
     estimator.verbose = True
     output_dir = os.path.join(scene_path, 'preds')
     os.makedirs(output_dir, exist_ok=True)
 
-    # Initialize dictionaries
-    overlap_dict, nonoverlap_dict = {}, {}
+    # Compute overlapping
+    info_redu, info_gain = {}, {}
     for img_name_0, img_name_1 in itertools.combinations(poses.keys(), 2):
+        print(f"{img_name_0} - {img_name_1}")
+
         img_path_0 = os.path.join(original_scene_path, img_name_0)
         img_path_1 = os.path.join(original_scene_path, img_name_1)
         estimator(Path(scene_path), [img_path_0], img_path_1, None, None, None, dict())
-        
-        # Extract 3D points and masks
-        pcd_list = []
-        for i in range(2):
-            conf = estimator.scene.get_masks()[i].cpu().numpy()
-            pts3d = estimator.scene.get_pts3d()[i].detach().cpu().numpy()[conf]
-            pcd = save_point_cloud(pts3d, os.path.join(output_dir, f'pts3d_{i}.pcd'))
-            pcd_list.append(pcd)
 
-        # Compute overlap and nonoverlap ratio        
-        overlap_ratio, nonoverlap_ratio = overlap_ratio_compute(pcd_list[0], pcd_list[1])
-        overlap_dict[(img_name_0, img_name_1)] = overlap_ratio
-        nonoverlap_dict[(img_name_0, img_name_1)] = nonoverlap_ratio
-        print(f'Overlap ratio: {overlap_ratio:.3f}, Nonoverlap ratio: {nonoverlap_ratio:.3f}')
-        
-        overlap_ratio, nonoverlap_ratio = overlap_ratio_compute(pcd_list[1], pcd_list[0])
-        overlap_dict[(img_name_1, img_name_0)] = overlap_ratio
-        nonoverlap_dict[(img_name_1, img_name_0)] = nonoverlap_ratio
-        print(f'Overlap ratio: {overlap_ratio:.3f}, Nonoverlap ratio: {nonoverlap_ratio:.3f}')
+        ratio_A2B = dict()
+        cams = inv(estimator.scene.get_im_poses())
+        K = estimator.scene.get_intrinsics()
+        all_pts3d = estimator.scene.get_pts3d()
+        for i, pts3d in enumerate(all_pts3d):
+            for j in range(len(all_pts3d)):
+                if i == j: continue
 
-    overlap_file = os.path.join(scene_path, 'overlap.npy')
-    np.save(overlap_file, overlap_dict)
-    print(f"Saved overlap_dict to {overlap_file}")
+                pts3d_flat = pts3d.reshape(-1, 3)
+                proj = geotrf(cams[j], pts3d_flat)
+                proj_depth = proj[:, 2]
+                u, v = geotrf(K[j], proj, norm=1, ncol=2).round().long().unbind(-1)
 
-    nonoverlap_file = os.path.join(scene_path, 'nonoverlap.npy')
-    np.save(nonoverlap_file, nonoverlap_dict)
-    print(f"Saved nonoverlap_dict to {nonoverlap_file}")   
+                H, W, _ = pts3d.shape
+                msk_i = (proj_depth > 0) & (0 <= u) & (u < W) & (0 <= v) & (v < H)
+                ratio_A2B[(i, j)] = np.sum(msk_i.detach().cpu().numpy()) / (H * W)
+
+                pcd = save_point_cloud(pts3d.detach().cpu().numpy(), os.path.join(output_dir, f'pts3d_{i}.pcd'), True)
+
+        info_redu[(img_name_0, img_name_1)] = ratio_A2B[(0, 1)]          # how much information is redundant of img_0
+        info_gain[(img_name_0, img_name_1)] = 1.0 - ratio_A2B[(0, 1)]    # how much information is gained of img_0 
+        info_redu[(img_name_1, img_name_0)] = ratio_A2B[(1, 0)]          # how much information is redundant of img_1
+        info_gain[(img_name_1, img_name_0)] = 1.0 - ratio_A2B[(1, 0)]    # how much information is gained of img_1
+
+        print(f'(A to B) Info Redu: {ratio_A2B[(0, 1)]:.3f}, Info Gain: {1.0-ratio_A2B[(0, 1)]:.3f}')        
+        print(f'(B to A) Info Redu: {ratio_A2B[(1, 0)]:.3f}, Info Gain: {1.0-ratio_A2B[(1, 0)]:.3f}')
+
+        input()
+
+    np.save(os.path.join(scene_path, 'information_redundancy.npy'), info_redu)
+    np.save(os.path.join(scene_path, 'information_gain.npy'), info_gain)
 
     # Copy timestamps
     import shutil
@@ -201,7 +324,7 @@ def pre_compute(scene_path):
 def load_scene_data(dataset_path, scene):
     """Improved data loading with submap structure conversion"""
     scene_path = os.path.join(dataset_path, scene)
-    required_files = ['iqa.txt', 'overlap.npy', 'submap_split.npy', 'timestamps.txt']
+    required_files = ['iqa.txt', 'information_redundancy.npy', 'information_gain.npy', 'submap_split.npy', 'timestamps.txt', 'descriptors.txt']
     
     if not all(os.path.exists(os.path.join(scene_path, f)) for f in required_files):
         print("Pre-computed files not found. Computing...")
@@ -216,18 +339,42 @@ def load_scene_data(dataset_path, scene):
     } for item in submap_array]
     
     return {
-        'iqa_scores': np.load(os.path.join(scene_path, 'iqa.txt')),
-        'overlap_dict': np.load(os.path.join(scene_path, 'overlap.npy')),
-        'nonoverlap_dict': np.load(os.path.join(scene_path, 'nonoverlap.npy')),
-        'submap_splits': submap_splits
+        'timestamps': read_timestamps(os.path.join(scene_path, 'timestamps.txt')),
+        'descriptors': read_descriptors(os.path.join(scene_path, 'descriptors.txt')),
+        'iqa_scores': read_timestamps(os.path.join(scene_path, 'iqa.txt')),
+        'info_redu': np.load(os.path.join(scene_path, 'information_redundancy.npy'), allow_pickle=True),
+        'info_gain': np.load(os.path.join(scene_path, 'information_gain.npy'), allow_pickle=True),
+        'submap_splits': submap_splits,
     }
+
+def select_keyframes(scene_data, args):
+    ###### Definition
+    ###### timestamps[img_name] = timestamp
+    ###### iqa_scores[img_name] = iqa_score 
+    ###### info_redu[img_name0, img_name1] = info_redu
+    ###### info_gain[img_name0, img_name1] = info_gain
+    ###### submap_splits[i] = {'start': start_time, 'end': end_time, 'frames': [img_name0, img_name1, ...]}
+    timestamps = scene_data['timestamps']       
+    descriptors = scene_data['descriptors']
+    iqa_scores = scene_data['iqa_scores']       
+    info_redu = scene_data['info_redu'].item()  
+    info_gain = scene_data['info_gain'].item()  
+    submap_splits = scene_data['submap_splits']
+    submap_database = submap_splits[:-1]
+    
+    if args.method == 'landmark':
+        kf_selector = LandmarkSelector()
+
+    keyframes = kf_selector.select_keyframes(timestamps, descriptors, iqa_scores, info_redu, info_gain, submap_database)
+
+    return keyframes
 
 def main():
     args = parse_arguments()
     scene_data = load_scene_data(args.dataset_path, args.scene)
-    
-    # Add keyframe selection logic here using scene_data
     print(f"Loaded data with {len(scene_data['submap_splits'])} submaps")
+
+    keyframes = select_keyframes(scene_data, args)
 
 if __name__ == "__main__":
     main()
