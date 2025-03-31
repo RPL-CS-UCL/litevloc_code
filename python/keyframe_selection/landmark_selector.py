@@ -9,14 +9,14 @@ import math
 class LandmarkSelector:
     def __init__(self):
         # Parameters for probability calculation
-        self.Q_th = 30.0       # Midpoint for quality sigmoid
-        self.k_Q = 0.1       # Quality sigmoid steepness
+        self.Q_th = 30.0     # Midpoint for quality sigmoid
+        self.k_Q = 0.6       # Quality sigmoid steepness
 
-        self.R_th = 0.6      # Information redundancy threshold
-        self.lambda_R = 1.0  # Information redundancy sensitivity
+        self.R_th = 0.4      # Information redundancy threshold
+        self.k_R = 0.1       # Information redundancy sensitivity (higher, more sensitive)
 
-        self.G_th = 0.2      # Information gain threshold
-        self.lambda_G = 1.0  # Information gain sensitivity
+        self.G_th = 0.4      # Information gain threshold
+        self.k_G = 1.0
         
         self.T_th = 3600.0   # Timestamp threshold (second)
         self.lambda_T = 0.05 # Timestamp sensitivity
@@ -28,11 +28,11 @@ class LandmarkSelector:
 
     def redundancy_probability(self, R):
         """Exponential decay function for redundancy (0-1). Lower is better."""
-        return math.exp(-self.lambda_R * R)
+        return 1 / (1 + math.exp(-self.k_R * 10.0 * (R - self.R_th)))
 
     def gain_probability(self, G):
         """Exponential increase function for information gain (0-1). Higher is better."""
-        return 1 - math.exp(-self.lambda_G * G)
+        return 1 / (1 + math.exp(-self.k_G * 10.0 * (G - self.G_th)))
 
     def time_probability(self, T):
         """Exponential decay based on time elapsed. Smaller (recent) is better."""
@@ -49,11 +49,11 @@ class LandmarkSelector:
     def compute_keep_prob(self, Q, R, G, T):
         """Calculate posterior probability for a keyframe."""
         P_Q = self.quality_probability(Q)
-        P_R = self.redundancy_probability(R)
+        # P_R = self.redundancy_probability(R)
         P_G = self.gain_probability(G)
         P_T = self.time_probability(T)
 
-        keep_prob = P_Q * P_R * P_G * P_T + 1e-6
+        keep_prob = P_Q * P_G * P_T + 1e-6
         
         return keep_prob
 
@@ -102,17 +102,19 @@ class LandmarkSelector:
                     continue
                 
                 # A node should be deleted if it has much redudancy information and less new information
-                max_R = max([edge[1]['R'] for edge in db_node.edges]) # the maximum information redudancy of db_node
-                min_G = min([edge[1]['G'] for edge in db_node.edges]) # the minimum information gain of db_node
-                print(f"{db_node.id}: max_R={max_R:.3f}, min_G={min_G:.3f}")
+                # max_R = max([edge[1]['R'] for edge in db_node.edges]) # the maximum information redudancy of db_node
+                # min_G = min([edge[1]['G'] for edge in db_node.edges]) # the minimum information gain of db_node
+                # print(f"{db_node.id}: max_R={max_R:.3f}, min_G={min_G:.3f}")
                 # TODO:
                 # if max_R > self.R_th and min_G < self.G_th:
                 #     print(f"Delete node {db_node.id}")
                 #     graph.nodes.pop(db_node.id)
                 #     graph.edges.pop(db_node.id)
 
+                # min_G = min([edge[1]['G'] for edge in db_node.edges]) # the minimum information gain of db_node
+
                 P_keep = min([
-                    self.compute_keep_prob(db_node.iqa_score, max_R, min_G, edge[1]['dt'])
+                    self.compute_keep_prob(db_node.iqa_score, edge[1]['R'], edge[1]['G'], edge[1]['dt'])
                     for edge in db_node.edges
                 ])
                 
@@ -121,7 +123,8 @@ class LandmarkSelector:
                     P_R = self.redundancy_probability(edge[1]['R'])
                     P_G = self.gain_probability(edge[1]['G'])
                     P_T = self.time_probability(edge[1]['dt'])
-                    P = P_Q * P_R * P_G * P_T + 1e-3
+                    # P = P_Q * P_R * P_G * P_T + 1e-3
+                    P = P_Q * P_G * P_T + 1e-3
                     print(f"{db_node.id} -> {edge[0].id} with keep probability {P:.3f}")                    
                     print(f"Q: {db_node.iqa_score}, R: {edge[1]['R']}, G: {edge[1]['G']}, dT: {edge[1]['dt']}")
                     print(f"PQ: {P_Q:.3f}, PR: {P_R:.3f}, PG: {P_G:.3f}, PT: {P_T:.3f}")
