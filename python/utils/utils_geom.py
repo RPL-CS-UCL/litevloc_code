@@ -12,6 +12,17 @@ from typing import Dict, Optional, Tuple
 DEFAULT_IMAGE_TEMPLATE = "seq/{frame_id:06d}.color.jpg"
 QUAT_MODES = ('xyzw', 'wxyz')
 
+def read_img_names(file_path: str) -> Dict[str, int]:
+    """Read image Image Names from a file into a dictionary.
+    
+    Args:
+        file_path: Path to image names file.
+    
+    Returns:
+        Dictionary mapping image names to their corresponding IDs.
+    """
+    return _read_generic_file(file_path, data_dim=0)
+
 def read_timestamps(file_path: str) -> Dict[str, np.ndarray]:
     """Read timestamps from a file into a dictionary.
     
