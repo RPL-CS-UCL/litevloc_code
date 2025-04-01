@@ -43,6 +43,10 @@ class BaseGraph:
 		if not self.contain_node(new_node):
 			self.nodes[new_node.id] = new_node
 
+	def remove_node(self, node):
+		if self.contain_node(node):
+			self.nodes.pop(node.id)
+
 	def add_edge_undirected(self, from_node, to_node, weight):
 		# Add an edge between two nodes if both nodes exist in the graph
 		if self.contain_node(from_node) and self.contain_node(to_node):
