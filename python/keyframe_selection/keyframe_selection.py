@@ -95,6 +95,10 @@ def geotrf(Trf, pts, ncol=None, norm=False):
     res = pts[..., :ncol].reshape(*output_reshape, ncol)
     return res
 
+def edge_str(i, j):
+    return f'{i}_{j}'
+
+
 class SubmapManager:
     def __init__(self, time_threshold=300.0):
         self.submaps = []
@@ -283,29 +287,72 @@ def pre_compute(scene_path):
         estimator(Path(scene_path), [img_path_0], img_path_1, None, None, None, dict())
 
         ratio_A2B = dict()
-        cams = inv(estimator.scene.get_im_poses())
-        K = estimator.scene.get_intrinsics()
-        all_pts3d = estimator.scene.get_pts3d()
+        cams_old = inv(estimator.scene.get_im_poses())
+        K_old = estimator.scene.get_intrinsics()
+        all_pts3d_old = estimator.scene.get_pts3d()
+
+        # NOTE(gogojjh): ptcloud may be expressed in camera1 or camera2\
+        # TODO(gogojjh): fix the issues of correct coordinates
+        confs = []
+        for i in range(len(all_pts3d_old)):
+            conf = float(estimator.scene.conf_i[edge_str(i, 1-i)].mean() * estimator.scene.conf_j[edge_str(i, 1-i)].mean())
+            confs.append(conf)
+
+        if confs[1] > confs[0]:
+            cams = [cams_old[1], cams_old[0]]
+            K = [K_old[1], K_old[0]]
+            all_pts3d = [all_pts3d_old[1], all_pts3d_old[0]]
+        else:
+            cams = [cams_old[0], cams_old[1]]
+            K = [K_old[0], K_old[1]]
+            all_pts3d = [all_pts3d_old[0], all_pts3d_old[1]]
+
         for i, pts3d in enumerate(all_pts3d):
             for j in range(len(all_pts3d)):
                 if i == j: continue
+                print(f"{i} -> {j}")
+                print(cams[j])
 
+                pcd = save_point_cloud(pts3d.detach().cpu().numpy(), os.path.join(output_dir, f'pts3d_{i}.pcd'), True)
+                
                 pts3d_flat = pts3d.reshape(-1, 3)
-                proj = geotrf(cams[j], pts3d_flat)
+                ori_depth = pts3d_flat[:, 2]
+
+                proj = geotrf(cams[j], pts3d_flat) # project the point in i into j
                 proj_depth = proj[:, 2]
                 u, v = geotrf(K[j], proj, norm=1, ncol=2).round().long().unbind(-1)
 
                 H, W, _ = pts3d.shape
                 msk_i = (proj_depth > 0) & (0 <= u) & (u < W) & (0 <= v) & (v < H)
-                ratio_A2B[(i, j)] = np.sum(msk_i.detach().cpu().numpy()) / (H * W)
+                msk = (proj_depth[msk_i] / ori_depth[msk_i]) < 1.2
 
-                pcd = save_point_cloud(pts3d.detach().cpu().numpy(), os.path.join(output_dir, f'pts3d_{i}.pcd'), True)
+                import matplotlib.pyplot as plt
+                # Create figure
+                fig, axs = plt.subplots(2, 2, figsize=(16, 12))
+
+                # Original Depth Map
+                im0 = axs[0,0].imshow(ori_depth.reshape(288, 512, 1).detach().cpu().numpy(), cmap='turbo')
+                axs[0,0].set_title(f'Original Depth (Camera {i})')
+                plt.colorbar(im0, ax=axs[0,0], label='Depth')
+
+                # Projected Depth Map
+                im1 = axs[0,1].imshow(proj_depth.reshape(288, 512, 1).detach().cpu().numpy(), cmap='turbo')
+                axs[0,1].set_title(f'Projected Depth (Camera {j})')
+                plt.colorbar(im1, ax=axs[0,1], label='Depth')
+
+                # Save and display
+                plt.tight_layout()
+                plt.savefig(os.path.join(output_dir, f'depth_maps_{i}_to_{j}.jpg'))
+                plt.close()
+
+                ratio_A2B[(i, j)] = np.sum(msk.detach().cpu().numpy()) / (H * W)
 
         info_redu[(img_name_0, img_name_1)] = ratio_A2B[(0, 1)]          # how much information is redundant of img_0
         info_gain[(img_name_0, img_name_1)] = 1.0 - ratio_A2B[(0, 1)]    # how much information is gained of img_0 
         info_redu[(img_name_1, img_name_0)] = ratio_A2B[(1, 0)]          # how much information is redundant of img_1
         info_gain[(img_name_1, img_name_0)] = 1.0 - ratio_A2B[(1, 0)]    # how much information is gained of img_1
 
+        print(f'Info Redu: larger, the more of A is observed by B')
         print(f'(A to B) Info Redu: {ratio_A2B[(0, 1)]:.3f}, Info Gain: {1.0-ratio_A2B[(0, 1)]:.3f}')        
         print(f'(B to A) Info Redu: {ratio_A2B[(1, 0)]:.3f}, Info Gain: {1.0-ratio_A2B[(1, 0)]:.3f}')
 
