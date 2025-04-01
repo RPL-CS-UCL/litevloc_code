@@ -122,12 +122,18 @@ def load_scene_data(dataset_dir, target_scenes):
 
     scene_data = {}
     for path in sorted(scene_paths):
+        intr_path = os.path.join(path, 'intrinsics.txt')
+        pose_path = os.path.join(path, pose_file_name)
+        if not os.path.exists(pose_path) and 'poses_abs' in pose_path:
+            pose_path = pose_path.replace('poses_abs', 'poses_abs_gt')
+       
         scene_name = os.path.basename(path)
         scene_data[scene_name] = {
-            'intrinsics': _load_intrinsics(os.path.join(path, 'intrinsics.txt')),
-            'poses': _load_poses(os.path.join(path, pose_file_name)),
+            'intrinsics': _load_intrinsics(intr_path),
+            'poses': _load_poses(pose_path),
             'images': _collect_images(path)
         }
+
     return scene_data, is_multi_frame
 
 def _load_intrinsics(filepath):
@@ -139,7 +145,6 @@ def _load_intrinsics(filepath):
             frame_path = os.path.join(os.path.dirname(filepath), parts[0])
             intrinsics[frame_path] = np.array(list(map(float, parts[1:])))
     return intrinsics
-
 def _load_poses(filepath):
     """Loads camera poses from text file (world-to-camera format)."""
     poses = {}
@@ -361,6 +366,7 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
         for idx, img_path in enumerate(data['images']):
             if img_path not in data['poses']:
                 continue
+            
             if idx % step != 0: 
                 continue
 
