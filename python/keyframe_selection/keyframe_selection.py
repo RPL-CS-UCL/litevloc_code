@@ -6,98 +6,21 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 
 import numpy as np
 import argparse
-from collections import OrderedDict
-import pyiqa
 import torch
 import itertools
 from pathlib import Path
 import open3d as o3d
-from sklearn.mixture import GaussianMixture
+from torchvision import transforms
+from PIL import Image
+import pyiqa
 
 from utils.utils_geom import read_intrinsics, read_poses, read_timestamps, read_descriptors
 from utils.utils_vpr_method import *
-import torchvision.transforms as transforms
-from PIL import Image
-
-from estimator import get_estimator
-
 from landmark_selector import LandmarkSelector
 
-def inv(mat):
-    """ Invert a torch or numpy matrix
-    """
-    if isinstance(mat, torch.Tensor):
-        return torch.linalg.inv(mat)
-    if isinstance(mat, np.ndarray):
-        return np.linalg.inv(mat)
-    raise ValueError(f'bad matrix type = {type(mat)}')
-
-def geotrf(Trf, pts, ncol=None, norm=False):
-    """ Apply a geometric transformation to a list of 3-D points.
-
-    H: 3x3 or 4x4 projection matrix (typically a Homography)
-    p: numpy/torch/tuple of coordinates. Shape must be (...,2) or (...,3)
-
-    ncol: int. number of columns of the result (2 or 3)
-    norm: float. if != 0, the resut is projected on the z=norm plane.
-
-    Returns an array of projected 2d points.
-    """
-    assert Trf.ndim >= 2
-    if isinstance(Trf, np.ndarray):
-        pts = np.asarray(pts)
-    elif isinstance(Trf, torch.Tensor):
-        pts = torch.as_tensor(pts, dtype=Trf.dtype)
-
-    # adapt shape if necessary
-    output_reshape = pts.shape[:-1]
-    ncol = ncol or pts.shape[-1]
-
-    # optimized code
-    if (isinstance(Trf, torch.Tensor) and isinstance(pts, torch.Tensor) and
-            Trf.ndim == 3 and pts.ndim == 4):
-        d = pts.shape[3]
-        if Trf.shape[-1] == d:
-            pts = torch.einsum("bij, bhwj -> bhwi", Trf, pts)
-        elif Trf.shape[-1] == d + 1:
-            pts = torch.einsum("bij, bhwj -> bhwi", Trf[:, :d, :d], pts) + Trf[:, None, None, :d, d]
-        else:
-            raise ValueError(f'bad shape, not ending with 3 or 4, for {pts.shape=}')
-    else:
-        if Trf.ndim >= 3:
-            n = Trf.ndim - 2
-            assert Trf.shape[:n] == pts.shape[:n], 'batch size does not match'
-            Trf = Trf.reshape(-1, Trf.shape[-2], Trf.shape[-1])
-
-            if pts.ndim > Trf.ndim:
-                # Trf == (B,d,d) & pts == (B,H,W,d) --> (B, H*W, d)
-                pts = pts.reshape(Trf.shape[0], -1, pts.shape[-1])
-            elif pts.ndim == 2:
-                # Trf == (B,d,d) & pts == (B,d) --> (B, 1, d)
-                pts = pts[:, None, :]
-
-        if pts.shape[-1] + 1 == Trf.shape[-1]:
-            Trf = Trf.swapaxes(-1, -2)  # transpose Trf
-            pts = pts @ Trf[..., :-1, :] + Trf[..., -1:, :]
-        elif pts.shape[-1] == Trf.shape[-1]:
-            Trf = Trf.swapaxes(-1, -2)  # transpose Trf
-            pts = pts @ Trf
-        else:
-            pts = Trf @ pts.T
-            if pts.ndim >= 2:
-                pts = pts.swapaxes(-1, -2)
-
-    if norm:
-        pts = pts / pts[..., -1:]  # DONT DO /= BECAUSE OF WEIRD PYTORCH BUG
-        if norm != 1:
-            pts *= norm
-
-    res = pts[..., :ncol].reshape(*output_reshape, ncol)
-    return res
-
-def edge_str(i, j):
-    return f'{i}_{j}'
-
+from estimator import THIRD_PARTY_DIR, get_estimator, add_to_path
+add_to_path(THIRD_PARTY_DIR.joinpath("mast3r/dust3r"))
+from dust3r.utils.geometry import inv, geotrf
 
 class SubmapManager:
     def __init__(self, time_threshold=300.0):
@@ -157,6 +80,21 @@ def save_point_cloud(pts3d, save_path, save_flag=False):
         o3d.io.write_point_cloud(save_path, pcd)
     return pcd
 
+def visualize_proj_depth(output_dir, depthmap, proj_depthmap, i, j):
+    import matplotlib.pyplot as plt
+    fig, axs = plt.subplots(1, 2, figsize=(16, 12))
+    im0 = axs[0].imshow(depthmap, cmap='turbo')
+    axs[0].set_title(f'Original Depth Camera {j} onto Camera {j}')
+    plt.colorbar(im0, ax=axs[0], label='Depth')
+    
+    im1 = axs[1].imshow(proj_depthmap, cmap='turbo')
+    axs[1].set_title(f'Projected Depth of Camera {i} onto Camera {j})')
+    plt.colorbar(im1, ax=axs[1], label='Depth')
+
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, f'depth_maps_{i}_to_{j}.jpg'))
+    plt.close()
+
 def pre_compute(scene_path):
     """Enhanced pre-computation with structured submap handling"""
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
@@ -196,33 +134,33 @@ def pre_compute(scene_path):
     print(f"{len(submap_data)} submaps are split")
        
     # Create iqa.txt
-    # IQA_METRIC = 'musiq'
-    # iqa_metric = pyiqa.create_metric(IQA_METRIC, device=device)
-    # iqa_scores = np.empty((len(poses), 2), dtype=object)
-    # for indice, (img_name, _) in enumerate(poses.items()):
-    #     img_path = os.path.join(original_scene_path, img_name)
-    #     score = iqa_metric(img_path).detach().squeeze(0).cpu().numpy()[0]
-    #     iqa_scores[indice, 0], iqa_scores[indice, 1] = img_name, score
-    # np.savetxt(os.path.join(scene_path, 'iqa.txt'), iqa_scores, fmt="%s %.4f")
+    IQA_METRIC = 'musiq'
+    iqa_metric = pyiqa.create_metric(IQA_METRIC, device=device)
+    iqa_scores = np.empty((len(poses), 2), dtype=object)
+    for indice, (img_name, _) in enumerate(poses.items()):
+        img_path = os.path.join(original_scene_path, img_name)
+        score = iqa_metric(img_path).detach().squeeze(0).cpu().numpy()[0]
+        iqa_scores[indice, 0], iqa_scores[indice, 1] = img_name, score
+    np.savetxt(os.path.join(scene_path, 'iqa.txt'), iqa_scores, fmt="%s %.4f")
 
-    # # Create descriptor.txt
-    # desc_dimenson = 256
-    # vpr_model = initialize_vpr_model('cosplace', 'ResNet18', desc_dimenson, device)    
-    # transformations = [
-    #     transforms.ToTensor(),
-    #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    #     transforms.Resize(size=[512, 288], antialias=True)
-    # ]
-    # transform = transforms.Compose(transformations)
-    # all_descriptors = np.empty((len(poses), desc_dimenson + 1), dtype=object)
-    # for indice, (img_name, _) in enumerate(poses.items()):
-    #     img_path = os.path.join(original_scene_path, img_name)
-    #     pil_img = Image.open(img_path).convert("RGB")
-    #     normalized_img = transform(pil_img)
-    #     descriptors = vpr_model(normalized_img.unsqueeze(0).to(device))
-    #     descriptors = descriptors.detach().cpu().numpy()
-    #     all_descriptors[indice, 0], all_descriptors[indice, 1:] = img_name, descriptors
-    # np.savetxt(os.path.join(scene_path, 'descriptors.txt'), all_descriptors, fmt="%s" + " %.9f" * desc_dimenson)
+    # Create descriptor.txt
+    desc_dimenson = 256
+    vpr_model = initialize_vpr_model('cosplace', 'ResNet18', desc_dimenson, device)    
+    transformations = [
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        transforms.Resize(size=[512, 288], antialias=True)
+    ]
+    transform = transforms.Compose(transformations)
+    all_descriptors = np.empty((len(poses), desc_dimenson + 1), dtype=object)
+    for indice, (img_name, _) in enumerate(poses.items()):
+        img_path = os.path.join(original_scene_path, img_name)
+        pil_img = Image.open(img_path).convert("RGB")
+        normalized_img = transform(pil_img)
+        descriptors = vpr_model(normalized_img.unsqueeze(0).to(device))
+        descriptors = descriptors.detach().cpu().numpy()
+        all_descriptors[indice, 0], all_descriptors[indice, 1:] = img_name, descriptors
+    np.savetxt(os.path.join(scene_path, 'descriptors.txt'), all_descriptors, fmt="%s" + " %.9f" * desc_dimenson)
 
     # Create information reduction and information gain
     estimator = get_estimator('master', device)
@@ -240,65 +178,43 @@ def pre_compute(scene_path):
         estimator(Path(scene_path), [img_path_0], img_path_1, None, None, None, dict())
 
         ratio_A2B = dict()
-        cams_old = inv(estimator.scene.get_im_poses())
-        K_old = estimator.scene.get_intrinsics()
-        all_pts3d_old = estimator.scene.get_pts3d()
+        K = estimator.scene.get_intrinsics()
+        cams = inv(estimator.scene.get_im_poses())
+        depthmaps = estimator.scene.get_depthmaps()
+        all_pts3d = estimator.scene.get_pts3d() # all pts3d in the world frame
+        H, W = depthmaps[0].shape
 
-        # NOTE(gogojjh): ptcloud may be expressed in camera1 or camera2\
-        # TODO(gogojjh): fix the issues of correct coordinates
-        confs = []
-        for i in range(len(all_pts3d_old)):
-            conf = float(estimator.scene.conf_i[edge_str(i, 1-i)].mean() * estimator.scene.conf_j[edge_str(i, 1-i)].mean())
-            confs.append(conf)
+        assert len(all_pts3d) == 2
+        for i in range(len(all_pts3d)):          
+            j = 1 - i
+            print(f"{i} -> {j}")
 
-        if confs[1] > confs[0]:
-            cams = [cams_old[1], cams_old[0]]
-            K = [K_old[1], K_old[0]]
-            all_pts3d = [all_pts3d_old[1], all_pts3d_old[0]]
-        else:
-            cams = [cams_old[0], cams_old[1]]
-            K = [K_old[0], K_old[1]]
-            all_pts3d = [all_pts3d_old[0], all_pts3d_old[1]]
+            # Project depth of camera i into camera j
+            pts3d_flat = all_pts3d[i].reshape(-1, 3)
+            proj = geotrf(cams[j], pts3d_flat)
+            proj_depth = proj[:, 2]
+            u, v = geotrf(K[j], proj, norm=1, ncol=2).round().long().unbind(-1)
 
-        for i, pts3d in enumerate(all_pts3d):
-            for j in range(len(all_pts3d)):
-                if i == j: continue
-                print(f"{i} -> {j}")
-                print(cams[j])
+            # Mask for overlapping points
+            valid_mask = (proj_depth > 0) & (u >= 0) & (u < W) & (v >= 0) & (v < H)
+            proj_depth_map = torch.zeros(H, W, device=device)
+            proj_depth_map[v[valid_mask], u[valid_mask]] = proj_depth[valid_mask]
 
-                pcd = save_point_cloud(pts3d.detach().cpu().numpy(), os.path.join(output_dir, f'pts3d_{i}.pcd'), True)
-                
-                pts3d_flat = pts3d.reshape(-1, 3)
-                ori_depth = pts3d_flat[:, 2]
+            u, v = u[valid_mask], v[valid_mask]
+            proj_depth = proj_depth[valid_mask]
+            msk = torch.abs(proj_depth - depthmaps[j][v, u].reshape(1, -1)) < 0.5 * depthmaps[j][v, u].reshape(1, -1)
 
-                proj = geotrf(cams[j], pts3d_flat) # project the point in i into j
-                proj_depth = proj[:, 2]
-                u, v = geotrf(K[j], proj, norm=1, ncol=2).round().long().unbind(-1)
+            ratio_A2B[(i, j)] = np.sum(msk.detach().cpu().numpy()) / (H * W)
 
-                H, W, _ = pts3d.shape
-                msk_i = (proj_depth > 0) & (0 <= u) & (u < W) & (0 <= v) & (v < H)
-                msk = (proj_depth[msk_i] / ori_depth[msk_i]) < 1.2
-
-                import matplotlib.pyplot as plt
-                # Create figure
-                fig, axs = plt.subplots(2, 2, figsize=(16, 12))
-
-                # Original Depth Map
-                im0 = axs[0,0].imshow(ori_depth.reshape(288, 512, 1).detach().cpu().numpy(), cmap='turbo')
-                axs[0,0].set_title(f'Original Depth (Camera {i})')
-                plt.colorbar(im0, ax=axs[0,0], label='Depth')
-
-                # Projected Depth Map
-                im1 = axs[0,1].imshow(proj_depth.reshape(288, 512, 1).detach().cpu().numpy(), cmap='turbo')
-                axs[0,1].set_title(f'Projected Depth (Camera {j})')
-                plt.colorbar(im1, ax=axs[0,1], label='Depth')
-
-                # Save and display
-                plt.tight_layout()
-                plt.savefig(os.path.join(output_dir, f'depth_maps_{i}_to_{j}.jpg'))
-                plt.close()
-
-                ratio_A2B[(i, j)] = np.sum(msk.detach().cpu().numpy()) / (H * W)
+            viz_flag = False
+            if viz_flag:
+                visualize_proj_depth(
+                    output_dir, 
+                    depthmaps[j].detach().cpu().numpy(), 
+                    proj_depth_map.detach().cpu().numpy(), 
+                    i, j
+                )
+                save_point_cloud(all_pts3d[i].detach().cpu().numpy(), os.path.join(output_dir, f'pts3d_{i}.pcd'), True)
 
         info_redu[(img_name_0, img_name_1)] = ratio_A2B[(0, 1)]          # how much information is redundant of img_0
         info_gain[(img_name_0, img_name_1)] = 1.0 - ratio_A2B[(0, 1)]    # how much information is gained of img_0 
@@ -309,7 +225,7 @@ def pre_compute(scene_path):
         print(f'(A to B) Info Redu: {ratio_A2B[(0, 1)]:.3f}, Info Gain: {1.0-ratio_A2B[(0, 1)]:.3f}')        
         print(f'(B to A) Info Redu: {ratio_A2B[(1, 0)]:.3f}, Info Gain: {1.0-ratio_A2B[(1, 0)]:.3f}')
 
-        input()
+        # input()
 
     np.save(os.path.join(scene_path, 'information_redundancy.npy'), info_redu)
     np.save(os.path.join(scene_path, 'information_gain.npy'), info_gain)
