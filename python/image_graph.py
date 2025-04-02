@@ -141,7 +141,7 @@ class ImageGraphLoader:
 
 # Image Graph Class
 class ImageGraph(BaseGraph):
-	def __init__(self, map_root):
+	def __init__(self, map_root: str):
 		super().__init__()
 		self.map_root = map_root
 		

@@ -13,7 +13,7 @@ def convert_world2cam_to_cam2world(q, t):
     tinv = -rotate_vector(t, qinv)
     return qinv, tinv
 
-def load_poses(file: typing.IO, load_score: bool = False, is_multi_frame: bool = False):
+def load_poses(file: typing.IO, load_confidence: bool = False, is_multi_frame: bool = False):
     """
     Load poses from a text file and convert them to cam2world convention (t is the camera center in world coordinates).
 
@@ -28,7 +28,7 @@ def load_poses(file: typing.IO, load_score: bool = False, is_multi_frame: bool =
 
     Parameters:
         file (typing.IO): Input file object.
-        load_score (bool): Whether to load confidence/loss values.
+        load_confidence (bool): Whether to load confidence/loss values.
         is_multi_frame (bool): If True, use the format for multiple frames as reference images. If False, use the standard format.
 
     Returns:
@@ -46,9 +46,9 @@ def load_poses(file: typing.IO, load_score: bool = False, is_multi_frame: bool =
         # Determine the expected number of fields
         if is_multi_frame:
             num_ref = int(parts[0]) if len(parts) > 0 and parts[0].isdigit() else 0
-            expected_parts = num_ref + 10 if load_score else num_ref + 9
+            expected_parts = num_ref + 10 if load_confidence else num_ref + 9
         else:
-            expected_parts = 9 if load_score else 8
+            expected_parts = 9 if load_confidence else 8
 
         if len(parts) != expected_parts:
             logging.warning(
@@ -81,7 +81,7 @@ def load_poses(file: typing.IO, load_score: bool = False, is_multi_frame: bool =
             if any(np.isnan(v) or np.isinf(v) for v in parts_float):
                 raise ValueError()
             qw, qx, qy, qz, tx, ty, tz = parts_float[:7]
-            score = parts_float[7] if load_score else None
+            score = parts_float[7] if load_confidence else None
         except ValueError:
             logging.warning(
                 f'Error parsing pose in file {file.name} line {line_number}. Ignoring line.')
