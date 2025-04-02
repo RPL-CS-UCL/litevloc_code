@@ -10,29 +10,27 @@ from pathlib import Path
 from collections import defaultdict
 from dataclasses import dataclass
 from zipfile import ZipFile
-
 import time
 import numpy as np
 from tqdm import tqdm
-
 from transforms3d.quaternions import mat2quat
-
-from matching import available_models, get_matcher
-from matching.utils import to_numpy
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 from utils.pose_solver import available_solvers, get_solver
 from utils.pose_solver_default import cfg
 from utils.utils_image_matching_method import save_visualization
+from utils.utils_geom import correct_intrinsic_scale
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../map_free_reloc"))
 from lib.datasets.datamodules import DataModule
 from lib.utils.data import data_to_model_device
 
-from pycpptools.src.python.utils_sensor.utils import correct_intrinsic_scale
+# Matching framework imports
+from matching import available_models, get_matcher
+from matching.utils import to_numpy
 
 @dataclass
-class Pose:
+class PoseResult:
     image_name: str
     q: np.ndarray
     t: np.ndarray
@@ -69,8 +67,8 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             matching_time = time.time() - start_time
             num_inliers, mkpts0, mkpts1 = (
                 matcher_result["num_inliers"],
-                matcher_result["inliers0"],
-                matcher_result["inliers1"],
+                matcher_result["inlier_kpts0"],
+                matcher_result["inlier_kpts0"],
             )
 
             """Pose Estimation"""
@@ -109,10 +107,12 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 raise ValueError("Estimated pose is NaN or infinite.")
 
             # populate results_dict
-            estimated_pose = Pose(image_name=query_img,
-                                q=mat2quat(R).reshape(-1),
-                                t=t.reshape(-1),
-                                inliers=num_inliers)
+            estimated_pose = PoseResult(
+                image_name=query_img,
+                q=mat2quat(R).reshape(-1),
+                t=t.reshape(-1),
+                inliers=num_inliers
+            )
             results_dict[scene].append(estimated_pose)
 
             if args.debug:

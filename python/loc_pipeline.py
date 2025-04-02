@@ -39,6 +39,9 @@ pack_path = rospkg.get_path('litevloc')
 sys.path.append(os.path.join(pack_path, '../image_matching_models'))
 
 from matching.utils import to_numpy
+from utils.utils_pipeline import *
+from utils.utils_geom import read_intrinsics, read_poses, read_descriptors, read_img_names, correct_intrinsic_scale
+from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error
 from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search, compute_euclidean_dis
 from utils.utils_vpr_method import save_visualization as save_vpr_visualization
 from utils.utils_image_matching_method import initialize_img_matcher
@@ -49,9 +52,7 @@ from utils.pose_solver_default import cfg
 from image_graph import ImageGraphLoader as GraphLoader
 from image_node import ImageNode
 
-import pycpptools.src.python.utils_math as pytool_math
 import pycpptools.src.python.utils_ros as pytool_ros
-import pycpptools.src.python.utils_sensor as pytool_sensor
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
@@ -213,7 +214,7 @@ class LocPipeline:
 			else:
 				T_mapnode_obs = np.eye(4)
 				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
-				T_w_mapnode = pytool_math.tools_eigen.convert_vec_to_matrix(self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
+				T_w_mapnode = convert_vec_to_matrix(self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
 				T_w_obs = T_w_mapnode @ T_mapnode_obs
 				rospy.logwarn(f'[Succ] sufficient number {num_solver_inliers} solver inliers')
 				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': num_solver_inliers}
@@ -275,7 +276,7 @@ class LocPipeline:
 def perform_localization(loc: LocPipeline, args):
 	"""Main loop for processing observations"""
 	obs_poses_gt = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'poses.txt'))
-	obs_cam_intrinsics = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'intrinsics.txt'))
+	obs_cam_intr = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'intrinsics.txt'))
 	resize = args.image_size
 	loc.last_obs_node = None
 
@@ -289,12 +290,16 @@ def perform_localization(loc: LocPipeline, args):
 		depth_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
 		depth_img = load_depth_image(depth_img_path, depth_scale=0.001)
 
-		raw_K = np.array([obs_cam_intrinsics[obs_id, 0], 0, obs_cam_intrinsics[obs_id, 2], 0, 
-						  obs_cam_intrinsics[obs_id, 1], obs_cam_intrinsics[obs_id, 3], 
-						  0, 0, 1], dtype=np.float32).reshape(3, 3)
-		raw_img_size = (int(obs_cam_intrinsics[obs_id, 4]), int(obs_cam_intrinsics[obs_id, 5])) # width, height
-		K = pytool_sensor.utils.correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
-		img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
+		raw_K = np.array([
+			obs_cam_intr[obs_id, 0], 0, obs_cam_intr[obs_id, 2],
+			0, obs_cam_intr[obs_id, 1], obs_cam_intr[obs_id, 3],
+			0, 0, 1], dtype=np.float32).reshape(3, 3)
+		raw_size = (int(obs_cam_intr[obs_id, 4]), int(obs_cam_intr[obs_id, 5])) # width, height
+		if resize:
+			K = correct_intrinsic_scale(raw_K, resize[0] / raw_size[0], resize[1] / raw_size[1]) 
+		else:
+			K = raw_K
+		img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_size
 		
 		with torch.no_grad():
 			desc = loc.vpr_model(rgb_img.unsqueeze(0).to(args.device)).cpu().numpy()
@@ -305,7 +310,7 @@ def perform_localization(loc: LocPipeline, args):
 							 np.zeros(3), np.array([0, 0, 0, 1]),
 							 K, img_size,
 							 rgb_img_path, depth_img_path)
-		obs_node.set_raw_intrinsics(raw_K, raw_img_size)
+		obs_node.set_raw_intrinsics(raw_K, raw_size)
 		obs_node.set_pose_gt(obs_poses_gt[obs_id, 1:4], obs_poses_gt[obs_id, 4:])
 		loc.curr_obs_node = obs_node
 
@@ -328,7 +333,8 @@ def perform_localization(loc: LocPipeline, args):
 				init_trans, init_quat = loc.last_obs_node.trans, loc.last_obs_node.quat
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
 
-				dis_trans, _ = pytool_math.tools_eigen.compute_relative_dis(init_trans, init_quat, loc.ref_map_node.trans, loc.ref_map_node.quat)
+				dis_trans, _ = compute_pose_error(
+					init_trans, init_quat, loc.ref_map_node.trans, loc.ref_map_node.quat, mode='vector')
 				if dis_trans > loc.args.global_pos_threshold:
 					rospy.logwarn('Too far distance from the ref_map_node. Losing Visual Tracking. Reset the global position.')
 					loc.has_global_pos = False
@@ -344,7 +350,7 @@ def perform_localization(loc: LocPipeline, args):
 			rospy.loginfo(f"Local localization costs: {time.time() - loc_start_time:.3f}s")
 			if result['succ']:
 				T_w_obs = result['T_w_obs']
-				trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
+				trans, quat = convert_matrix_to_vec(T_w_obs, 'xyzw')
 				loc.curr_obs_node.set_pose(trans, quat)
 				loc.has_local_pos = True
 				rospy.loginfo(f'Groundtruth Poses: {loc.curr_obs_node.trans_gt.T}')

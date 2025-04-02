@@ -14,7 +14,7 @@ class ImageNode(BaseNode):
 				 img_size: np.ndarray,
 				 rgb_img_name: str, 
 				 depth_img_name: str,
-				 gps_data: np.ndarray):
+				 gps_data: np.ndarray = None):
 		super().__init__(node_id, trans, quat)
 
 		# RGB and depth images
