@@ -169,6 +169,7 @@ def save_visualization(image0, image1, mkpts0, mkpts1, out_dir, index, n_viz=1, 
         f"match_{index}.jpg" if isinstance(index, str) else f"match_{index:06d}.jpg"
     )
     viz2d.save_plot(viz_path)
+    plt.close()
     return viz_path
 
 
