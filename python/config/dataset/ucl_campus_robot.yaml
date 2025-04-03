@@ -1,0 +1,26 @@
+MODEL: FeatureMatching
+DATASET:
+  DATA_SOURCE: 'MapFree'  # To determine the dataloader
+  DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/map_free_eval/ucl_campus_robot/map_free_eval'
+  TRAIN_SCENES: [s00000, s00006]
+  TEST_SCENES: s00001, s00002, s00003, s00004, s00005, s00007, s00008]
+  ESTIMATED_DEPTH: zed   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
+  AUGMENTATION_TYPE: None
+  HEIGHT: 288             # Images are resized
+  WIDTH: 512
+  MIN_OVERLAP_SCORE: 0.2  # [train only] discard data with overlap_score < min_overlap_score
+  MAX_OVERLAP_SCORE: 0.7  # [train only] discard data with overlap_score < min_overlap_score
+  QUERY_FRAME_COUNT: 1    # 1 (single frame task) or 9 (multi-frame task) only!
+  MAX_DEPTH: 13.0
+  VIZ_CAM_SIZE: 0.2
+PNP:
+  RANSAC_ITER: 1000
+  REPROJECTION_INLIER_THRESHOLD: 3 # pixel
+  CONFIDENCE: 0.9999
+EMAT_RANSAC:
+  PIX_THRESHOLD: 2.0
+  SCALE_THRESHOLD: 0.1
+  CONFIDENCE: 0.9999
+PROCRUSTES:
+  MAX_CORR_DIST: 0.05 # meters
+  REFINE: False # refine pose with Icp
