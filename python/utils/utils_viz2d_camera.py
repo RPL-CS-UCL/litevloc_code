@@ -91,12 +91,11 @@ def plot_camera_poses(poses: np.ndarray, sample_rate: int, title: str) -> plt.Fi
     ax.set_title(title)
     return fig
 
-def plot_camera_poses_pair(poses: np.ndarray, start_idx0, start_idx1, sample_rate: int, title: str) -> plt.Figure:
+def plot_camera_poses_pair(poses: np.ndarray, start_ids, sample_rate: int, title: str) -> plt.Figure:
     """Plots 2D camera poses with orientation arrows.
     
     Args:
-        poses1: Array of keyframe camera poses (N x 7) containing translation and quaternion
-        poses2: Array of camera poses (N x 7) containing translation and quaternion
+        poses: Array of camera poses (N x 7) containing translation and quaternion
         sample_rate: Subsampling rate for visualization
         title: Plot title
     
@@ -111,13 +110,16 @@ def plot_camera_poses_pair(poses: np.ndarray, start_idx0, start_idx1, sample_rat
     positions = []
     fig, ax = plt.subplots(figsize=(5, 5))
     for idx, pose in enumerate(poses[::sample_rate, :]):
+        for j in range(len(start_ids)):
+            if idx >= start_ids[j]:
+                color_idx = j
         transform = convert_vec_to_matrix(pose[:3], pose[3:])
         positions.append(transform[:3, 3])
         arrow_style = {
             'head_width': head_size * 1.0,
             'head_length': head_size * 1.0,
-            'fc': PALLETE[0] if idx < start_idx1 else PALLETE[1],
-            'zorder': 100 if idx < start_idx1 else 0,
+            'fc': PALLETE[color_idx] if color_idx < 2 else [0.5, 0.5, 0.5],
+            'zorder': 100 if color_idx < 2 else 0,
         }
         _draw_orientation_arrow(ax, transform, arrow_length, arrow_style)
 
