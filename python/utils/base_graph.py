@@ -43,6 +43,10 @@ class BaseGraph:
 		if not self.contain_node(new_node):
 			self.nodes[new_node.id] = new_node
 
+	def remove_node_list(self, node_list: list):
+		for node in node_list:
+			self.remove_node(node)
+
 	def remove_node(self, node):
 		if self.contain_node(node):
 			self.nodes.pop(node.id)
