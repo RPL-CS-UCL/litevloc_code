@@ -108,6 +108,16 @@ def _read_generic_file(file_path: str, data_dim: Optional[int]) -> Dict[str, np.
             
     return data_dict
 
+def convert_pose_inv(
+    trans, quat,
+    trans_inv, quat_inv,
+    mode='xyzw'
+):
+    T = convert_vec_to_matrix(trans, quat, mode=mode)
+    T_inv = np.linalg.inv(T)
+    trans_inv, quat_inv = convert_matrix_to_vec(T_inv, mode=mode)
+    return trans_inv, quat_inv
+
 def convert_vec_gtsam_pose3(
     translation, 
     quaternion, 

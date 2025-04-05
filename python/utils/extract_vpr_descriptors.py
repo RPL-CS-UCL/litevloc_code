@@ -19,6 +19,7 @@ python extract_vpr_descriptors.py --dataset_path /Rocket_ssd/dataset/data_litevl
 """
 import os
 import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 
 import time
 import matplotlib
@@ -26,8 +27,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from utils.utils_vpr_method import *
 from image_graph import ImageGraphLoader
+from utils.utils_vpr_method import *
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):

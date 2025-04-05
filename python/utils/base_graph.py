@@ -1,12 +1,13 @@
 import os
 import numpy as np
-from utils.gtsam_pose_graph import PoseGraph
-from utils.utils_geom import convert_vec_gtsam_pose3
+# from utils.gtsam_pose_graph import PoseGraph
+# from utils.utils_geom import convert_vec_gtsam_pose3
 
 class BaseGraph:
 	# Initialize an empty dictionary to store nodes
-	def __init__(self):
+	def __init__(self, map_root: str):
 		self.nodes = {}
+		self.map_root = map_root
 
 	def __str__(self):
 		num_edge = 0
@@ -15,9 +16,13 @@ class BaseGraph:
 		out_str = f"Graph has {len(self.nodes)} nodes with {num_edge} edges"
 		return out_str
 
-	def read_edge_list(self, path_edge_list):
+	def read_edge_list(self, edge_type):
+		self.edge_type = edge_type
+
+		path_edge_list = os.path.join(self.map_root, edge_type)
 		if not os.path.exists(path_edge_list): 
 			return
+		
 		edges_A_B_weight = np.loadtxt(path_edge_list, dtype=float)
 		for edge in edges_A_B_weight:
 			node_id0, node_id1 = int(edge[0]), int(edge[1])
@@ -26,6 +31,7 @@ class BaseGraph:
 				node0 = self.get_node(node_id0)
 				node1 = self.get_node(node_id1)
 				self.add_edge_undirected(node0, node1, weight)
+		
 	
 	def write_edge_list(self, path_edge_list):
 		edges = np.zeros((0, 3), dtype=np.float64)
@@ -112,23 +118,24 @@ class BaseGraph:
 					return True
 		return False
 
-	def convert_to_gtsam_pose_graph(self):
-		# Convert the base graph to a gtsam pose graph
-		pose_graph = PoseGraph()
-		prior_sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
-		odom_sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
-		for node in self.nodes.values():
-			curr_pose3 = convert_vec_gtsam_pose3(node.trans, node.quat)
-			# Add prior factor
-			if node.id == 0:
-				pose_graph.add_prior_factor(node.id, curr_pose3, prior_sigma)
-			pose_graph.add_init_estimate(node.id, curr_pose3)
-			# Add odometry factor
-			for edge in node.edges:
-				next_node = self.get_node(edge[0].id)
-				next_pose3 = convert_vec_gtsam_pose3(next_node.trans, next_node.quat)
-				pose_graph.add_odometry_factor(node.id, curr_pose3, next_node.id, next_pose3, odom_sigma)
-		return pose_graph			
+	# NOTE(gogojjh): should be removed
+	# def convert_to_gtsam_pose_graph(self):
+	# 	# Convert the base graph to a gtsam pose graph
+	# 	pose_graph = PoseGraph()
+	# 	prior_sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
+	# 	odom_sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
+	# 	for node in self.nodes.values():
+	# 		curr_pose3 = convert_vec_gtsam_pose3(node.trans, node.quat)
+	# 		# Add prior factor
+	# 		if node.id == 0:
+	# 			pose_graph.add_prior_factor(node.id, curr_pose3, prior_sigma)
+	# 		pose_graph.add_init_estimate(node.id, curr_pose3)
+	# 		# Add odometry factor
+	# 		for edge in node.edges:
+	# 			next_node = self.get_node(edge[0].id)
+	# 			next_pose3 = convert_vec_gtsam_pose3(next_node.trans, next_node.quat)
+	# 			pose_graph.add_odometry_factor(node.id, curr_pose3, next_node.id, next_pose3, odom_sigma)
+	# 	return pose_graph			
 
 if __name__ == "__main__":
 	import sys
