@@ -51,23 +51,23 @@ class ImageGraphLoader:
 		Raises:
 			FileNotFoundError: If any of the required files are not found in the map directory.
 		"""
-		image_graph = ImageGraph(map_root)
+		image_graph = ImageGraph(map_root, edge_type)
 
 		# Read timestamps, intrinsics, poses, poses_abs_gt, and descriptors
-		timestamps = read_timestamps(os.path.join(map_root, 'timestamps.txt'))
-		intrinsics = read_intrinsics(os.path.join(map_root, 'intrinsics.txt'))
-		poses = read_poses(os.path.join(map_root, 'poses.txt'))
-		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
-		descs = read_descriptors(os.path.join(map_root, 'database_descriptors.txt'))
-		gps_datas = read_gps(os.path.join(map_root, 'gps_data.txt'))
-		iqa_datas = read_timestamps(os.path.join(map_root, 'iqa_data.txt'))
+		timestamps = read_timestamps(str(map_root/'timestamps.txt'))
+		intrinsics = read_intrinsics(str(map_root/'intrinsics.txt'))
+		poses = read_poses(str(map_root/'poses.txt'))
+		poses_abs_gt = read_poses(str(map_root/'poses_abs_gt.txt'))
+		descs = read_descriptors(str(map_root/'database_descriptors.txt'))
+		gps_datas = read_gps(str(map_root/'gps_data.txt'))
+		iqa_datas = read_timestamps(str(map_root/'iqa_data.txt'))
 
 		# Iterate over each image and create observation nodes
 		if poses is not None:
 			for key in poses.keys():
 				# Read rgb image
 				rgb_img_name = key
-				rgb_img_path = os.path.join(map_root, key)
+				rgb_img_path = os.path.join(str(map_root/key))
 				if not load_rgb:
 					rgb_image = None
 				elif load_rgb and os.path.exists(rgb_img_path):
@@ -77,11 +77,11 @@ class ImageGraphLoader:
 
 				# Read depth image
 				depth_img_name = key.replace('color.jpg', 'depth.png')
-				depth_img_path = os.path.join(map_root, depth_img_name)
+				depth_img_path = str(map_root/depth_img_name)
 				if not load_depth:
 					depth_image = None
 				elif load_depth and os.path.exists(depth_img_path):
-					depth_image = load_depth_image(os.path.join(map_root, depth_img_name), depth_scale=depth_scale)
+					depth_image = load_depth_image(depth_img_path, depth_scale=depth_scale)
 				else:
 					continue
 
@@ -155,14 +155,15 @@ class ImageGraphLoader:
 				image_graph.add_node(node)
 
 		# Read edge list based on the specified edge type
-		image_graph.read_edge_list(edge_type)
+		edge_list_path = map_root/f"edges_{edge_type}.txt"
+		image_graph.read_edge_list(edge_list_path)
 
 		return image_graph
 
 # Image Graph Class
 class ImageGraph(BaseGraph):
-	def __init__(self, map_root: Path):
-		super().__init__(map_root)
+	def __init__(self, map_root: Path, edge_type: str):
+		super().__init__(map_root, edge_type)
 		
 	def save_to_file(self):
 		num_node = self.get_num_node()
@@ -198,7 +199,8 @@ class ImageGraph(BaseGraph):
 		np.savetxt(str(self.map_root/"poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
 		np.savetxt(str(self.map_root/"database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
 		np.savetxt(str(self.map_root/"gps_data.txt"), gps_datas, fmt='%s %.6f %.6f %.6f %.6f %.6f')
-		self.write_edge_list(str(self.map_root/f"edges_{self.edge_type}.txt"))
+		edge_list_path = self.map_root/f"edges_{self.edge_type}.txt"
+		self.write_edge_list(edge_list_path)
 
 class TestImageGraph():
 	def __init__(self):

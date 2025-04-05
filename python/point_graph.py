@@ -14,12 +14,12 @@ class PointGraphLoader:
 
 	@staticmethod
 	def load_data(map_root: Path, edge_type: str):
-		point_graph = PointGraph(map_root)
+		point_graph = PointGraph(map_root, edge_type)
 		
 		# Read timestamps, poses, and poses_abs_gt
-		times = read_timestamps(os.path.join(map_root, 'timestamps.txt'))
-		poses = read_poses(os.path.join(map_root, 'poses.txt'))
-		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
+		times = read_timestamps(str(map_root/'timestamps.txt'))
+		poses = read_poses(str(map_root/'poses.txt'))
+		poses_abs_gt = read_poses(str(map_root/'poses_abs_gt.txt'))
 
 		if poses is not None:
 			for key in poses.keys():	
@@ -31,19 +31,28 @@ class PointGraphLoader:
 				node = PointNode(node_id, f'point node {node_id}', time, trans, quat, None, None)
 				node.set_pose(trans, quat)
 				if poses_abs_gt is not None and key in poses_abs_gt:
-					trans, quat = convert_pose_inv(poses_abs_gt[key][4:], np.roll(poses_abs_gt[key][:4], -1), 'xyzw')
+					trans, quat = convert_pose_inv(
+						poses_abs_gt[key][4:], 
+						np.roll(poses_abs_gt[key][:4], -1), 
+						'xyzw'
+					)
 					node.set_pose_gt(trans, quat)
 
 				point_graph.add_node(node)
 
-		point_graph.read_edge_list(edge_type)
+		edge_list_path = map_root/f"edges_{edge_type}.txt"
+		point_graph.read_edge_list(edge_list_path)
 
 		return point_graph
 
 # Image Graph Class
 class PointGraph(BaseGraph):
-	def __init__(self, map_root):
-		super().__init__(map_root)
+	def __init__(self, map_root: Path, edge_type: str):
+		super().__init__(map_root, edge_type)
+
+	def save_to_file(self):
+		edge_list_path = self.map_root/f"edges_{self.edge_type}.txt"
+		self.write_edge_list(edge_list_path)
 
 class TestPointGraph():
 	def __init__(self):
