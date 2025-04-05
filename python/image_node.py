@@ -1,11 +1,12 @@
 import numpy as np
 from utils.base_node import BaseNode
+import torch
 
 class ImageNode(BaseNode):
 	def __init__(self, 
 			  	 node_id: int, 
-				 rgb_image: str,
-				 depth_image: str,
+				 rgb_image: torch.Tensor,
+				 depth_image: torch.Tensor,
 				 global_descriptor: np.ndarray, 
 				 time: float, 
 				 trans: np.ndarray, 
