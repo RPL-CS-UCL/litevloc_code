@@ -1,13 +1,14 @@
 import os
 import numpy as np
+from pathlib import Path
 # from utils.gtsam_pose_graph import PoseGraph
 # from utils.utils_geom import convert_vec_gtsam_pose3
 
 class BaseGraph:
 	# Initialize an empty dictionary to store nodes
-	def __init__(self, map_root: str):
-		self.nodes = {}
+	def __init__(self, map_root: Path):
 		self.map_root = map_root
+		self.nodes = {}
 
 	def __str__(self):
 		num_edge = 0
@@ -18,8 +19,7 @@ class BaseGraph:
 
 	def read_edge_list(self, edge_type):
 		self.edge_type = edge_type
-
-		path_edge_list = os.path.join(self.map_root, edge_type)
+		path_edge_list = str(self.map_root/f"edges_{edge_type}")
 		if not os.path.exists(path_edge_list): 
 			return
 		
@@ -93,6 +93,9 @@ class BaseGraph:
 		if all_id == []:
 			return [-1]
 		return all_id
+
+	def get_max_node_id(self):
+		return max(self.get_all_id())
 
 	def contain_node(self, query_node):
 		# Check if a node with the given id exists in the graph

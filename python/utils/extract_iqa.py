@@ -48,10 +48,10 @@ def main(args):
 	
 	out_path = Path(args.output)
 	out_path.mkdir(parents=True, exist_ok=True)
-	np.savetxt(out_path/"iqa.txt", scores, fmt="%s %.5f")
+	np.savetxt(out_path/"iqa_data.txt", scores, fmt="%s %.5f")
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser()
+	parser = argparse.ArgumentParser(description="Calculate Image Quality Assessment scores")
 	parser.add_argument("--dataset_path", required=True)
 	parser.add_argument("--metric", default="musiq", choices=pyiqa.list_models())
 	parser.add_argument("--device", default="cuda")

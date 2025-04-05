@@ -7,6 +7,7 @@ import argparse
 # from datetime import datetime
 import logging
 import numpy as np
+import pathlib
 
 from estimator import get_estimator, available_models
 from estimator.utils import to_numpy
@@ -31,11 +32,11 @@ def setup_logging(log_dir, stdout_level='info'):
 		]
 	)
 
-def setup_log_environment(out_dir, args):
+def setup_log_environment(out_dir: pathlib.Path, args):
 	"""Setup logging and directories."""
-	os.makedirs(out_dir, exist_ok=True)
-	os.makedirs(os.path.join(out_dir, "seq"), exist_ok=True)
-	os.makedirs(os.path.join(out_dir, "preds"), exist_ok=True)
+	out_dir.mkdir(parents=True, exist_ok=True)
+	(out_dir / "seq").mkdir(parents=True, exist_ok=True)
+	(out_dir / "preds").mkdir(parents=True, exist_ok=True)
 	# start_time = datetime.now()
 	# log_dir = os.path.join(out_dir, f"outputs_{args.pose_estimation_method}", start_time.strftime("%Y-%m-%d_%H-%M-%S"))
 	# setup_logging(log_dir, stdout_level="info")
