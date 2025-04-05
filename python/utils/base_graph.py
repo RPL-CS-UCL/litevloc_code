@@ -1,13 +1,12 @@
 import os
 import numpy as np
 from pathlib import Path
-# from utils.gtsam_pose_graph import PoseGraph
-# from utils.utils_geom import convert_vec_gtsam_pose3
 
 class BaseGraph:
 	# Initialize an empty dictionary to store nodes
-	def __init__(self, map_root: Path):
+	def __init__(self, map_root: Path, edge_type: str):
 		self.map_root = map_root
+		self.edge_type = edge_type
 		self.nodes = {}
 
 	def __str__(self):
@@ -17,23 +16,20 @@ class BaseGraph:
 		out_str = f"Graph has {len(self.nodes)} nodes with {num_edge} edges"
 		return out_str
 
-	def read_edge_list(self, edge_type):
-		self.edge_type = edge_type
-		path_edge_list = str(self.map_root/f"edges_{edge_type}")
-		if not os.path.exists(path_edge_list): 
-			return
+	def read_edge_list(self, edge_list_path: Path):
+		if edge_list_path.exists():
+			edges_A_B_weight = np.loadtxt(str(edge_list_path), dtype=float)
+			for edge in edges_A_B_weight:
+				node_id0, node_id1 = int(edge[0]), int(edge[1])
+				weight = edge[2]
+				if (self.get_node(node_id0) is not None) and (self.get_node(node_id1) is not None):
+					node0 = self.get_node(node_id0)
+					node1 = self.get_node(node_id1)
+					self.add_edge_undirected(node0, node1, weight)
+		else:
+			print(f"Edge list {str(edge_list_path)} file not found")
 		
-		edges_A_B_weight = np.loadtxt(path_edge_list, dtype=float)
-		for edge in edges_A_B_weight:
-			node_id0, node_id1 = int(edge[0]), int(edge[1])
-			weight = edge[2]
-			if (self.get_node(node_id0) is not None) and (self.get_node(node_id1) is not None):
-				node0 = self.get_node(node_id0)
-				node1 = self.get_node(node_id1)
-				self.add_edge_undirected(node0, node1, weight)
-		
-	
-	def write_edge_list(self, path_edge_list):
+	def write_edge_list(self, edge_list_path: Path):
 		edges = np.zeros((0, 3), dtype=np.float64)
 		for node_id, node in self.nodes.items():
 			for neighbor, weight in node.edges:
@@ -42,7 +38,8 @@ class BaseGraph:
 					vec = np.zeros((1, 3), dtype=np.float64)
 					vec[0, 0], vec[0, 1], vec[0, 2] = node_id, neighbor.id, weight
 					edges = np.vstack((edges, vec))
-		np.savetxt(path_edge_list, edges, fmt='%d %d %.6f')
+		
+		np.savetxt(str(edge_list_path), edges, fmt='%d %d %.6f')
 
 	# Add a new node to the graph if it doesn't already exist
 	def add_node(self, new_node):
@@ -56,6 +53,12 @@ class BaseGraph:
 	def remove_node(self, node):
 		if self.contain_node(node):
 			self.nodes.pop(node.id)
+
+	def add_inter_edges(self, edges, weight_func):
+		for edge in edges:
+			node_a, node_b = edge[0], edge[1]
+			weight = weight_func(node_a, node_b)
+			self.add_edge_undirected(node_a, node_b, weight)
 
 	def add_edge_undirected(self, from_node, to_node, weight):
 		# Add an edge between two nodes if both nodes exist in the graph
