@@ -1,10 +1,25 @@
 #! /usr/bin/env python
 
 """
-Usage: work with map-free dataset format
-python extract_iqa.py --dataset_path path/out_map \
---metric musiq --device cuda \
---output path/out_map
+extract_iqa.py
+
+This script is designed to work with the map-free dataset format. 
+It extracts Image Quality Assessment (IQA) scores for images in the dataset using a specified metric. 
+The script supports various IQA metrics provided by the `pyiqa` library and can run on either CPU or GPU.
+
+Usage:
+    python extract_iqa.py --dataset_path path/out_map \
+                          --metric musiq --device cuda \
+                          --output path/out_map
+
+Arguments:
+    --dataset_path: Path to the dataset directory containing images and poses.
+    --metric: The IQA metric to use (default: 'musiq').
+    --device: The device to run the metric on (default: 'cuda').
+    --output: Directory to save the output IQA scores (default: './results').
+
+The script reads the poses from 'poses.txt' in the dataset directory, computes the IQA score for each image, 
+and saves the results in 'iqa.txt' within the specified output directory.
 """
 
 import os
