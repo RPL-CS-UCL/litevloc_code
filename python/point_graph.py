@@ -1,82 +1,49 @@
 import os
 import numpy as np
 
+from pathlib import Path
+
 from point_node import PointNode
-
-from pycpptools.src.python.utils_algorithm.shortest_path import dijk_shortest_path
-from pycpptools.src.python.utils_algorithm.base_graph import BaseGraph
-from pycpptools.src.python.utils_math.tools_eigen import convert_vec_to_matrix, convert_matrix_to_vec
-
-def read_timestamps(file_path):
-	times = dict()
-	with open(file_path, 'r') as f:
-		for line_id, line in enumerate(f):
-			if line.startswith('#'): 
-				continue
-			if line.startswith('seq'):
-				img_name = line.strip().split(' ')[0]
-				data = float(line.strip().split(' ')[1]) # Each row: image_name, timestamp
-			else:
-				img_name = f'seq/{line_id:06}.color.jpg'
-				data = float(line.strip().split(' ')[1]) # Each row: qw, qx, qy, tx, ty, tz
-			times[img_name] = np.array(data)
-	return times
-
-def read_poses(file_path):
-	if not os.path.exists(file_path):
-		print(f"Poses not found in {file_path}")
-		return None
-
-	poses = dict()
-	with open(file_path, 'r') as f:
-		for line_id, line in enumerate(f):
-			if line.startswith('#'): 
-				continue
-			if line.startswith('seq'):
-				img_name = line.strip().split(' ')[0]
-				data = [float(p) for p in line.strip().split(' ')[1:]] # Each row: image_name, qw, qx, qy, tx, ty, tz
-			else:
-				img_name = f'seq/{line_id:06}.color.jpg'
-				data = [float(p) for p in line.strip().split(' ')] # Each row: qw, qx, qy, tx, ty, tz
-			poses[img_name] = np.array(data)
-	return poses
+from utils.utils_shortest_path import dijk_shortest_path
+from utils.base_graph import BaseGraph
+from utils.utils_geom import read_timestamps, read_poses, convert_pose_inv
 
 class PointGraphLoader:
 	def __init__(self):
 		pass
 
 	@staticmethod
-	def load_data(graph_path):
-		point_graph = PointGraph()
-		times = read_timestamps(os.path.join(graph_path, 'timestamps.txt'))
-		poses = read_poses(os.path.join(graph_path, 'poses.txt'))
-		poses_abs_gt = read_poses(os.path.join(graph_path, 'poses_abs_gt.txt'))
-
-		for key in poses.keys():	
-			# Each row: time, qw, qx, qy, tx, ty, tz
-			time, quat, trans = times[key], poses[key][:4], poses[key][4:] 
-			Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
-			trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
-			
-			node_id = point_graph.get_num_node()
-			node = PointNode(node_id, f'point node {node_id}', time, trans, quat, None, None)
-			node.set_pose(trans, quat)
-			if poses_abs_gt is not None and key in poses_abs_gt:
-				quat, trans = poses_abs_gt[key][:4], poses_abs_gt[key][4:]
-				Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
-				trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
-				node.set_pose_gt(trans, quat)
-			point_graph.add_node(node)
-
-		edge_file = os.path.join(graph_path, 'edge_list.txt')
-		point_graph.read_edge_list(edge_file)
+	def load_data(map_root: Path, edge_type: str):
+		point_graph = PointGraph(map_root)
 		
+		# Read timestamps, poses, and poses_abs_gt
+		times = read_timestamps(os.path.join(map_root, 'timestamps.txt'))
+		poses = read_poses(os.path.join(map_root, 'poses.txt'))
+		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
+
+		if poses is not None:
+			for key in poses.keys():	
+				time = times[key][0]
+				# qw, qx, qy, tx, ty, tz
+				trans, quat = convert_pose_inv(poses[key][4:], np.roll(poses[key][:4], -1), 'xyzw')
+				
+				node_id = point_graph.get_num_node()
+				node = PointNode(node_id, f'point node {node_id}', time, trans, quat, None, None)
+				node.set_pose(trans, quat)
+				if poses_abs_gt is not None and key in poses_abs_gt:
+					trans, quat = convert_pose_inv(poses_abs_gt[key][4:], np.roll(poses_abs_gt[key][:4], -1), 'xyzw')
+					node.set_pose_gt(trans, quat)
+
+				point_graph.add_node(node)
+
+		point_graph.read_edge_list(edge_type)
+
 		return point_graph
 
 # Image Graph Class
 class PointGraph(BaseGraph):
-	def __init__(self):
-		super().__init__()
+	def __init__(self, map_root):
+		super().__init__(map_root)
 
 class TestPointGraph():
 	def __init__(self):

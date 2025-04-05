@@ -3,8 +3,9 @@
 import os
 import numpy as np
 
+from pathlib import Path
 from utils.utils_geom import read_timestamps, read_intrinsics, read_poses, read_descriptors, read_gps
-from utils.utils_geom import convert_pose_inv
+from utils.utils_geom import convert_pose_inv, correct_intrinsic_scale
 from utils.utils_image import load_rgb_image, load_depth_image
 from utils.base_graph import BaseGraph
 from image_node import ImageNode
@@ -21,14 +22,20 @@ class ImageGraphLoader:
 		return out_str
 
 	@staticmethod
-	def load_data(map_root, resize, depth_scale, 
-		load_rgb=False, load_depth=False, normalized=False,
-		edge_type='odometry'):
+	def load_data(
+		map_root: Path, 
+		resize: tuple, 
+		depth_scale: float, 
+		load_rgb: bool = False, 
+		load_depth: bool = False, 
+		normalized: bool = False,
+		edge_type: str = 'odometry'
+	):
 		"""
 		Load data from the specified map directory and create an image graph.
 
 		Args:
-			map_root (str): The root directory of the map.
+			map_root (Path): The root directory of the map.
 			resize (tuple): The desired size to resize the images to.
 			depth_scale (float): The scale factor to apply to the depth images.
 			load_rgb (bool, optional): Whether to load RGB images. Defaults to False.
@@ -56,91 +63,96 @@ class ImageGraphLoader:
 		iqa_datas = read_timestamps(os.path.join(map_root, 'iqa_data.txt'))
 
 		# Iterate over each image and create observation nodes
-		for key in poses.keys():
-			# Read rgb image
-			rgb_img_name = key
-			rgb_img_path = os.path.join(map_root, key)
-			if not load_rgb:
-				rgb_image = None
-			elif load_rgb and os.path.exists(rgb_img_path):
-				rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
-			else:
-				continue
-
-			# Read depth image
-			depth_img_name = key.replace('color.jpg', 'depth.png')
-			depth_img_path = os.path.join(map_root, depth_img_name)
-			if not load_depth:
-				depth_image = None
-			elif load_depth and os.path.exists(depth_img_path):
-				depth_image = load_depth_image(os.path.join(map_root, depth_img_name), depth_scale=depth_scale)
-			else:
-				continue
-
-			# Extract extrinsics
-			time, quat, trans = timestamps[key][0], poses[key][:4], poses[key][4:]
-			Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
-			trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
-
-			# Extract intrinsics
-			if key in intrinsics:
-				fx, fy, cx, cy, width, height = \
-					intrinsics[key][0], intrinsics[key][1], intrinsics[key][2], \
-					intrinsics[key][3], int(intrinsics[key][4]), int(intrinsics[key][5])
-			else:
-				continue
-			raw_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
-			raw_img_size = np.array([width, height])
-			K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
-			img_size = np.array([int(resize[0]), int(resize[1])]) if resize is not None else raw_img_size
-
-			# Extract descriptors
-			if descs is not None:
-				if key in descs:
-					desc = descs[key]
+		if poses is not None:
+			for key in poses.keys():
+				# Read rgb image
+				rgb_img_name = key
+				rgb_img_path = os.path.join(map_root, key)
+				if not load_rgb:
+					rgb_image = None
+				elif load_rgb and os.path.exists(rgb_img_path):
+					rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
 				else:
 					continue
-			else:
-				desc = None
 
-			# Extract GPS
-			if gps_datas is not None:
-				if key in gps_datas:
-					gps_data = gps_datas[key]
+				# Read depth image
+				depth_img_name = key.replace('color.jpg', 'depth.png')
+				depth_img_path = os.path.join(map_root, depth_img_name)
+				if not load_depth:
+					depth_image = None
+				elif load_depth and os.path.exists(depth_img_path):
+					depth_image = load_depth_image(os.path.join(map_root, depth_img_name), depth_scale=depth_scale)
 				else:
 					continue
-			else:
-				gps_data = None
 
-			# Extract Image Quality Assessment data
-			if iqa_datas is not None:
-				if key in iqa_datas:
-					iqa_data = iqa_datas[key][0]
+				# Extract extrinsics
+				time = timestamps[key][0]
+				# qw, qx, qy, tx, ty, tz
+				trans, quat = convert_pose_inv(poses[key][4:], poses[key][:4], 'xyzw')
+
+				# Extract intrinsics
+				if key in intrinsics:
+					fx, fy, cx, cy, width, height = \
+						intrinsics[key][0], intrinsics[key][1], intrinsics[key][2], \
+						intrinsics[key][3], int(intrinsics[key][4]), int(intrinsics[key][5])
 				else:
 					continue
-			else:
-				iqa_data = None
+				raw_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
+				raw_img_size = np.array([int(width), int(height)])
+				if resize is not None:
+					K = correct_intrinsic_scale(raw_K, resize[0] / width, resize[1] / height) 
+					img_size = np.array([int(resize[0]), int(resize[1])])
+				else:
+					K = raw_K
+					img_size = raw_img_size
 
-			# Create observation node
-			node_id = image_graph.get_num_node()
-			node = ImageNode(node_id, rgb_image, depth_image, desc,
-							 time, trans, quat, 
-							 K, img_size,
-							 rgb_img_name, depth_img_name,
-							 gps_data, iqa_data)
-			# Set other variables
-			node.set_raw_intrinsics(raw_K, raw_img_size)
-			node.set_pose(trans, quat)
-			if poses_abs_gt is not None and key in poses_abs_gt:
-				trans, quat = convert_pose_inv(
-					poses_abs_gt[key][4:], 
-					np.roll(poses_abs_gt[key][:4], -1), 
-					'xyzw'
-				)
-				node.set_pose_gt(trans, quat)
-		
-			# Add the new node into the graph
-			image_graph.add_node(node)
+				# Extract descriptors
+				if descs is not None:
+					if key in descs:
+						desc = descs[key]
+					else:
+						continue
+				else:
+					desc = None
+
+				# Extract GPS
+				if gps_datas is not None:
+					if key in gps_datas:
+						gps_data = gps_datas[key]
+					else:
+						continue
+				else:
+					gps_data = None
+
+				# Extract Image Quality Assessment data
+				if iqa_datas is not None:
+					if key in iqa_datas:
+						iqa_data = iqa_datas[key][0]
+					else:
+						continue
+				else:
+					iqa_data = None
+
+				# Create observation node
+				node_id = image_graph.get_num_node()
+				node = ImageNode(node_id, rgb_image, depth_image, desc,
+								time, trans, quat, 
+								K, img_size,
+								rgb_img_name, depth_img_name,
+								gps_data, iqa_data)
+				# Set other variables
+				node.set_raw_intrinsics(raw_K, raw_img_size)
+				node.set_pose(trans, quat)
+				if poses_abs_gt is not None and key in poses_abs_gt:
+					trans, quat = convert_pose_inv(
+						poses_abs_gt[key][4:], 
+						np.roll(poses_abs_gt[key][:4], -1), 
+						'xyzw'
+					)
+					node.set_pose_gt(trans, quat)
+			
+				# Add the new node into the graph
+				image_graph.add_node(node)
 
 		# Read edge list based on the specified edge type
 		image_graph.read_edge_list(edge_type)
@@ -149,7 +161,7 @@ class ImageGraphLoader:
 
 # Image Graph Class
 class ImageGraph(BaseGraph):
-	def __init__(self, map_root: str):
+	def __init__(self, map_root: Path):
 		super().__init__(map_root)
 		
 	def save_to_file(self):
@@ -180,13 +192,13 @@ class ImageGraph(BaseGraph):
 			descs[line_id, 0], descs[line_id, 1:] = img_name, node.get_descriptor()
 			gps_datas[line_id, 0], gps_datas[line_id, 1:] = img_name, node.gps_data
 
-		np.savetxt(os.path.join(self.map_root, "timestamps.txt"), times, fmt='%s %.6f')
-		np.savetxt(os.path.join(self.map_root, "intrinsics.txt"), intrinsics, fmt='%s %.6f %.6f %.6f %.6f %d %d')
-		np.savetxt(os.path.join(self.map_root, "poses.txt"), poses, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
-		np.savetxt(os.path.join(self.map_root, "poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
-		np.savetxt(os.path.join(self.map_root, "database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
-		np.savetxt(os.path.join(self.map_root, "gps_data.txt"), gps_datas, fmt='%s %.6f %.6f %.6f %.6f %.6f')
-		self.write_edge_list(os.path.join(self.map_root, f"edges_{self.edge_type}.txt"))
+		np.savetxt(str(self.map_root/"timestamps.txt"), times, fmt='%s %.6f')
+		np.savetxt(str(self.map_root/"intrinsics.txt"), intrinsics, fmt='%s %.6f %.6f %.6f %.6f %d %d')
+		np.savetxt(str(self.map_root/"poses.txt"), poses, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
+		np.savetxt(str(self.map_root/"poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
+		np.savetxt(str(self.map_root/"database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
+		np.savetxt(str(self.map_root/"gps_data.txt"), gps_datas, fmt='%s %.6f %.6f %.6f %.6f %.6f')
+		self.write_edge_list(str(self.map_root/f"edges_{self.edge_type}.txt"))
 
 class TestImageGraph():
 	def __init__(self):
@@ -194,7 +206,7 @@ class TestImageGraph():
 	
 	def run_test(self):
 		# Initialize the image graph
-		graph = ImageGraph(map_root='/tmp')
+		graph = ImageGraph(map_root=Path('/tmp'))
 
 		# Add nodes to the graph
 		graph.add_node(ImageNode(

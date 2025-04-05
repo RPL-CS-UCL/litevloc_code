@@ -110,7 +110,6 @@ def _read_generic_file(file_path: str, data_dim: Optional[int]) -> Dict[str, np.
 
 def convert_pose_inv(
     trans, quat,
-    trans_inv, quat_inv,
     mode='xyzw'
 ):
     T = convert_vec_to_matrix(trans, quat, mode=mode)
@@ -266,7 +265,7 @@ def _compute_error_from_vectors(
     tf2 = convert_vec_to_matrix(trans2, quat2, mode)
     return _compute_error_from_matrices(tf1, tf2)
 
-def correct_intrinsic_scale(K, scale_x, scale_y):
+def correct_intrinsic_scale(K: np.ndarray, scale_x: float, scale_y: float):
     """Given an intrinsic matrix (3x3) and two scale factors, returns the new intrinsic matrix corresponding to
     the new coordinates x' = scale_x * x; y' = scale_y * y
     Source: https://dsp.stackexchange.com/questions/6055/how-does-resizing-an-image-affect-the-intrinsic-camera-matrix
