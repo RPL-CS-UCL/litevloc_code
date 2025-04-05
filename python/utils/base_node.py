@@ -1,3 +1,9 @@
+#! /usr/bin/env python
+
+import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
+
 import numpy as np
 from utils.utils_geom import compute_pose_error
 

@@ -15,7 +15,8 @@ class ImageNode(BaseNode):
 				 img_size: np.ndarray,
 				 rgb_img_name: str, 
 				 depth_img_name: str,
-				 gps_data: np.ndarray = None):
+				 gps_data: np.ndarray = None,
+				 iqa_data: float = None):
 		super().__init__(node_id, trans, quat)
 
 		# RGB and depth images
@@ -41,6 +42,9 @@ class ImageNode(BaseNode):
 
 		# GPS data
 		self.gps_data = gps_data
+
+		# IQA data
+		self.iqa_data = iqa_data
 		
 		# Next node using in the shortest path
 		self.next_node = None

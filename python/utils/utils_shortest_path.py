@@ -1,9 +1,14 @@
+#! /usr/bin/env python
+
 import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
+
 import heapq
 import unittest
 
-from base_node import BaseNode as Node
-from base_graph import BaseGraph as Graph
+from utils.base_node import BaseNode as Node
+from utils.base_graph import BaseGraph as Graph
 
 def dijk_shortest_path(graph, start_node, goal_node):
     """

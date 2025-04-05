@@ -3,7 +3,8 @@
 import os
 import numpy as np
 
-from utils.utils_geom import *
+from utils.utils_geom import read_timestamps, read_intrinsics, read_poses, read_descriptors, read_gps
+from utils.utils_geom import convert_pose_inv
 from utils.utils_image import load_rgb_image, load_depth_image
 from utils.base_graph import BaseGraph
 from image_node import ImageNode
@@ -14,7 +15,7 @@ class ImageGraphLoader:
 
 	def __str__(self):
 		num_edge = 0
-		for node_id, node in self.nodes.items():
+		for _, node in self.nodes.items():
 			num_edge += len(node.edges)
 		out_str = f"Graph has {len(self.nodes)} nodes with {num_edge} edges, load data from {self.map_root}"
 		return out_str
@@ -52,11 +53,13 @@ class ImageGraphLoader:
 		poses_abs_gt = read_poses(os.path.join(map_root, 'poses_abs_gt.txt'))
 		descs = read_descriptors(os.path.join(map_root, 'database_descriptors.txt'))
 		gps_datas = read_gps(os.path.join(map_root, 'gps_data.txt'))
+		iqa_datas = read_timestamps(os.path.join(map_root, 'iqa_data.txt'))
 
 		# Iterate over each image and create observation nodes
 		for key in poses.keys():
+			# Read rgb image
 			rgb_img_name = key
-			rgb_img_path = os.path.join(map_root, rgb_img_name)
+			rgb_img_path = os.path.join(map_root, key)
 			if not load_rgb:
 				rgb_image = None
 			elif load_rgb and os.path.exists(rgb_img_path):
@@ -64,6 +67,7 @@ class ImageGraphLoader:
 			else:
 				continue
 
+			# Read depth image
 			depth_img_name = key.replace('color.jpg', 'depth.png')
 			depth_img_path = os.path.join(map_root, depth_img_name)
 			if not load_depth:
@@ -74,7 +78,7 @@ class ImageGraphLoader:
 				continue
 
 			# Extract extrinsics
-			time, quat, trans = timestamps[key], poses[key][:4], poses[key][4:]
+			time, quat, trans = timestamps[key][0], poses[key][:4], poses[key][4:]
 			Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
 			trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
 
@@ -85,7 +89,6 @@ class ImageGraphLoader:
 					intrinsics[key][3], int(intrinsics[key][4]), int(intrinsics[key][5])
 			else:
 				continue
-
 			raw_K = np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
 			raw_img_size = np.array([width, height])
 			K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
@@ -109,41 +112,45 @@ class ImageGraphLoader:
 			else:
 				gps_data = None
 
+			# Extract Image Quality Assessment data
+			if iqa_datas is not None:
+				if key in iqa_datas:
+					iqa_data = iqa_datas[key][0]
+				else:
+					continue
+			else:
+				iqa_data = None
+
 			# Create observation node
 			node_id = image_graph.get_num_node()
 			node = ImageNode(node_id, rgb_image, depth_image, desc,
 							 time, trans, quat, 
 							 K, img_size,
 							 rgb_img_name, depth_img_name,
-							 gps_data)
+							 gps_data, iqa_data)
+			# Set other variables
 			node.set_raw_intrinsics(raw_K, raw_img_size)
 			node.set_pose(trans, quat)
 			if poses_abs_gt is not None and key in poses_abs_gt:
-				quat, trans = poses_abs_gt[key][:4], poses_abs_gt[key][4:]
-				Tc2w = convert_vec_to_matrix(trans, quat, 'wxyz')
-				trans, quat = convert_matrix_to_vec(np.linalg.inv(Tc2w), 'xyzw')
+				trans, quat = convert_pose_inv(
+					poses_abs_gt[key][4:], 
+					np.roll(poses_abs_gt[key][:4], -1), 
+					'xyzw'
+				)
 				node.set_pose_gt(trans, quat)
 		
+			# Add the new node into the graph
 			image_graph.add_node(node)
 
-		# TODO(gogojjh):
 		# Read edge list based on the specified edge type
-		if edge_type is not None:
-			if edge_type == 'odometry':
-				edge_list_path = os.path.join(map_root, 'odometry_edge_list.txt')
-			elif edge_type == 'covisible':
-				edge_list_path = os.path.join(map_root, 'covisible_edge_list.txt')
-			elif edge_type == 'traversable':
-				edge_list_path = os.path.join(map_root, 'traversable_edge_list.txt')
-			image_graph.read_edge_list(edge_list_path)
+		image_graph.read_edge_list(edge_type)
 
 		return image_graph
 
 # Image Graph Class
 class ImageGraph(BaseGraph):
 	def __init__(self, map_root: str):
-		super().__init__()
-		self.map_root = map_root
+		super().__init__(map_root)
 		
 	def save_to_file(self):
 		num_node = self.get_num_node()
@@ -155,26 +162,22 @@ class ImageGraph(BaseGraph):
 		descs = np.empty((num_node, len(first_node.get_descriptor()) + 1), dtype=object)
 		gps_datas = np.empty((num_node, 6), dtype=object)
 		for line_id, (node_id, node) in enumerate(self.nodes.items()):
+			# Force the image name to be concistent with the node id
 			img_name = f"seq/{node_id:06d}.color.jpg"
-			times[line_id, 0], times[line_id, 1] = img_name, node.time
 
+			times[line_id, 0], times[line_id, 1] = img_name, node.time
 			fx, fy, cx, cy, width, height = \
 				node.raw_K[0, 0], node.raw_K[1, 1], node.raw_K[0, 2], node.raw_K[1, 2], \
 				node.raw_img_size[0], node.raw_img_size[1]
 			intrinsics[line_id, 0], intrinsics[line_id, 1:] = img_name, np.array([fx, fy, cx, cy, width, height])
 			
-			Tw2c = convert_vec_to_matrix(node.trans, node.quat, 'xyzw')
-			Tc2w = np.linalg.inv(Tw2c)
-			trans, quat = convert_matrix_to_vec(Tc2w, 'wxyz')
+			trans, quat = convert_pose_inv(node.trans, np.roll(node.quat, 1), 'wxyz')
 			poses[line_id, 0], poses[line_id, 1:5], poses[line_id, 5:] = img_name, quat, trans
 
-			Tw2c = convert_vec_to_matrix(node.trans_gt, node.quat_gt, 'xyzw')
-			Tc2w = np.linalg.inv(Tw2c)
-			trans, quat = convert_matrix_to_vec(Tc2w, 'wxyz')
+			trans, quat = convert_pose_inv(node.trans_gt, np.roll(node.quat_gt, 1), 'wxyz')
 			poses_abs_gt[line_id, 0], poses_abs_gt[line_id, 1:5], poses_abs_gt[line_id, 5:] = img_name, quat, trans
 
 			descs[line_id, 0], descs[line_id, 1:] = img_name, node.get_descriptor()
-
 			gps_datas[line_id, 0], gps_datas[line_id, 1:] = img_name, node.gps_data
 
 		np.savetxt(os.path.join(self.map_root, "timestamps.txt"), times, fmt='%s %.6f')
@@ -183,7 +186,7 @@ class ImageGraph(BaseGraph):
 		np.savetxt(os.path.join(self.map_root, "poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
 		np.savetxt(os.path.join(self.map_root, "database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
 		np.savetxt(os.path.join(self.map_root, "gps_data.txt"), gps_datas, fmt='%s %.6f %.6f %.6f %.6f %.6f')
-		self.write_edge_list(os.path.join(self.map_root, 'odometry_edge_list.txt'))
+		self.write_edge_list(os.path.join(self.map_root, f"edges_{self.edge_type}.txt"))
 
 class TestImageGraph():
 	def __init__(self):
@@ -191,25 +194,33 @@ class TestImageGraph():
 	
 	def run_test(self):
 		# Initialize the image graph
-		graph = ImageGraph()
+		graph = ImageGraph(map_root='/tmp')
 
 		# Add nodes to the graph
-		graph.add_node(ImageNode(1, None, None, "descriptor_1", 
-									0, np.zeros((1, 3)), np.zeros((1, 4)), 
-									np.eye(3), (640, 480),
-									'tmp_rgb.png', 'tmp_depth.png'))
-		graph.add_node(ImageNode(2, None, None, "descriptor_2", 
-									0, np.zeros((1, 3)), np.zeros((1, 4)), 
-									np.eye(3), (640, 480),
-									'tmp_rgb.png', 'tmp_depth.png'))
-		graph.add_node(ImageNode(3, None, None, "descriptor_3", 
-									0, np.zeros((1, 3)), np.zeros((1, 4)), 
-									np.eye(3), (640, 480),
-									'tmp_rgb.png', 'tmp_depth.png'))
-		graph.add_node(ImageNode(4, None, None, "descriptor_4", 
-									0, np.zeros((1, 3)), np.zeros((1, 4)), 
-									np.eye(3), (640, 480),
-									'tmp_rgb.png', 'tmp_depth.png'))
+		graph.add_node(ImageNode(
+			1, None, None, "descriptor_1", 
+			0, np.zeros((1, 3)), np.zeros((1, 4)), 
+			np.eye(3), (640, 480),
+			'tmp_rgb.png', 'tmp_depth.png')
+		)
+		graph.add_node(ImageNode(
+			2, None, None, "descriptor_2", 
+			0, np.zeros((1, 3)), np.zeros((1, 4)), 
+			np.eye(3), (640, 480),
+			'tmp_rgb.png', 'tmp_depth.png')
+		)
+		graph.add_node(ImageNode(
+			3, None, None, "descriptor_3", 
+			0, np.zeros((1, 3)), np.zeros((1, 4)), 
+			np.eye(3), (640, 480),
+			'tmp_rgb.png', 'tmp_depth.png')
+		)
+		graph.add_node(ImageNode(
+			4, None, None, "descriptor_4", 
+			0, np.zeros((1, 3)), np.zeros((1, 4)), 
+			np.eye(3), (640, 480),
+			'tmp_rgb.png', 'tmp_depth.png')
+		)
 
 		# Add edges between the nodes with weights
 		graph.add_edge_undirected(graph.get_node(1), graph.get_node(2), 1.0)
