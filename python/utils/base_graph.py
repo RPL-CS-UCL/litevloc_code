@@ -65,6 +65,7 @@ class BaseGraph:
 			self.add_edge_undirected(edge[0], edge[1], weight)
 	def add_edge_undirected(self, from_node, to_node, weight):
 		# Add an edge between two nodes if both nodes exist in the graph
+		# In some cases that from_node or to_node are removed 
 		if self.contain_node(from_node) and self.contain_node(to_node):
 			from_node.add_edge(to_node, weight)
 			to_node.add_edge(from_node, weight)  # Assuming undirected graph

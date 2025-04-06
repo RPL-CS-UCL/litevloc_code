@@ -17,7 +17,7 @@ class ImageNode(BaseNode):
 				 depth_img_name: str,
 				 gps_data: np.ndarray = None,
 				 iqa_data: float = None):
-		super().__init__(node_id, trans, quat)
+		super().__init__(node_id, trans, quat, time)
 
 		# RGB and depth images
 		self.rgb_image = rgb_image
@@ -29,9 +29,6 @@ class ImageNode(BaseNode):
 
 		# VPR descriptor: numpy.array
 		self.global_descriptor = global_descriptor
-
-		# Time of the image
-		self.time = time
 
 		# Camera intrinsics
 		self.K = K
