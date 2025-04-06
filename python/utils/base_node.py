@@ -8,7 +8,7 @@ import numpy as np
 from utils.utils_geom import compute_pose_error
 
 class BaseNode:
-	def __init__(self, id, trans=np.zeros(3), quat=np.array([0.0, 0.0, 0.0, 1.0])):
+	def __init__(self, id, trans=np.zeros(3), quat=np.array([0.0, 0.0, 0.0, 1.0]), time=0.0):
 		# Initialize the node with a given id and an empty list of edges
 		self.id = id
 		self.edges = []    # [(nodeB, weight), ...]
@@ -19,6 +19,9 @@ class BaseNode:
 		self.has_pose_gt = False
 		self.trans_gt = np.zeros(3)
 		self.quat_gt = np.array([0.0, 0.0, 0.0, 1.0])
+
+		# Data collection moment of this node in UTC timestamp
+		self.time = time
 
 		# Next node using in the shortest path
 		self.next_node = None
