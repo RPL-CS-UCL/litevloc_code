@@ -203,28 +203,27 @@ class ImageGraph(BaseGraph):
 				src = self.map_root / node.depth_img_name
 				if src.exists():
 					src.unlink()
-	def save_to_file(self):
-		num_node = self.get_num_node()
-		first_node = next(iter(self.nodes.values()))
-		intrinsics = np.empty((num_node, 7), dtype=object)
-		iqa_data = np.empty((num_node, 2), dtype=object)
-		descs = np.empty((num_node, len(first_node.get_descriptor()) + 1), dtype=object)
-		for line_id, (node_id, node) in enumerate(self.nodes.items()):
-			# Force the image name to be concistent with the node id
-			img_name = f"seq/{node_id:06d}.color.jpg"
+	def save_to_file(self, edge_only=False):
+		if not edge_only:
+			num_node = self.get_num_node()
+			first_node = next(iter(self.nodes.values()))
+			intrinsics = np.empty((num_node, 7), dtype=object)
+			iqa_data = np.empty((num_node, 2), dtype=object)
+			descs = np.empty((num_node, len(first_node.get_descriptor()) + 1), dtype=object)
+			for line_id, (node_id, node) in enumerate(self.nodes.items()):
+				# Force the image name to be concistent with the node id
+				img_name = f"seq/{node_id:06d}.color.jpg"
+				fx, fy, cx, cy, width, height = \
+					node.raw_K[0, 0], node.raw_K[1, 1], node.raw_K[0, 2], node.raw_K[1, 2], \
+					node.raw_img_size[0], node.raw_img_size[1]
+				intrinsics[line_id, :] = [img_name, fx, fy, cx, cy, width, height]
+				iqa_data[line_id, :] = [img_name, node.iqa_data]
+				descs[line_id, :] = [img_name, *node.get_descriptor()]
 
-			fx, fy, cx, cy, width, height = \
-				node.raw_K[0, 0], node.raw_K[1, 1], node.raw_K[0, 2], node.raw_K[1, 2], \
-				node.raw_img_size[0], node.raw_img_size[1]
-			intrinsics[line_id, :] = [img_name, fx, fy, cx, cy, width, height]
+			np.savetxt(str(self.map_root/"intrinsics.txt"), intrinsics, fmt='%s' + ' %.6f'*4 + ' %d %d')
+			np.savetxt(str(self.map_root/"iqa_data.txt"), iqa_data, fmt='%s %.6f')
+			np.savetxt(str(self.map_root/"database_descriptors.txt"), descs, fmt='%s' + ' %.6f'*(descs.shape[1] - 1))
 
-			iqa_data[line_id, :] = [img_name, node.iqa_data]
-
-			descs[line_id, :] = [img_name, *node.get_descriptor()]
-
-		np.savetxt(str(self.map_root/"intrinsics.txt"), intrinsics, fmt='%s' + ' %.6f'*4 + ' %d %d')
-		np.savetxt(str(self.map_root/"iqa_data.txt"), iqa_data, fmt='%s %.6f')
-		np.savetxt(str(self.map_root/"database_descriptors.txt"), descs, fmt='%s' + ' %.6f'*(descs.shape[1] - 1))
 		self.write_edge_list(self.map_root/f"edges_{self.edge_type}.txt")
 
 class TestImageGraph():
