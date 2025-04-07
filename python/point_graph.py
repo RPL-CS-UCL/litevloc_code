@@ -59,29 +59,28 @@ class PointGraph(BaseGraph):
 	def __init__(self, map_root: Path, edge_type: str):
 		super().__init__(map_root, edge_type)
 
-	def save_to_file(self):
-		num_node = self.get_num_node()
-		times = np.empty((num_node, 2), dtype=object)		
-		poses = np.empty((num_node, 8), dtype=object)
-		poses_abs_gt = np.empty((num_node, 8), dtype=object)
-		gps_datas = np.empty((num_node, 6), dtype=object)
+	def save_to_file(self, edge_only=False):
+		if not edge_only:
+			num_node = self.get_num_node()
+			times = np.empty((num_node, 2), dtype=object)		
+			poses = np.empty((num_node, 8), dtype=object)
+			poses_abs_gt = np.empty((num_node, 8), dtype=object)
+			gps_datas = np.empty((num_node, 6), dtype=object)
 
-		for line_id, (node_id, node) in enumerate(self.nodes.items()):
-			img_name = f"seq/{node_id:06d}.color.jpg"
-			times[line_id] = [img_name, node.time]
+			for line_id, (node_id, node) in enumerate(self.nodes.items()):
+				img_name = f"seq/{node_id:06d}.color.jpg"
+				times[line_id] = [img_name, node.time]
+				trans, quat = convert_pose_inv(node.trans, np.roll(node.quat, 1), 'wxyz')
+				poses[line_id] = [img_name, *quat, *trans]
+				trans, quat = convert_pose_inv(node.trans_gt, np.roll(node.quat_gt, 1), 'wxyz')
+				poses_abs_gt[line_id] = [img_name, *quat, *trans]
+				gps_datas[line_id] = [img_name, *node.gps_data]
 
-			trans, quat = convert_pose_inv(node.trans, np.roll(node.quat, 1), 'wxyz')
-			poses[line_id] = [img_name, *quat, *trans]
+			np.savetxt(str(self.map_root/"timestamps.txt"), times, fmt='%s %.6f')
+			np.savetxt(str(self.map_root/"poses.txt"), poses, fmt='%s' + ' %.6f'*7)
+			np.savetxt(str(self.map_root/"poses_abs_gt.txt"), poses_abs_gt, fmt='%s' + ' %.6f'*7)
+			np.savetxt(str(self.map_root/"gps_data.txt"), gps_datas, fmt='%s' + ' %.6f'*5)
 
-			trans, quat = convert_pose_inv(node.trans_gt, np.roll(node.quat_gt, 1), 'wxyz')
-			poses_abs_gt[line_id] = [img_name, *quat, *trans]
-
-			gps_datas[line_id] = [img_name, *node.gps_data]
-
-		np.savetxt(str(self.map_root/"timestamps.txt"), times, fmt='%s %.6f')
-		np.savetxt(str(self.map_root/"poses.txt"), poses, fmt='%s' + ' %.6f'*7)
-		np.savetxt(str(self.map_root/"poses_abs_gt.txt"), poses_abs_gt, fmt='%s' + ' %.6f'*7)
-		np.savetxt(str(self.map_root/"gps_data.txt"), gps_datas, fmt='%s' + ' %.6f'*5)
 		self.write_edge_list(self.map_root/f"edges_{self.edge_type}.txt")
 
 class TestPointGraph():

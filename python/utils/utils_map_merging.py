@@ -174,6 +174,8 @@ def parse_arguments():
 
 	parser.add_argument("--pose_estimation_method", type=str, default="master", help="master, duster")
 
+	parser.add_argument("--select_keyframe", action="store_true", help="Flag to select keyframes")
+
 	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="cuda (gpu) or cpu")
 
 	parser.add_argument("--viz", action="store_true", help="Flag to plot results")
