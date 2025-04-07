@@ -3,21 +3,23 @@ from utils.base_node import BaseNode
 import torch
 
 class ImageNode(BaseNode):
-	def __init__(self, 
-			  	 node_id: int, 
-				 rgb_image: torch.Tensor,
-				 depth_image: torch.Tensor,
-				 global_descriptor: np.ndarray, 
-				 time: float, 
-				 trans: np.ndarray, 
-				 quat: np.ndarray, 
-				 K: np.ndarray, 
-				 img_size: np.ndarray,
-				 rgb_img_name: str, 
-				 depth_img_name: str,
-				 gps_data: np.ndarray = None,
-				 iqa_data: float = None):
-		super().__init__(node_id, trans, quat, time)
+	def __init__(
+			self, 
+			node_id: int, 
+			rgb_image: torch.Tensor,
+			depth_image: torch.Tensor,
+			global_descriptor: np.ndarray, 
+			time: float, 
+			trans: np.ndarray, 
+			quat: np.ndarray, 
+			K: np.ndarray, 
+			img_size: np.ndarray,
+			rgb_img_name: str, 
+			depth_img_name: str,
+			gps_data: np.ndarray = None,
+			iqa_data: float = None
+		):
+		super().__init__(node_id, trans, quat)
 
 		# RGB and depth images
 		self.rgb_image = rgb_image
@@ -37,6 +39,9 @@ class ImageNode(BaseNode):
 		self.raw_K = K
 		self.raw_img_size = img_size
 
+		# Data collection moment of this node in UTC timestamp
+		self.time = time
+
 		# GPS data
 		self.gps_data = gps_data
 
@@ -49,7 +54,6 @@ class ImageNode(BaseNode):
 		# Matched keypoints
 		self.mkpts = None
 		self.inliers = None
-
 
 	def __str__(self):
 		out_str = f'Image Node ID: {self.id} with edge number: {len(self.edges)}'

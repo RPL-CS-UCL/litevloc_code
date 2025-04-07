@@ -1,23 +1,19 @@
-import os
-
-from pycpptools.src.python.utils_algorithm.base_node import BaseNode
+import numpy as np
+from utils.base_node import BaseNode
 
 class PointNode(BaseNode):
-	def __init__(self, id, global_descriptor, time, trans, quat, rgb_img_path, depth_img_path):
+	def __init__(
+			self, 
+			id: int, 
+			time: float, 
+			trans: np.ndarray,
+			quat: np.ndarray,
+			gps_data: np.ndarray = None):
 		super().__init__(id, trans, quat)
 
-		# Image paths
-		self.rgb_img_path = rgb_img_path
-		self.depth_img_path = depth_img_path
-
-		# VPR descriptor
-		self.global_descriptor = global_descriptor
-
-		# Time of the image
+		# Data collection moment of this node in UTC timestamp
 		self.time = time
 
-	def set_descriptor(self, global_descriptor):
-		self.global_descriptor = global_descriptor
+		# GPS data
+		self.gps_data = gps_data
 
-	def get_descriptor(self):
-		return self.global_descriptor
