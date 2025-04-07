@@ -20,9 +20,6 @@ class BaseNode:
 		self.trans_gt = np.zeros(3)
 		self.quat_gt = np.array([0.0, 0.0, 0.0, 1.0])
 
-		# Data collection moment of this node in UTC timestamp
-		self.time = time
-
 		# Next node using in the shortest path
 		self.next_node = None
 

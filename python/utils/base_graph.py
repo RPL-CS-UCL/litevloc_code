@@ -16,6 +16,25 @@ class BaseGraph:
 		out_str = f"Graph has {len(self.nodes)} nodes with {num_edge} edges"
 		return out_str
 
+	def remove_node_list(self, node_list: list):
+		for node in node_list:
+			self.remove_node(node)
+			print(f"Removed node {node.id} from graph")
+
+	def remove_node(self, node):
+		if self.contain_node(node):
+			self.nodes.pop(node.id)
+
+	def remove_invalid_edges(self):
+		for node_id, node in self.nodes.items():
+			edges_to_remove = []
+			for neighbor, weight in node.edges:
+				if not self.contain_node(neighbor):
+					edges_to_remove.append((neighbor, weight))
+			for edge in edges_to_remove:
+				node.edges.remove(edge)
+				print(f"Removed edges {node.id} -> {edge[0].id} from graph")
+
 	def read_edge_list(self, edge_list_path: Path):
 		if edge_list_path.exists():
 			# list of edges [node_a.id, node_b.id, weight]
@@ -32,28 +51,22 @@ class BaseGraph:
 		
 	def write_edge_list(self, edge_list_path: Path):
 		edges = np.zeros((0, 3), dtype=np.float64)
+		# Remove invalid edges with nodes which are previously removed
+		self.remove_invalid_edges()
 		for node_id, node in self.nodes.items():
 			for neighbor, weight in node.edges:
 				# Avoid duplicate edges
 				if node_id < neighbor.id:
 					vec = np.zeros((1, 3), dtype=np.float64)
 					vec[0, 0], vec[0, 1], vec[0, 2] = node_id, neighbor.id, weight
-					edges = np.vstack((edges, vec))
-		
+					edges = np.vstack((edges, vec))				
+			
 		np.savetxt(str(edge_list_path), edges, fmt='%d %d %.6f')
 
 	# Add a new node to the graph if it doesn't already exist
 	def add_node(self, new_node):
 		if not self.contain_node(new_node):
 			self.nodes[new_node.id] = new_node
-
-	def remove_node_list(self, node_list: list):
-		for node in node_list:
-			self.remove_node(node)
-
-	def remove_node(self, node):
-		if self.contain_node(node):
-			self.nodes.pop(node.id)
 
 	def add_inter_edges(
 		self, 

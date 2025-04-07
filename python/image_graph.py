@@ -2,6 +2,7 @@
 
 import os
 import numpy as np
+import shutil
 
 from pathlib import Path
 from utils.utils_geom import read_timestamps, read_intrinsics, read_poses, read_descriptors, read_gps
@@ -64,7 +65,7 @@ class ImageGraphLoader:
 
 		# Iterate over each image and create observation nodes
 		if poses is not None:
-			for key in poses.keys():
+			for node_id, key in enumerate(poses.keys()):
 				# Read rgb image
 				rgb_img_name = key
 				rgb_img_path = os.path.join(str(map_root/key))
@@ -134,12 +135,13 @@ class ImageGraphLoader:
 					iqa_data = None
 
 				# Create observation node
-				node_id = image_graph.get_num_node()
-				node = ImageNode(node_id, rgb_image, depth_image, desc,
-								time, trans, quat, 
-								K, img_size,
-								rgb_img_name, depth_img_name,
-								gps_data, iqa_data)
+				node = ImageNode(
+					node_id, rgb_image, depth_image, desc,
+					time, trans, quat, 
+					K, img_size,
+					rgb_img_name, depth_img_name,
+					gps_data, iqa_data
+				)
 				# Set other variables
 				node.set_raw_intrinsics(raw_K, raw_img_size)
 				node.set_pose(trans, quat)
@@ -165,42 +167,65 @@ class ImageGraph(BaseGraph):
 	def __init__(self, map_root: Path, edge_type: str):
 		super().__init__(map_root, edge_type)
 		
+	def copy_sensor_data(self, other_graph: 'ImageGraph'):
+		"""Copy sensor data files from source map"""
+		for node in other_graph.nodes.values():
+			# Handle RGB images
+			if node.rgb_img_name:
+				src = other_graph.map_root / node.rgb_img_name
+				if src.exists():
+					new_name = f"seq/{node.id:06d}.color.jpg"
+					dest = self.map_root / new_name
+					shutil.copy(src, dest)
+					node.rgb_img_name = new_name
+
+			# Handle depth images
+			if node.depth_img_name:
+				src = other_graph.map_root / node.depth_img_name
+				if src.exists():
+					new_name = f"seq/{node.id:06d}.depth.png"
+					dest = self.map_root / new_name
+					shutil.copy(src, dest)
+					node.depth_img_name = new_name
+
+	def rm_sensor_data(
+			self, 
+			nodes_to_remove: list # [node0, node1, ...]
+		):
+		"""Remove sensor data files from source map if the corresponding node is removed"""
+		for node in nodes_to_remove:
+			if node.rgb_img_name:
+				src = self.map_root / node.rgb_img_name
+				if src.exists():
+					src.unlink()
+			
+			if node.depth_img_name:
+				src = self.map_root / node.depth_img_name
+				if src.exists():
+					src.unlink()
 	def save_to_file(self):
 		num_node = self.get_num_node()
-		times = np.empty((num_node, 2), dtype=object)
-		intrinsics = np.empty((num_node, 7), dtype=object)
-		poses = np.empty((num_node, 8), dtype=object)
-		poses_abs_gt = np.empty((num_node, 8), dtype=object)
 		first_node = next(iter(self.nodes.values()))
+		intrinsics = np.empty((num_node, 7), dtype=object)
+		iqa_data = np.empty((num_node, 2), dtype=object)
 		descs = np.empty((num_node, len(first_node.get_descriptor()) + 1), dtype=object)
-		gps_datas = np.empty((num_node, 6), dtype=object)
 		for line_id, (node_id, node) in enumerate(self.nodes.items()):
 			# Force the image name to be concistent with the node id
 			img_name = f"seq/{node_id:06d}.color.jpg"
 
-			times[line_id, 0], times[line_id, 1] = img_name, node.time
 			fx, fy, cx, cy, width, height = \
 				node.raw_K[0, 0], node.raw_K[1, 1], node.raw_K[0, 2], node.raw_K[1, 2], \
 				node.raw_img_size[0], node.raw_img_size[1]
-			intrinsics[line_id, 0], intrinsics[line_id, 1:] = img_name, np.array([fx, fy, cx, cy, width, height])
-			
-			trans, quat = convert_pose_inv(node.trans, np.roll(node.quat, 1), 'wxyz')
-			poses[line_id, 0], poses[line_id, 1:5], poses[line_id, 5:] = img_name, quat, trans
+			intrinsics[line_id, :] = [img_name, fx, fy, cx, cy, width, height]
 
-			trans, quat = convert_pose_inv(node.trans_gt, np.roll(node.quat_gt, 1), 'wxyz')
-			poses_abs_gt[line_id, 0], poses_abs_gt[line_id, 1:5], poses_abs_gt[line_id, 5:] = img_name, quat, trans
+			iqa_data[line_id, :] = [img_name, node.iqa_data]
 
-			descs[line_id, 0], descs[line_id, 1:] = img_name, node.get_descriptor()
-			gps_datas[line_id, 0], gps_datas[line_id, 1:] = img_name, node.gps_data
+			descs[line_id, :] = [img_name, *node.get_descriptor()]
 
-		np.savetxt(str(self.map_root/"timestamps.txt"), times, fmt='%s %.6f')
-		np.savetxt(str(self.map_root/"intrinsics.txt"), intrinsics, fmt='%s %.6f %.6f %.6f %.6f %d %d')
-		np.savetxt(str(self.map_root/"poses.txt"), poses, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
-		np.savetxt(str(self.map_root/"poses_abs_gt.txt"), poses_abs_gt, fmt='%s %.6f %.6f %.6f %.6f %.6f %.6f %.6f')
-		np.savetxt(str(self.map_root/"database_descriptors.txt"), descs, fmt='%s ' + '%.6f ' * (descs.shape[1] - 1))
-		np.savetxt(str(self.map_root/"gps_data.txt"), gps_datas, fmt='%s %.6f %.6f %.6f %.6f %.6f')
-		edge_list_path = self.map_root/f"edges_{self.edge_type}.txt"
-		self.write_edge_list(edge_list_path)
+		np.savetxt(str(self.map_root/"intrinsics.txt"), intrinsics, fmt='%s' + ' %.6f'*4 + ' %d %d')
+		np.savetxt(str(self.map_root/"iqa_data.txt"), iqa_data, fmt='%s %.6f')
+		np.savetxt(str(self.map_root/"database_descriptors.txt"), descs, fmt='%s' + ' %.6f'*(descs.shape[1] - 1))
+		self.write_edge_list(self.map_root/f"edges_{self.edge_type}.txt")
 
 class TestImageGraph():
 	def __init__(self):
