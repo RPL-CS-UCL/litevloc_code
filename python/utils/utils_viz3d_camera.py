@@ -363,12 +363,16 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
     for scene_name, data in scene_data.items():
         scene_color = _get_scene_color(scene_name)
         
-        for idx, img_path in enumerate(data['images']):
-            if img_path not in data['poses']:
-                continue
-            
+        for idx, img_path in enumerate(data['poses']):
             if idx % step != 0: 
                 continue
+
+            if img_path in data['images']:
+                # The rgb image exists
+                exist_image = True
+            else:
+                # The rgb image is removed
+                exist_image = False          
 
             # Get camera parameters
             pose_w2c = data['poses'][img_path]
@@ -379,11 +383,18 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
                 # T^ct_c0 = T^ct_w @ T^w_c0
                 pose_w2c = pose_w2c @ np.linalg.inv(pose_w2c0)
 
-            fx, fy, cx, cy, width, height = data['intrinsics'][img_path]
-            imsize = (int(width), int(height))
-
             try:
-                image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+                if exist_image:
+                    show_cam_size = cam_size
+                    fx, fy, cx, cy, width, height = data['intrinsics'][img_path]
+                    image = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
+                    imsize = (int(width), int(height))
+                else:
+                    show_cam_size = cam_size * 5
+                    fx, fy, cx, cy, width, height = data['intrinsics'][next(iter(data['intrinsics']))]
+                    image = None
+                    imsize = (int(width), int(height))
+
                 if 'seq0/frame_000000' in img_path or 'seq/000000' in img_path:
                     show_cam_size = cam_size * 5
                     _add_scene_cam(
@@ -395,10 +406,9 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
                         focal=fx,
                         imsize=imsize,
                         cam_size=show_cam_size,
-                        show_image=True
+                        show_image=(True and exist_image)
                     )
                 else:
-                    show_cam_size = cam_size
                     _add_scene_cam(
                         scene=scene,
                         scene_name=scene_name,
@@ -408,7 +418,7 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
                         focal=fx,
                         imsize=imsize,
                         cam_size=show_cam_size,
-                        show_image=show_image
+                        show_image=(show_image and exist_image)
                     )
             except Exception as e:
                 print(f"Error processing {img_path}: {str(e)}")

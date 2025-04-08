@@ -13,7 +13,7 @@ class BaseNode:
 		self.id = id
 		self.edges = []    # [(nodeB, weight), ...]
 
-		self.trans = trans # xyzw
+		self.trans = trans # xyz
 		self.quat = quat   # xyzw
 
 		self.has_pose_gt = False
