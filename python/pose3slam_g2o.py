@@ -98,6 +98,7 @@ def main():
 
         for key in graph.keyVector():
             factor = graph.at(key)
+            print(factor.keys())
             if isinstance(factor, gtsam.BetweenFactorPose3):
                 key1, key2 = factor.keys()
                 tsl1 = result.atPose3(key1).translation()

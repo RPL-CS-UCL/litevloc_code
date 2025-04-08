@@ -26,7 +26,11 @@ class PointGraphLoader:
 			for node_id, key in enumerate(poses.keys()):
 				time = times[key][0]
 				# qw, qx, qy, tx, ty, tz
-				trans, quat = convert_pose_inv(poses[key][4:], np.roll(poses[key][:4], -1), 'xyzw')
+				trans, quat = convert_pose_inv(
+					poses[key][4:], 
+					np.roll(poses[key][:4], -1), 
+					'xyzw'
+				)
 
 				# Extract GPS
 				if gps_datas is not None:

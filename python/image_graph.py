@@ -57,7 +57,7 @@ class ImageGraphLoader:
 		# Read timestamps, intrinsics, poses, poses_abs_gt, and descriptors
 		timestamps = read_timestamps(str(map_root/'timestamps.txt'))
 		intrinsics = read_intrinsics(str(map_root/'intrinsics.txt'))
-		poses = read_poses(str(map_root/'poses.txt'))
+		poses = read_poses(str(map_root/'poses.txt')) # img_name, qw, qx, qy, tx, ty, tz
 		poses_abs_gt = read_poses(str(map_root/'poses_abs_gt.txt'))
 		descs = read_descriptors(str(map_root/'database_descriptors.txt'))
 		gps_datas = read_gps(str(map_root/'gps_data.txt'))
@@ -86,10 +86,14 @@ class ImageGraphLoader:
 				else:
 					continue
 
-				# Extract extrinsics
 				time = timestamps[key][0]
-				# qw, qx, qy, tx, ty, tz
-				trans, quat = convert_pose_inv(poses[key][4:], poses[key][:4], 'xyzw')
+
+				# Extract extrinsics
+				trans, quat = convert_pose_inv(
+					poses[key][4:], 
+					np.roll(poses[key][:4], -1), 
+					'xyzw'
+				)
 
 				# Extract intrinsics
 				if key in intrinsics:

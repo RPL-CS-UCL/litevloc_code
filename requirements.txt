@@ -46,6 +46,8 @@ pycolmap==0.6.0
 kornia>=0.6.11
 gdown
 lightglue @ git+https://github.com/cvg/LightGlue
+# IQA
+pyiqa
 # ROS
 empy==4.2
 catkin_pkg
