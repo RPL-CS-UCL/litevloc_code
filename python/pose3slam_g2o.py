@@ -59,6 +59,9 @@ def main():
 
     is3D = True
     graph, initial = gtsam.readG2o(g2o_file, is3D)
+    print(f"Graph Info: ---------------------")
+    print(f"Number of factors: {graph.size()}")
+    print(f"Keys of involved variables: {graph.keyVector()}")
 
     # Add prior factor
     priorModel = gtsam.noiseModel.Diagonal.Variances(vector6(1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4))
@@ -68,7 +71,6 @@ def main():
 
     if args.viz:
         result = initial
-        print("Only visualization")
         print("initial error = ", graph.error(initial))
     else:
         result = optimize_pose_graph(graph, initial, True)
@@ -98,7 +100,6 @@ def main():
 
         for key in graph.keyVector():
             factor = graph.at(key)
-            print(factor.keys())
             if isinstance(factor, gtsam.BetweenFactorPose3):
                 key1, key2 = factor.keys()
                 tsl1 = result.atPose3(key1).translation()
