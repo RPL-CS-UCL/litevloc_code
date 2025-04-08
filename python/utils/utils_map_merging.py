@@ -85,6 +85,7 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 	fig, ax = plt.subplots(figsize=(10, 10))
 	
 	# Plot submap
+	print('Plot db_submap')
 	for node_id, node in db_submap.nodes.items():
 		ax.plot(node.trans_gt[0], node.trans_gt[1], 'ko', markersize=5)
 		# ax.text(node.trans_gt[0], node.trans_gt[1], f'DB{node_id}', fontsize=12, color='k')
@@ -110,13 +111,14 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 				(nodeB.trans_gt, nodeB.quat_gt),
 				mode='vector'
 			)
-			if dis_tsl < 20.0:
+			if dis_tsl < 10.0:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
 				succ_cnt += 1
 			else:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
+
 		elif 'refine' in suffix:
 			T_nodeA = convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
 			T_nodeB = convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
