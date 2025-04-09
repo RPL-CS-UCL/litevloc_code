@@ -93,6 +93,7 @@ def main():
         ax = fig.add_subplot(111, projection='3d')
 
         resultPoses = gtsam.utilities.allPose3s(result)
+        print(f"Number of resultPoses: {resultPoses.size()}")
         x_coords = [resultPoses.atPose3(i).translation()[0] for i in range(resultPoses.size())]
         y_coords = [resultPoses.atPose3(i).translation()[1] for i in range(resultPoses.size())]
         z_coords = [resultPoses.atPose3(i).translation()[2] for i in range(resultPoses.size())]
