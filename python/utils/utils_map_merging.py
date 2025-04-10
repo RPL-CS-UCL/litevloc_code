@@ -143,13 +143,16 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 		plt.savefig(os.path.join(log_dir, f"results_{suffix}_{query_submap_id}_posegraph.png"))
 
 def save_vis_kf_removal(log_dir, img_id, rgb_img):
+	(log_dir/"preds/kf_vis").mkdir(parents=True, exist_ok=True)
 	fig, ax = plt.subplots(1, 1, figsize=(4, 4))
 	ax.imshow(rgb_img)
-	ax.set_title(f'Remove New Keyframe {img_id} by Checking Quality and Gain')
+	ax.set_title(f'Remove New Keyframe {img_id}')
 	ax.axis('off')
-	plt.savefig(os.path.join(log_dir, f"kf_rejection_{img_id}.jpg"))
+	plt.savefig(str(log_dir/"preds/kf_vis"/f"kf_rejection_query_{img_id}.jpg"))
+	plt.close()
 
 def save_vis_kf_replacement(log_dir, img0_id, img1_id, rgb_img0, rgb_img1):
+	(log_dir/"preds/kf_vis").mkdir(parents=True, exist_ok=True)
 	fig, ax = plt.subplots(1, 2, figsize=(10, 4))
 	ax[0].imshow(rgb_img0)
 	ax[0].set_title('Old Keyframe')
@@ -157,7 +160,8 @@ def save_vis_kf_replacement(log_dir, img0_id, img1_id, rgb_img0, rgb_img1):
 	ax[1].imshow(rgb_img1)
 	ax[1].set_title('New Keyframe')
 	ax[1].axis('off')
-	plt.savefig(os.path.join(log_dir, f"kf_replacement_{img0_id}_{img1_id}.jpg"))
+	plt.savefig(str(log_dir/"preds/kf_vis"/f"kf_replacement_{img0_id}_{img1_id}.jpg"))
+	plt.close()
 
 def save_query_result(log_dir, query_result_info, query_submap_id):
 	fig, ax = plt.subplots(1, 2, figsize=(10, 4))
