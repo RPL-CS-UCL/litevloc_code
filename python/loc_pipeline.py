@@ -156,7 +156,7 @@ class LocPipeline:
 			return None
 		
 		closest_map_node = self.image_graph.get_node(pred[0][0])
-		all_nei_nodes = [nei_node for nei_node, _ in closest_map_node.edges] + [closest_map_node]
+		all_nei_nodes = [nei_node for nei_node, _ in closest_map_node.edges.values()] + [closest_map_node]
 		list_dis = [compute_euclidean_dis(obs_node.get_descriptor(), node.get_descriptor()) for node in all_nei_nodes]
 		node_min_dis = all_nei_nodes[np.argmin(list_dis)]
 		out_str = 'Keyframe candidate: '

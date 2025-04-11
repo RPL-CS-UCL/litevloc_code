@@ -7,7 +7,7 @@ class BaseGraph:
 	def __init__(self, map_root: Path, edge_type: str):
 		self.map_root = map_root
 		self.edge_type = edge_type
-		self.nodes = {}
+		self._nodes = {}
 
 	def __str__(self):
 		num_edge = 0
@@ -16,24 +16,27 @@ class BaseGraph:
 		out_str = f"Graph has {len(self.nodes)} nodes with {num_edge} edges"
 		return out_str
 
+	@property
+	def nodes(self):
+		return self._nodes
+
+	def set_node(self, new_nodes: dict):
+		self._nodes = new_nodes
+
 	def remove_node_list(self, node_list: list):
 		for node in node_list:
 			self.remove_node(node)
-			print(f"Removed node {node.id} from graph")
 
 	def remove_node(self, node):
 		if self.contain_node(node):
 			self.nodes.pop(node.id)
 
-	def remove_invalid_edges(self):
-		for node_id, node in self.nodes.items():
-			edges_to_remove = []
-			for neighbor, weight in node.edges:
-				if not self.contain_node(neighbor):
-					edges_to_remove.append((neighbor, weight))
-			for edge in edges_to_remove:
-				node.edges.remove(edge)
-				print(f"Removed edges {node.id} -> {edge[0].id} from graph")
+	def remove_invalid_edges(self, nodes_to_remove: list):
+		for node in self.nodes.values():
+			for node_rm in nodes_to_remove:
+				if node_rm.id in node.edges:
+					node.edges.pop(node_rm.id)
+					# print(f"Removed edges {node.id} -> {node_rm.id} from graph")
 
 	def read_edge_list(self, edge_list_path: Path):
 		if edge_list_path.exists():
@@ -52,13 +55,12 @@ class BaseGraph:
 	def write_edge_list(self, edge_list_path: Path):
 		edges = np.zeros((0, 3), dtype=np.float64)
 		# Remove invalid edges with nodes which are previously removed
-		self.remove_invalid_edges()
-		for node_id, node in self.nodes.items():
-			for neighbor, weight in node.edges:
+		for node in self.nodes.values():
+			for neighbor, weight in node.edges.values():
 				# Avoid duplicate edges
-				if node_id < neighbor.id:
+				if node.id < neighbor.id:
 					vec = np.zeros((1, 3), dtype=np.float64)
-					vec[0, 0], vec[0, 1], vec[0, 2] = node_id, neighbor.id, weight
+					vec[0, 0], vec[0, 1], vec[0, 2] = node.id, neighbor.id, weight
 					edges = np.vstack((edges, vec))				
 			
 		np.savetxt(str(edge_list_path), edges, fmt='%d %d %.6f')
@@ -67,6 +69,7 @@ class BaseGraph:
 	def add_node(self, new_node):
 		if not self.contain_node(new_node):
 			self.nodes[new_node.id] = new_node
+			# print(f'Adding {new_node.id} into graph')
 
 	def add_inter_edges(
 		self, 
@@ -76,6 +79,7 @@ class BaseGraph:
 		for edge in edges:
 			weight = weight_func(edge)
 			self.add_edge_undirected(edge[0], edge[1], weight)
+	
 	def add_edge_undirected(self, from_node, to_node, weight):
 		# Add an edge between two nodes if both nodes exist in the graph
 		# In some cases that from_node or to_node are removed 
@@ -86,15 +90,7 @@ class BaseGraph:
 	# Add an edge between two nodes if both nodes exist in the graph
 	def add_edge_directed(self, from_node, to_node, weight):
 		if self.contain_node(from_node) and self.contain_node(to_node):
-			for edge in from_node.edges:
-				# Edge already exists with the same weight, do not add again
-				if (edge[0].id == to_node.id) and (edge[1] == weight):
-					return
-				# Replace the current lighter edge with the new edge
-				if (edge[0].id == to_node.id) and (edge[1] > weight):
-					from_node.edges.remove(edge)  # Remove the current heavier edge
-					break
-				from_node.add_edge(to_node, weight)  # Add the new edge with the specified weight
+			from_node.add_edge(to_node, weight)  # Add the new edge with the specified weight
 
 	# Return the node with the given id if it exists, otherwise return None
 	def get_node(self, id: int):
@@ -122,7 +118,7 @@ class BaseGraph:
 		if query_node.id in self.nodes:
 			return True
 		else:
-			return
+			return False
 
 	def check_node_connected(self, node1, node2):
 		# Check if two nodes are connected using DFS
@@ -135,7 +131,7 @@ class BaseGraph:
 		if current_node.id == target_node.id:
 			return True
 		visited.add(current_node.id)
-		for neighbor, _ in current_node.edges:
+		for neighbor, _ in current_node.edges.values():
 			if neighbor.id not in visited:
 				if self.dfs(neighbor, target_node, visited):
 					return True
@@ -144,27 +140,8 @@ class BaseGraph:
 	def print_edges(self):
 		for node in self.nodes.values():
 			print(f"Node ID: {node.id}")
-			for neighbor, weight in node.edges:
+			for neighbor, weight in node.edges.values():
 				print(f"      Neighbor ID: {neighbor.id}, Weight: {weight}")
-
-	# NOTE(gogojjh): should be removed
-	# def convert_to_gtsam_pose_graph(self):
-	# 	# Convert the base graph to a gtsam pose graph
-	# 	pose_graph = PoseGraph()
-	# 	prior_sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
-	# 	odom_sigma = np.array([np.deg2rad(1.), np.deg2rad(1.), np.deg2rad(1.), 0.01, 0.01, 0.01])
-	# 	for node in self.nodes.values():
-	# 		curr_pose3 = convert_vec_gtsam_pose3(node.trans, node.quat)
-	# 		# Add prior factor
-	# 		if node.id == 0:
-	# 			pose_graph.add_prior_factor(node.id, curr_pose3, prior_sigma)
-	# 		pose_graph.add_init_estimate(node.id, curr_pose3)
-	# 		# Add odometry factor
-	# 		for edge in node.edges:
-	# 			next_node = self.get_node(edge[0].id)
-	# 			next_pose3 = convert_vec_gtsam_pose3(next_node.trans, next_node.quat)
-	# 			pose_graph.add_odometry_factor(node.id, curr_pose3, next_node.id, next_pose3, odom_sigma)
-	# 	return pose_graph			
 
 if __name__ == "__main__":
 	import sys
