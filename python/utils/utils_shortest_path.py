@@ -27,7 +27,7 @@ def dijk_shortest_path(graph, start_node, goal_node):
         if current_distance > distances[current_node]:
             continue
 
-        for neighbor, weight in current_node.edges:
+        for neighbor, weight in current_node.edges.values():
             distance = current_distance + weight
             if distance < distances[neighbor]:
                 distances[neighbor] = distance

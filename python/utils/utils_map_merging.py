@@ -89,14 +89,14 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 	for node_id, node in db_submap.nodes.items():
 		ax.plot(node.trans_gt[0], node.trans_gt[1], 'ko', markersize=5)
 		# ax.text(node.trans_gt[0], node.trans_gt[1], f'DB{node_id}', fontsize=12, color='k')
-		for edge in node.edges:
+		for edge in node.edges.values():
 			next_node = edge[0]
 			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-', linewidth=1)
 
 	for node_id, node in query_submap.nodes.items():			
 		ax.plot(node.trans_gt[0], node.trans_gt[1], 'bo', markersize=5)
 		ax.text(node.trans_gt[0], node.trans_gt[1], f'Q{node_id}', fontsize=12, color='k')		
-		for edge in node.edges:
+		for edge in node.edges.values():
 			next_node = edge[0]
 			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-', linewidth=1)
 	
@@ -106,11 +106,7 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 		nodeA, nodeB, T_rel, score = edge
 		# Identify correct and wrong connections
 		if 'coarse' in suffix:
-			dis_tsl, dis_angle = compute_pose_error(
-				(nodeA.trans_gt, nodeA.quat_gt), 
-				(nodeB.trans_gt, nodeB.quat_gt),
-				mode='vector'
-			)
+			dis_tsl, dis_angle = nodeA.compute_distance(nodeB)
 			if dis_tsl < 10.0:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
