@@ -33,7 +33,7 @@ def load_rgb_image(
             tfm.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         )
     if resize is not None:
-        new_size = (resize[1], resize[0]) # width, height
+        new_size = (resize[1], resize[0]) # HxW
         transformations.append(tfm.Resize(size=new_size, antialias=True))
     transform = tfm.Compose(transformations)
 

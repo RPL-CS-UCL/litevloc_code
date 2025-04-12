@@ -19,7 +19,7 @@ RMSE_THRESHOLD = 3.0
 VPR_MATCH_THRESHOLD = 0.90
 REFINE_GV_SCORE_THRESHOLD = 100.0
 REFINE_CONF_THRESHOLD = 0.5 # threshold to select good refinement: out-of-range image, wrong coarse localization
-MAX_LOSS = 10.0
+MAX_LOSS = 10.0 
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
@@ -103,7 +103,7 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 	# Plot connections
 	succ_cnt = 0
 	for edge in edges_nodeA_to_nodeB:
-		nodeA, nodeB, T_rel, score = edge
+		nodeA, nodeB, T_rel, score = edge[:4]
 		# Identify correct and wrong connections
 		if 'coarse' in suffix:
 			dis_tsl, dis_angle = nodeA.compute_distance(nodeB)
