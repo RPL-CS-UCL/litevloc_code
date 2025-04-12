@@ -25,7 +25,7 @@ class ImageGraphLoader:
 	@staticmethod
 	def load_data(
 		map_root: Path, 
-		resize: tuple, 
+		resize: tuple, # WxH
 		depth_scale: float, 
 		load_rgb: bool = False, 
 		load_depth: bool = False, 
