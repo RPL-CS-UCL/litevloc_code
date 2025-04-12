@@ -86,12 +86,13 @@ class PoseGraph:
 		ax = fig.add_subplot(111, projection='3d')
 
 		resultPoses = gtsam.utilities.allPose3s(result)
+		print(f"Number of resultPoses: {resultPoses.size()}")
 		x_coords = [resultPoses.atPose3(i).translation()[0] for i in range(resultPoses.size())]
 		y_coords = [resultPoses.atPose3(i).translation()[1] for i in range(resultPoses.size())]
 		z_coords = [resultPoses.atPose3(i).translation()[2] for i in range(resultPoses.size())]
-		plt.plot(x_coords, y_coords, z_coords, 'o', color='b', label='Est. Trajectory')
+		plt.plot(x_coords, y_coords, z_coords, 'o', color='b', label='Est. Trajectory', markersize=5)
 
-		for key in graph.keyVector():
+		for key in range(graph.size()):
 			factor = graph.at(key)
 			if isinstance(factor, gtsam.BetweenFactorPose3):
 				key1, key2 = factor.keys()
@@ -105,4 +106,7 @@ class PoseGraph:
 		ax.view_init(elev=55, azim=60)
 		plt.tight_layout()
 		plt.axis('equal')
-		plt.savefig(os.path.join(save_dir, 'pose_graph_refined.png'))
+		if save_dir:
+			plt.savefig(os.path.join(save_dir, 'pose_graph_refined.png'))
+		else:
+			plt.show()

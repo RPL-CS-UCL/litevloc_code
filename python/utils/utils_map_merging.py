@@ -18,8 +18,11 @@ from utils.utils_geom import convert_vec_to_matrix, compute_pose_error
 RMSE_THRESHOLD = 3.0
 VPR_MATCH_THRESHOLD = 0.90
 REFINE_GV_SCORE_THRESHOLD = 100.0
+RELIABLE_CONF_THRESHOLD = 0.1
 REFINE_CONF_THRESHOLD = 0.5 # threshold to select good refinement: out-of-range image, wrong coarse localization
 MAX_LOSS = 10.0 
+
+assert RELIABLE_CONF_THRESHOLD < REFINE_CONF_THRESHOLD
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)

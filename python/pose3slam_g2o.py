@@ -12,6 +12,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import gtsam
+from utils.gtsam_pose_graph import plot_pose_graph
 
 # Using GTSAM
 def optimize_pose_graph(graph, initial, verbose=False):
@@ -61,7 +62,7 @@ def main():
     graph, initial = gtsam.readG2o(g2o_file, is3D)
     print(f"Graph Info: ---------------------")
     print(f"Number of factors: {graph.size()}")
-    print(f"Keys of involved variables: {graph.keyVector()}")
+    print(f"Number of variables: {len(graph.keyVector())}")
 
     # Add prior factor
     priorModel = gtsam.noiseModel.Diagonal.Variances(vector6(1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4))
@@ -89,31 +90,7 @@ def main():
         print("Done!")
 
     if args.plot:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-
-        resultPoses = gtsam.utilities.allPose3s(result)
-        print(f"Number of resultPoses: {resultPoses.size()}")
-        x_coords = [resultPoses.atPose3(i).translation()[0] for i in range(resultPoses.size())]
-        y_coords = [resultPoses.atPose3(i).translation()[1] for i in range(resultPoses.size())]
-        z_coords = [resultPoses.atPose3(i).translation()[2] for i in range(resultPoses.size())]
-        plt.plot(x_coords, y_coords, z_coords, 'o', color='b', label='Est. Trajectory')
-
-        for key in graph.keyVector():
-            factor = graph.at(key)
-            if isinstance(factor, gtsam.BetweenFactorPose3):
-                key1, key2 = factor.keys()
-                tsl1 = result.atPose3(key1).translation()
-                tsl2 = result.atPose3(key2).translation()
-                plt.plot([tsl1[0], tsl2[0]], [tsl1[1], tsl2[1]], [tsl1[2], tsl2[2]], '.-', color='g')
-
-        ax.set_xlabel('X [m]')
-        ax.set_ylabel('Y [m]')
-        ax.set_zlabel('Z [m]')
-        ax.view_init(elev=55, azim=60)
-        plt.tight_layout()
-        plt.axis('equal')
-        plt.show()
+        plot_pose_graph(None, graph, result)
 
 if __name__ == "__main__":
     main()
