@@ -6,7 +6,11 @@ class BaseGraph:
 	# Initialize an empty dictionary to store nodes
 	def __init__(self, map_root: Path, edge_type: str):
 		self.map_root = map_root
+		map_root.mkdir(exist_ok=True, parents=True)
+		
 		self.edge_type = edge_type
+		
+		# Use dict() to ensure the keys (node.id) are uniques
 		self._nodes = {}
 
 	def __str__(self):
@@ -142,6 +146,41 @@ class BaseGraph:
 			print(f"Node ID: {node.id}")
 			for neighbor, weight in node.edges.values():
 				print(f"      Neighbor ID: {neighbor.id}, Weight: {weight}")
+
+	def find_connected_components(self):
+		visited = set()
+		sorted_components = []
+		for node in self.nodes.values():
+			if node.id not in visited:
+				stack = [node]
+				visited.add(node.id)
+				component = []
+				while stack:
+					current = stack.pop()
+					component.append(current)
+					for neighbor, _ in current.edges.values():
+						if neighbor.id not in visited:
+							visited.add(neighbor.id)
+							stack.append(neighbor)
+				
+				component.sort(key=lambda x: x.id)
+				sorted_components.append(component)
+		
+		return sorted_components
+
+	def get_disconnected_subgraphs(self):
+		sorted_components = self.find_connected_components()
+		subgraphs = []
+		for id, component in enumerate(sorted_components):
+			# Create subgraph, but use reference operation to store nodes
+			subgraph = type(self)(self.map_root/f"submap_disc_{id}", self.edge_type)
+			for node in component:
+				subgraph.add_node(node)
+			subgraphs.append(subgraph)
+		# Sort the subgraphs by the number of nodes descending
+		subgraphs.sort(key=lambda sg: -sg.get_num_node())
+		return subgraphs
+
 
 if __name__ == "__main__":
 	import sys

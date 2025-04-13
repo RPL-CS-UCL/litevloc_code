@@ -12,7 +12,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import gtsam
-from utils.gtsam_pose_graph import plot_pose_graph
+from utils.gtsam_pose_graph import PoseGraph
 
 # Using GTSAM
 def optimize_pose_graph(graph, initial, verbose=False):
@@ -90,7 +90,7 @@ def main():
         print("Done!")
 
     if args.plot:
-        plot_pose_graph(None, graph, result)
+        PoseGraph.plot_pose_graph(None, graph, result)
 
 if __name__ == "__main__":
     main()
