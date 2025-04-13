@@ -62,7 +62,7 @@ class PointGraphLoader:
 class PointGraph(BaseGraph):
 	def __init__(self, map_root: Path, edge_type: str):
 		super().__init__(map_root, edge_type)
-
+	
 	def save_to_file(self, edge_only=False):
 		if not edge_only:
 			num_node = self.get_num_node()
