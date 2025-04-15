@@ -135,7 +135,7 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 	plt.axis('equal')
 	plt.xlabel('X-axis')
 	plt.ylabel('Y-axis')
-	plt.title(f"Pose Graph with {succ_cnt}/{len(edges_nodeA_to_nodeB)} Connected Edges")
+	plt.title(f"Pose Graph: {succ_cnt}-Succ/{len(edges_nodeA_to_nodeB)}-Edges")
 	if suffix == '':
 		plt.savefig(os.path.join(log_dir, f"results_{query_submap_id}_posegraph.png"))
 	else:
