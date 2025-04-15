@@ -17,6 +17,7 @@ from matplotlib import pyplot as plt
 from utils.vpr_topological_filter import PlaceRecognitionTopologicalFilter
 from utils.vpr_single_matching import PlaceRecognitionSingleMatching
 from utils.vpr_sequence_matching import PlaceRecognitionSeqMatching
+from utils.vpr_sequence_matching_adaptive import PlaceRecognitionSeqMatchingAdaptive
 
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
@@ -60,6 +61,8 @@ def initialize_match_model(model_name, seq_len):
 		match_model = PlaceRecognitionSeqMatching(seqLen=seq_len, enable_ransac=False)
 	elif model_name == 'sequence_match_ransac':
 		match_model = PlaceRecognitionSeqMatching(seqLen=seq_len, enable_ransac=True)
+	elif model_name == 'sequence_match_adaptive':
+		match_model = PlaceRecognitionSeqMatchingAdaptive(seqLen=seq_len)
 	return match_model
 
 def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):
