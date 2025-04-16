@@ -12,6 +12,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import gtsam
+import time
 from utils.gtsam_pose_graph import PoseGraph
 
 # Using GTSAM
@@ -64,11 +65,16 @@ def main():
     print(f"Number of factors: {graph.size()}")
     print(f"Number of variables: {len(graph.keyVector())}")
 
-    # Add prior factor
+    # Add prior factor on each disconnected graph
     priorModel = gtsam.noiseModel.Diagonal.Variances(vector6(1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4))
-    firstKey = initial.keys()[0]
-    init_estimate = initial.atPose3(firstKey)
-    graph.add(gtsam.PriorFactorPose3(firstKey, init_estimate, priorModel))
+    
+    start_time = time.time()
+    comp_graph_keys = PoseGraph.find_connected_components(graph)
+    print(f"Search connected components costs time: {time.time() - start_time:.3f}s")
+    for comp_id, comp_keys in enumerate(comp_graph_keys):
+        init_estimate = initial.atPose3(comp_keys[0])
+        graph.add(gtsam.PriorFactorPose3(comp_keys[0], init_estimate, priorModel))
+        print(f"Add prior factor: {comp_keys[0]} to the {comp_id} subgraph with node number {len(comp_keys)}")
 
     if args.viz:
         result = initial
@@ -90,7 +96,7 @@ def main():
         print("Done!")
 
     if args.plot:
-        PoseGraph.plot_pose_graph(None, graph, result)
+        PoseGraph.plot_pose_graph(None, graph, result, mode='3d')
 
 if __name__ == "__main__":
     main()

@@ -148,6 +148,13 @@ class BaseGraph:
 				print(f"      Neighbor ID: {neighbor.id}, Weight: {weight}")
 
 	def find_connected_components(self):
+		"""
+		Return:
+			sorted_components: [component1, component2, ...]
+				len(component1) >= len(component2) >= ...
+				component1: [node1, node2, ...] with sorted node id (ascending)
+					node1.id < node2.id < ...
+		"""
 		visited = set()
 		sorted_components = []
 		for node in self.nodes.values():
@@ -166,6 +173,7 @@ class BaseGraph:
 				component.sort(key=lambda x: x.id)
 				sorted_components.append(component)
 		
+		sorted_components.sort(key=lambda x: -len(x))
 		return sorted_components
 
 	def get_disconnected_subgraphs(self):
@@ -177,8 +185,7 @@ class BaseGraph:
 			for node in component:
 				subgraph.add_node(node)
 			subgraphs.append(subgraph)
-		# Sort the subgraphs by the number of nodes descending
-		subgraphs.sort(key=lambda sg: -sg.get_num_node())
+
 		return subgraphs
 
 

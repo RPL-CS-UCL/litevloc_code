@@ -54,6 +54,51 @@ class PoseGraph:
 		return self.current_estimate
 	
 	@staticmethod
+	def find_connected_components(graph):
+		"""
+		Find disconnected subgraphs using basic data structures.
+		Return:
+			components: [component1, component2, ...]
+				component1: [key1, key2, ...] without sorting key id
+		"""		
+		# Build adjacency list using regular dict
+		adjacency = {}
+		all_keys = set()
+		for key in range(graph.size()):
+			factor = graph.at(key)
+			if isinstance(factor, gtsam.BetweenFactorPose3):
+				key1, key2 = factor.keys()
+				if key1 not in adjacency:
+					adjacency[key1] = set()
+				if key2 not in adjacency:
+					adjacency[key2] = set()
+				adjacency[key1].add(key2)
+				adjacency[key2].add(key1)
+				
+				all_keys.add(key1)
+				all_keys.add(key2)
+
+		visited = set()
+		components = []
+		# BFS implementation using list-as-queue
+		for key in all_keys:
+			if key not in visited:
+				queue = [key]
+				visited.add(key)
+				component = []
+				while queue:
+					current = queue.pop()  # Dequeue from front
+					component.append(current)
+					if current in adjacency:
+						for neighbor in adjacency[current]:
+							if neighbor not in visited:
+								visited.add(neighbor)
+								queue.append(neighbor)
+				
+				components.append(component)
+
+		return components
+	@staticmethod
 	def optimize_pose_graph_with_LM(graph, initial, verbose=False):
 		"""
 		Optimizes a pose graph using the Levenberg-Marquardt algorithm.
@@ -78,7 +123,7 @@ class PoseGraph:
 		return result	
 
 	@staticmethod
-	def plot_pose_graph(save_dir, graph, result):
+	def plot_pose_graph(save_dir, graph, result, mode='2d'):
 		import os
 		from matplotlib import pyplot as plt
 
@@ -103,7 +148,10 @@ class PoseGraph:
 		ax.set_xlabel('X [m]')
 		ax.set_ylabel('Y [m]')
 		ax.set_zlabel('Z [m]')
-		ax.view_init(elev=90, azim=90)
+		if mode == '2d':
+			ax.view_init(elev=90, azim=90)
+		elif mode == '3d':
+			ax.view_init(elev=55, azim=60)
 		plt.tight_layout()
 		plt.axis('equal')
 		if save_dir:
