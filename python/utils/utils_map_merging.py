@@ -104,38 +104,38 @@ def save_vis_pose_graph(log_dir, db_submap, query_submap, query_submap_id, edges
 			ax.plot([node.trans_gt[0], next_node.trans_gt[0]], [node.trans_gt[1], next_node.trans_gt[1]], 'k-', linewidth=1)
 	
 	# Plot connections
-	succ_cnt = 0
+	num_cor_loop = 0
 	for edge in edges_nodeA_to_nodeB:
 		nodeA, nodeB, T_rel, score = edge[:4]
 		# Identify correct and wrong connections
 		if 'coarse' in suffix:
-			dis_tsl, dis_angle = nodeA.compute_distance(nodeB)
-			if dis_tsl < 10.0:
+			dis_tsl, dis_angle = nodeA.compute_gt_distance(nodeB)
+			if dis_tsl < 7.5 and dis_angle < 75.0:
+				num_cor_loop += 1
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
-				succ_cnt += 1
 			else:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
+			title = f"Pose Graph: Find {num_cor_loop}/{len(edges_nodeA_to_nodeB)} Correct Loops (7.5, 75.0)"
 
 		elif 'refine' in suffix:
-			T_nodeA = convert_vec_to_matrix(nodeA.trans_gt, nodeA.quat_gt)
-			T_nodeB = convert_vec_to_matrix(nodeB.trans_gt, nodeB.quat_gt)
-			T_rel_gt = np.linalg.inv(T_nodeA) @ T_nodeB
-			dis_tsl, dis_angle = compute_pose_error(T_rel, T_rel_gt, mode='matrix')
-			if dis_tsl < 1.0 and dis_angle < 45.0:
+			dis_tsl_gt, dis_angle_gt = nodeA.compute_gt_distance(nodeB)
+			dis_tsl_est, dis_angle_est = nodeA.compute_distance(nodeB)
+			if dis_tsl_gt < 7.5 and dis_angle_gt < 75.5 and dis_tsl_est < 1.5 and dis_angle_est < 45.0:
+				num_cor_loop += 1
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'g-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
-				succ_cnt += 1
 			else:
 				ax.plot([nodeA.trans_gt[0], nodeB.trans_gt[0]], [nodeA.trans_gt[1], nodeB.trans_gt[1]], 'r-', linewidth=2)
 				ax.text(nodeB.trans_gt[0], nodeB.trans_gt[1]+0.4, f'P={score:.1f}', fontsize=12, color='k')
+			title = f"Pose Graph: Find {num_cor_loop}/{len(edges_nodeA_to_nodeB)} Correct Loops (1.5, 45.0)"
 	
 	ax.grid(ls='--', color='0.7')
 	plt.axis('equal')
 	plt.xlabel('X-axis')
 	plt.ylabel('Y-axis')
-	plt.title(f"Pose Graph: {succ_cnt}-Correct/{len(edges_nodeA_to_nodeB)}-TotalEdges")
+	plt.title(title) 
 	if suffix == '':
 		plt.savefig(os.path.join(log_dir, f"results_{query_submap_id}_posegraph.png"))
 	else:

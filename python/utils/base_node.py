@@ -60,3 +60,11 @@ class BaseNode:
 			mode='vector'
 		)
 		return dis_trans, dis_angle
+	
+	def compute_gt_distance(self, next_node):
+		dis_trans, dis_angle = compute_pose_error(
+			(self.trans_gt, self.quat_gt), 
+			(next_node.trans_gt, next_node.quat_gt),
+			mode='vector'
+		)
+		return dis_trans, dis_angle	
