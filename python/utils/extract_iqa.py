@@ -36,26 +36,32 @@ def main(args):
 	iqa_metric = pyiqa.create_metric(args.metric, device=args.device)
 	
 	dataset_path = Path(args.dataset_path)
-	poses = read_poses(dataset_path/"poses.txt")
-	scores = np.empty((len(poses), 2), dtype=object)
-	for indice, (img_name, _) in enumerate(poses.items()):
-		img_path = dataset_path / img_name
-		if not img_path.exists():
-			raise FileNotFoundError(f"Missing {img_path}")
-			
-		score = iqa_metric(str(img_path)).detach().squeeze().cpu().numpy()
-		scores[indice, 0], scores[indice, 1] = img_name, score
-	
-	out_path = Path(args.output)
-	out_path.mkdir(parents=True, exist_ok=True)
-	np.savetxt(out_path/"iqa_data.txt", scores, fmt="%s %.5f")
+	for scene in sorted(os.listdir(args.dataset_path)):
+		poses = read_poses(dataset_path/scene/"poses.txt")
+		scores = np.empty((len(poses), 2), dtype=object)
+		for indice, (img_name, _) in enumerate(poses.items()):
+			img_path = dataset_path / scene/img_name
+			if not img_path.exists():
+				raise FileNotFoundError(f"Missing {img_path}")
+				
+			score = iqa_metric(str(img_path)).detach().squeeze().cpu().numpy()
+			scores[indice, 0], scores[indice, 1] = img_name, score
+		
+		if args.output is None:
+			out_path = dataset_path / scene
+		else:
+			out_path = Path(args.output)
+		out_path.mkdir(parents=True, exist_ok=True)
+
+		print(f"Saving {out_path}/iqa_data.txt")
+		np.savetxt(out_path/"iqa_data.txt", scores, fmt="%s %.5f")
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Calculate Image Quality Assessment scores")
 	parser.add_argument("--dataset_path", required=True)
 	parser.add_argument("--metric", default="musiq", choices=pyiqa.list_models())
 	parser.add_argument("--device", default="cuda")
-	parser.add_argument("--output", default="./results")
+	parser.add_argument("--output", default=None)
 	args = parser.parse_args()
 	
 	main(args)
