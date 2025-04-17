@@ -12,16 +12,16 @@ class PoseGraph:
 		self.params = gtsam.ISAM2Params()
 
 	def add_prior_factor(self, key: int, pose: gtsam.Pose3, sigma: np.ndarray):
-		prior_cov = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
-		self.graph.add(gtsam.PriorFactorPose3(key, pose, prior_cov))
+		noise_model = gtsam.noiseModel.Diagonal.Sigmas(sigma)
+		self.graph.add(gtsam.PriorFactorPose3(key, pose, noise_model))
 
 	def add_odometry_factor(self, 
 							prev_key: int, prev_pose: gtsam.Pose3, 
 							curr_key: int, curr_pose: gtsam.Pose3, 
 							sigma: np.ndarray):
-		odometry_cov = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
+		noise_model = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
 		delta_pose = prev_pose.between(curr_pose)
-		self.graph.add(gtsam.BetweenFactorPose3(prev_key, curr_key, delta_pose, odometry_cov))
+		self.graph.add(gtsam.BetweenFactorPose3(prev_key, curr_key, delta_pose, noise_model))
 
 	def add_init_estimate(self, key: int, pose: gtsam.Pose3):
 		if self.initial_estimate.exists(key):
@@ -52,7 +52,26 @@ class PoseGraph:
 
 	def get_current_estimate(self):
 		return self.current_estimate
-	
+
+	@staticmethod
+	def add_robust_kernel(graph):
+		graph_robust = gtsam.NonlinearFactorGraph()
+		robust_model = gtsam.noiseModel.mEstimator.Huber.Create(k=1.345)
+		for key in range(graph.size()):
+			factor = graph.at(key)
+			# TODO(gogojjh): Add robust kernel to othre factors
+			if isinstance(factor, gtsam.BetweenFactorPose3):
+				key1, key2 = factor.keys()
+				noise_model = gtsam.noiseModel.Robust.Create(
+					robust_model, factor.noiseModel()
+				)
+				new_factor = gtsam.BetweenFactorPose3(key1, key2, factor.measured(), noise_model)
+				graph_robust.add(new_factor)
+			else:
+				graph_robust.add(factor.clone())
+		
+		return graph_robust
+
 	@staticmethod
 	def find_connected_components(graph):
 		"""
@@ -99,7 +118,7 @@ class PoseGraph:
 
 		return components
 	@staticmethod
-	def optimize_pose_graph_with_LM(graph, initial, verbose=False):
+	def optimize_pose_graph_with_LM(graph, initial, verbose=False, robust_kernel=False):
 		"""
 		Optimizes a pose graph using the Levenberg-Marquardt algorithm.
 
@@ -109,6 +128,8 @@ class PoseGraph:
 		Args:
 			graph (gtsam.NonlinearFactorGraph): The pose graph containing factors (constraints).
 			initial (gtsam.Values): Initial estimates for the variables (poses) in the graph.
+			verbose (bool): Whether to print optimization progress.
+			robust_kernel (bool): Whether to use a robust kernel for the optimization.
 
 		Returns:
 			gtsam.Values: The optimized values (poses) after the optimization process.
@@ -117,43 +138,50 @@ class PoseGraph:
 		params = gtsam.LevenbergMarquardtParams()
 		if verbose:
 			params.setVerbosity("Termination")
-		optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial, params)
+		
+		if robust_kernel:
+			graph_robust = PoseGraph.add_robust_kernel(graph)
+			optimizer = gtsam.LevenbergMarquardtOptimizer(graph_robust, initial, params)
+		else:
+			optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial, params)
+		
 		result = optimizer.optimize()
 		
 		return result	
 
 	@staticmethod
-	def plot_pose_graph(save_dir, graph, result, mode='2d'):
+	def plot_pose_graph(save_dir, graph, results, titles, mode='2d'):
 		import os
 		from matplotlib import pyplot as plt
 
-		fig = plt.figure()
-		ax = fig.add_subplot(111, projection='3d')
+		fig, axes = plt.subplots(1, len(results), subplot_kw={'projection': '3d'})		
+		for ax, title, result in zip(axes, titles, results):
+			resultPoses = gtsam.utilities.allPose3s(result)
+			print(f"Number of resultPoses: {resultPoses.size()}")
+			x_coords = [resultPoses.atPose3(i).translation()[0] for i in range(resultPoses.size())]
+			y_coords = [resultPoses.atPose3(i).translation()[1] for i in range(resultPoses.size())]
+			z_coords = [resultPoses.atPose3(i).translation()[2] for i in range(resultPoses.size())]
+			ax.plot(x_coords, y_coords, z_coords, 'o', color='b', label='Est. Trajectory', markersize=3)
 
-		resultPoses = gtsam.utilities.allPose3s(result)
-		print(f"Number of resultPoses: {resultPoses.size()}")
-		x_coords = [resultPoses.atPose3(i).translation()[0] for i in range(resultPoses.size())]
-		y_coords = [resultPoses.atPose3(i).translation()[1] for i in range(resultPoses.size())]
-		z_coords = [resultPoses.atPose3(i).translation()[2] for i in range(resultPoses.size())]
-		plt.plot(x_coords, y_coords, z_coords, 'o', color='b', label='Est. Trajectory', markersize=3)
+			for key in range(graph.size()):
+				factor = graph.at(key)
+				if isinstance(factor, gtsam.BetweenFactorPose3):
+					key1, key2 = factor.keys()
+					tsl1 = result.atPose3(key1).translation()
+					tsl2 = result.atPose3(key2).translation()
+					ax.plot([tsl1[0], tsl2[0]], [tsl1[1], tsl2[1]], [tsl1[2], tsl2[2]], '-', color='g', lw=1)
 
-		for key in range(graph.size()):
-			factor = graph.at(key)
-			if isinstance(factor, gtsam.BetweenFactorPose3):
-				key1, key2 = factor.keys()
-				tsl1 = result.atPose3(key1).translation()
-				tsl2 = result.atPose3(key2).translation()
-				plt.plot([tsl1[0], tsl2[0]], [tsl1[1], tsl2[1]], [tsl1[2], tsl2[2]], '-', color='g', lw=1)
+			ax.set_xlabel('X [m]')
+			ax.set_ylabel('Y [m]')
+			ax.set_zlabel('Z [m]')
+			ax.set_title(title)
+			if mode == '2d':
+				ax.view_init(elev=90, azim=90)
+			elif mode == '3d':
+				ax.view_init(elev=55, azim=60)
+			ax.axis('equal')
 
-		ax.set_xlabel('X [m]')
-		ax.set_ylabel('Y [m]')
-		ax.set_zlabel('Z [m]')
-		if mode == '2d':
-			ax.view_init(elev=90, azim=90)
-		elif mode == '3d':
-			ax.view_init(elev=55, azim=60)
 		plt.tight_layout()
-		plt.axis('equal')
 		if save_dir:
 			plt.savefig(os.path.join(save_dir, 'pose_graph_refined.png'))
 		else:
