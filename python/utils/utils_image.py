@@ -6,19 +6,45 @@ from PIL import Image
 import numpy as np
 import logging
 
-class GrayWorldCorrection:
-    """Torch-compatible transform that applies Gray World color correction to a PIL image."""
-    def __call__(self, img: Image.Image) -> Image.Image:
-        img_np = np.array(img)
+class ColorCorrection:
+    """
+    Torch-compatible transform that combines Gray World correction with:
+    - Gamma-aware processing (sRGB <-> linear)
+    - Daylight (5000K) color temperature compensation
+    - Blue channel reduction to counteract Aria's blueish tint
+    """
+    @staticmethod
+    def srgb_to_linear(ts: torch.Tensor) -> torch.Tensor:
+        """Convert sRGB to linear RGB (gamma decoding)."""
+        return torch.where(ts <= 0.04045, ts / 12.92, ((ts + 0.055) / 1.055).pow(2.4))
 
-        img_float = img_np.astype(np.float32)
-        means = img_float.mean(axis=(0, 1))
-        overall_mean = np.mean(means)
-        scale = overall_mean / means
-        img_corrected = img_float * scale
-        img_corrected = np.clip(img_corrected, 0, 255).astype(np.uint8)
+    @staticmethod
+    def linear_to_srgb(ts: torch.Tensor) -> torch.Tensor:
+        """Convert linear RGB to sRGB (gamma encoding)."""
+        return torch.where(ts <= 0.0031308, ts * 12.92, 1.055 * ts.pow(1 / 2.4) - 0.055)
 
-        return Image.fromarray(img_corrected)
+    def __init__(self, comp_blue: float = 0.95):
+        self.temp_comp = torch.tensor([
+            [1.00, 0.00, 0.00],      # Red stays same
+            [0.00, 1.00, 0.00],      # Green stays same
+            [0.00, 0.00, comp_blue]  # Reduce blue slightly
+        ])
+
+    def __call__(self, img_tensor: torch.Tensor) -> torch.Tensor:
+        # Step 1: sRGB -> linear RGB
+        linear = ColorCorrection.srgb_to_linear(img_tensor)
+        # Step 2: Gray World correction in linear RGB
+        means = linear.mean(dim=[1, 2])             # Channel means
+        mean_intensity = means.mean()
+        scale = mean_intensity / (means + 1e-6)     # Avoid divide-by-zero
+        scaled = linear * scale[:, None, None]      # Apply scale per channel
+        # Step 3: Apply 5000K temp compensation matrix
+        corrected = torch.einsum("ij,jhw->ihw", self.temp_comp, scaled)
+        # Step 4: linear -> sRGB
+        srgb = ColorCorrection.linear_to_srgb(torch.clamp(corrected, 0, 1))
+
+        return srgb
+
 def load_rgb_image(
     path: Union[str, Path],
     resize: Union[int, Tuple] = None,
@@ -49,7 +75,7 @@ def load_rgb_image(
         )
 
     if color_correct:
-        transformations.insert(0, GrayWorldCorrection())
+        transformations.append(ColorCorrection(comp_blue=0.95))
 
     if resize is not None:
         new_size = (resize[1], resize[0]) # HxW
@@ -59,12 +85,11 @@ def load_rgb_image(
 
     # Load image and apply transformation
     pil_img = Image.open(path).convert("RGB")
-    tensor_size1 = (pil_img.size[1], pil_img.size[0])
-
+    # tensor_size1 = (pil_img.size[1], pil_img.size[0])
     img = transform(np.array(pil_img))
-    tensor_size2 = img.shape
+    # tensor_size2 = img.shape
 
-    logging.debug(f" - adding {path} with resolution {tensor_size1} --> {tensor_size2}")
+    # logging.debug(f" - adding {path} with resolution {tensor_size1} --> {tensor_size2}")
     return img
 
 def load_depth_image(
@@ -77,11 +102,11 @@ def load_depth_image(
 
     # Load image and apply transformation
     pil_img = Image.open(path)
-    tensor_size1 = (pil_img.size[1], pil_img.size[0])
+    # tensor_size1 = (pil_img.size[1], pil_img.size[0])
     img = transform(np.array(pil_img) * depth_scale)
-    tensor_size2 = img.shape
+    # tensor_size2 = img.shape
 
-    logging.debug(f" - adding {path} with resolution {tensor_size1} --> {tensor_size2}")
+    # logging.debug(f" - adding {path} with resolution {tensor_size1} --> {tensor_size2}")
     return img
 
 def rgb_image_to_tensor(

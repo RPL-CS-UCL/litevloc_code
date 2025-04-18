@@ -201,6 +201,8 @@ def parse_arguments():
 
 	parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"], help="cuda (gpu) or cpu")
 
+	parser.add_argument("--color_correct", action="store_true", help="Flag to correct collor temperature")
+
 	parser.add_argument("--prune_keyframe_forward", action="store_true", 
 					 help="Flag to prune keyframes by checking quality and information gain of newly inserted keyframes")
 
