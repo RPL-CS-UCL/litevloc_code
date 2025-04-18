@@ -72,7 +72,7 @@ class ImageGraphLoader:
 				if not load_rgb:
 					rgb_image = None
 				elif load_rgb and os.path.exists(rgb_img_path):
-					rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
+					rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized, color_correct=True)
 				else:
 					continue
 

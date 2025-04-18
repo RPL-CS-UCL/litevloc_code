@@ -6,10 +6,24 @@ from PIL import Image
 import numpy as np
 import logging
 
+class GrayWorldCorrection:
+    """Torch-compatible transform that applies Gray World color correction to a PIL image."""
+    def __call__(self, img: Image.Image) -> Image.Image:
+        img_np = np.array(img)
+
+        img_float = img_np.astype(np.float32)
+        means = img_float.mean(axis=(0, 1))
+        overall_mean = np.mean(means)
+        scale = overall_mean / means
+        img_corrected = img_float * scale
+        img_corrected = np.clip(img_corrected, 0, 255).astype(np.uint8)
+
+        return Image.fromarray(img_corrected)
 def load_rgb_image(
     path: Union[str, Path],
     resize: Union[int, Tuple] = None,
     normalized: bool = False,
+    color_correct: bool = False
 ) -> torch.Tensor:
     """
     Load an RGB image from the given path and apply transformations.
@@ -26,15 +40,21 @@ def load_rgb_image(
     if isinstance(resize, int):
         resize = (resize, resize)
     
-    # Set up transformations: - Convert to tensor, - Normalize, - Resize
+    # Set up transformations: - Correct Color Space - Convert to tensor - Normalize, - Resize
     transformations = [tfm.ToTensor()]
+     
     if normalized:
         transformations.append(
             tfm.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         )
+
+    if color_correct:
+        transformations.insert(0, GrayWorldCorrection())
+
     if resize is not None:
         new_size = (resize[1], resize[0]) # HxW
         transformations.append(tfm.Resize(size=new_size, antialias=True))
+
     transform = tfm.Compose(transformations)
 
     # Load image and apply transformation

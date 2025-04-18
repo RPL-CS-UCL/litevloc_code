@@ -191,7 +191,7 @@ def parse_arguments():
 	parser.add_argument("--output_map_path", type=str, default=None, help="Path to output final map")
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
 										help="Resizing shape for images (WxH). If a single int is passed, set the"
-											 "smallest edge of all images to this value, while keeping aspect ratio")
+											 "longest edge of all images to this value, while keeping aspect ratio")
 
 	parser.add_argument("--vpr_match_model", type=str, default="sequence_match", 
 											 help="single_match, topo_filter, sequence_match, sequence_match_ransac")
