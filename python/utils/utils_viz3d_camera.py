@@ -144,6 +144,7 @@ def _load_intrinsics(filepath):
             parts = line.strip().split()
             frame_path = os.path.join(os.path.dirname(filepath), parts[0])
             intrinsics[frame_path] = np.array(list(map(float, parts[1:])))
+            
     return intrinsics
 def _load_poses(filepath):
     """Loads camera poses from text file (world-to-camera format)."""
@@ -161,6 +162,7 @@ def _load_poses(filepath):
             pose[:3, :3] = Rotation.from_quat(np.roll(quat, -1)).as_matrix()
             pose[:3, 3] = trans
             poses[frame_path] = pose
+
     return poses
 
 def _collect_images(scene_path):
