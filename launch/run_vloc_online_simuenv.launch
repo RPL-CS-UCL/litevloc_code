@@ -2,7 +2,7 @@
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_$(arg env_id)/out_map/" />
+	<arg name="map_path" default="data_litevloc/vnav_eval/matterport3d/s$(arg env_id)/merge_finalmap" />
 	<arg name="setup_simu_env" default="true" />
 	<arg name="use_rviz" default="true" />
 	<arg name="use_nav" default="true" />
@@ -51,10 +51,11 @@
 		</node>	
 	</group>
 
+	<!-- TODO -->
 	<!-- Planning -->
 	<group if="$(arg setup_simu_env)">
 		<node name="ros_global_planner" pkg="litevloc" type="ros_global_planner.py" output="log"
-			args="--dataset_path $(arg map_path) \
+			args="--map_path $(arg map_path) \
 						--image_size 512 288 --device cuda \
 						--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256" >
 			<param name="frame_id_map" value="vloc_map" />
@@ -63,10 +64,11 @@
 		</node>
 
 		<node name="ros_publish_goal_image" pkg="litevloc" type="ros_publish_goal_image.py" output="log"
-			args="--goal_image_path $(arg map_path)" >
+			args="--map_path $(arg map_path)" >
 		</node>
 	</group>
 
+	<!-- TODO -->
 	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="litevloc" type="ros_loc_pipeline.py" output="screen"
 		args="--dataset_path $(arg map_path)
@@ -97,8 +99,9 @@
 		<param name="max_depth" value="10.0" />
 	</node>
 
+	<!-- TODO -->
 	<node name="ros_pose_fusion" pkg="litevloc" type="ros_pose_fusion.py" output="log"
-		args="--env_type indoor">
+		args="--odom_type depth_registration">
 		<remap from="/local/odometry" to="/depth_reg/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
 		<param name="frame_id_map" value="vloc_map" />

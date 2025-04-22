@@ -14,14 +14,13 @@ import pathlib
 import numpy as np
 import torch
 import rospy
+import cv2
+import threading
 from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PointStamped
 from std_msgs.msg import Int16
-
-import cv2
-import threading
 
 from point_graph import PointGraphLoader as GraphLoader
 from image_node import ImageNode
@@ -30,8 +29,9 @@ from sensor_msgs.msg import Image
 from loc_pipeline import LocPipeline
 from utils.utils_image import rgb_image_to_tensor
 from utils.utils_pipeline import parse_arguments, setup_log_environment
+from utils.utils_shortest_path import dijk_shortest_path
 
-import pycpptools.src.python.utils_algorithm as pytool_alg
+# TODO(gogojjh):
 import pycpptools.src.python.utils_ros as pytool_ros
 
 class GlobalPlanner:
@@ -69,8 +69,8 @@ class GlobalPlanner:
 		self.status_pub = rospy.Publisher('/global_planner/status', Int16, queue_size=10)
 
 	def read_map_from_file(self):
-		data_path = self.args.dataset_path
-		self.point_graph = GraphLoader.load_data(data_path)
+		map_root = Path(self.args.map_path)
+		self.point_graph = GraphLoader.load_data(map_root, edge_type='trav')
 		self.map_node_position = np.array([node.trans for _, node in self.point_graph.nodes.items()])
 		rospy.loginfo(f"Loaded {self.point_graph} from {data_path}")
 
@@ -131,7 +131,7 @@ class GlobalPlanner:
 
 				# shortest path planning
 				tra_distance, tra_path = \
-					pytool_alg.sp.dijk_shortest_path(self.point_graph, start_node, goal_node)
+					dijk_shortest_path(self.point_graph, start_node, goal_node)
 				if tra_distance != float('inf'):
 					for i in range(len(tra_path) - 1):
 						node = tra_path[i]
@@ -167,6 +167,7 @@ class GlobalPlanner:
 			# Publish the closest subgoal as waypoint
 			self.publish_path()
 			self.publish_waypoint(self.subgoals[0])
+
 		rospy.Rate(self.main_freq).sleep()
 
 if __name__ == '__main__':
@@ -192,8 +193,9 @@ if __name__ == '__main__':
 	global_planner.conv_dist = 3.0
 
 	img_idx = 0
+	map_root = Path(args.map_path)
 	while not rospy.is_shutdown():
-		path_goal_img = os.path.join(args.dataset_path, f'goal_img_{img_idx}.jpg')
+		path_goal_img = str(map_root / 'goal_images' / f'goal_img_{img_idx}.jpg')
 		print(f'Loading goal image: {path_goal_img}')
 		if os.path.exists(path_goal_img):
 			global_planner.is_goal_init = False
@@ -210,6 +212,7 @@ if __name__ == '__main__':
 			odom_msg.pose.pose.orientation.z = 0
 			odom_msg.pose.pose.orientation.w = 1
 			time = odom_msg.header.stamp.to_sec()
+			# TODO(gogojjh):
 			trans, quat = pytool_ros.ros_msg.convert_rosodom_to_vec(odom_msg)
 			robot_node = PointNode(global_planner.robot_id, None, time, trans, quat, None, None)
 			global_planner.robot_id += 1

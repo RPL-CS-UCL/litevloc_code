@@ -72,7 +72,11 @@ def main(args):
 		"""Save image descriptors"""
 		if args.save_descriptors:
 			print(f"Saving image descriptors to {out_dir}")
-			np.savetxt(os.path.join(out_dir, f'database_descriptors.txt'), db_descriptors, fmt='%s ' + '%.9f ' * args.descriptors_dimension)
+			np.savetxt(
+				os.path.join(out_dir, f'database_descriptors.txt'), 
+				db_descriptors, 
+				fmt='%s ' + '%.9f ' * db_descriptors.shape[1]
+			)
 
 if __name__ == "__main__":
 	args = parse_arguments()

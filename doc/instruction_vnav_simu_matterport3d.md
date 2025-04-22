@@ -43,7 +43,7 @@ Follow the instructions in the [CMU VLA Challenge Repository](https://github.com
 ```bash
 conda create --name habitat python=3.8
 conda activate habitat
-conda install habitat-sim==0.2.1  -c conda-forge -c aihabitat\
+conda install habitat-sim==0.2.1  -c conda-forge -c aihabitat
 pip install numba==0.58.1 numpy==1.24.0
 ```
 
