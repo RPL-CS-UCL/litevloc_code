@@ -27,15 +27,16 @@ class PublishGoalImage():
         #     pass
         # if msg.data == 1: # in planning, no need to publish goal image
         #     return
-        if msg.data == 2: # Reach the original goal, need to publish a new goal
+        if msg.data == 2:  # Reach the original goal, need to publish a new goal
             self.goal_img_start_idx += 1
 
         bridge = CvBridge()
-        goal_img_path = f'{self.args.goal_image_path}/goal_img_{self.goal_img_start_idx}.jpg'
+        goal_img_path = f'{self.args.map_path}/goal_images/goal_img_{self.goal_img_start_idx}.jpg'
         if os.path.exists(goal_img_path) == False:
             rospy.loginfo(f'{goal_img_path} does not exist')
             rospy.loginfo(f'Switch to goal_img_0')
             self.goal_img_start_idx = 0
+
             return
         
         goal_img = cv2.imread(goal_img_path)
@@ -46,7 +47,7 @@ class PublishGoalImage():
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--goal_image_path', help='Path to the image file')
+    parser.add_argument('--map_path', help='Path to the map file')
     args, unknown = parser.parse_known_args()
 
     rospy.init_node('image_publisher', anonymous=True)

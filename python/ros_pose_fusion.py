@@ -12,6 +12,8 @@ import numpy as np
 import threading
 
 from pose_fusion import parse_arguments, PoseFusion
+
+# TODO(gogojjh)
 from pycpptools.src.python.utils_algorithm.stamped_poses import StampedPoses
 from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3, convert_matrix_to_vec
 from pycpptools.src.python.utils_ros import ros_msg
@@ -41,11 +43,11 @@ tf_buffer, listener = None, None
 
 # Odometry covariance
 SIGMA_ODOMETRY = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.01, 0.01, 0.1])
-if args.env_type == 'indoor':
-	# indoor: 
+if args.odom_type == 'depth_registration':
+	# depth_registration: 
 	SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
 else:
-	# outdoor:
+	# others:
 	SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.05, 0.05, 0.5])
 
 def odom_local_callback(odom_msg):

@@ -54,7 +54,7 @@ def parse_arguments():
 	""" 
 	Common parameters
 	"""
-	parser.add_argument("--dataset_path", type=str, default="matterport3d", help="path to dataset_path")
+	parser.add_argument("--map_path", type=str, default="matterport3d", help="path to map_path")
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
 										help="Resizing shape for images (WxH). If a single int is passed, set the"
 										"smallest edge of all images to this value, while keeping aspect ratio")
@@ -214,10 +214,14 @@ def parse_arguments():
 
 	return args
 
-def save_descriptors(log_dir, descriptors, desc_name):
+def save_descriptors(log_dir, descriptors):
 	"""Save descriptors to files."""
 	logging.debug(f"Saving the descriptors in {log_dir}")
-	np.save(os.path.join(log_dir, 'preds', f"{desc_name}.npy"), descriptors)
+	np.savetxt(
+		os.path.join(log_dir, f'database_descriptors.txt'), 
+		descriptors, 
+		fmt='%s ' + '%.9f ' * descriptors.shape[1]
+	)
 
 if __name__ == "__main__":
 	args = parse_arguments()
