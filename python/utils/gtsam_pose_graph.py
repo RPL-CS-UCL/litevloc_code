@@ -150,7 +150,7 @@ class PoseGraph:
 		return result	
 
 	@staticmethod
-	def plot_pose_graph(save_dir, graph, results, titles, mode='2d'):
+	def plot_pose_graph(save_dir, graph, results, titles, mode='2d', subgraph_keys=None):
 		import os
 		from matplotlib import pyplot as plt
 
@@ -170,6 +170,11 @@ class PoseGraph:
 					tsl1 = result.atPose3(key1).translation()
 					tsl2 = result.atPose3(key2).translation()
 					ax.plot([tsl1[0], tsl2[0]], [tsl1[1], tsl2[1]], [tsl1[2], tsl2[2]], '-', color='g', lw=1)
+
+			if subgraph_keys is not None:
+				for graph_id, keys in enumerate(subgraph_keys):
+					tsl = result.atPose3(keys[0]).translation()
+					ax.text(tsl[0], tsl[1], tsl[2], f'{graph_id}', fontsize=12, color='r', ha='center')
 
 			ax.set_xlabel('X [m]')
 			ax.set_ylabel('Y [m]')
