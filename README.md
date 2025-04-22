@@ -1,19 +1,22 @@
 ## LiteVLoc
 ### Requirements
-
-Install ```image-matching-methods``` and ```VPR-evaluation-methods```
+Create the workspace
 ```bash
-git clone git@github.com:gogojjh/VPR-methods-evaluation.git
+mkdir -p catkin_ws/src/
+cd catkin_ws/src/
+```
+Install ```image-matching-methods```
+```bash
 git clone git@github.com:gogojjh/image-matching-models.git --recursive
 cd image-matching-models && python -m pip install -e .
 ```
-Install ```pycpptools```
+Install  ```VPR-evaluation-methods```
 ```bash
-git clone git@github.com:gogojjh/pycpptools.git
-cd pycpptools && python -m pip install -e .
+git clone git@github.com:gogojjh/VPR-methods-evaluation.git
 ```
 Create conda environment (NVIDIA GeForce RTX 4090 and CUDA 11.8)
 ```bash
+git clone https://github.com/RPL-CS-UCL/litevloc_code
 conda env create -f environment.yaml
 conda install pytorch=2.0.1 torchvision=0.15.2 pytorch-cuda=11.8 numpy=1.24.3 -c pytorch -c nvidia # use the correct version of cuda for your system
 conda activate litevloc && pip install -r requirements.txt
@@ -22,19 +25,10 @@ Enter this code to check whether torch-related packages are installed
 ```bash
 python test_torch_install.py
 ```
-Set this in the bash: 
-```bash
-export PYTHONPATH=$PYTHONPATH:~/robohike_ws/src
-export TORCH_HOME=path_torch_hub
-```
-Build the ros package:
-```bash
-catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
-```
 
-### Instruction of Usage
+### We provide several usage of LiteVloc
 1. [Instruction in Performing Map-free Benchmarking](doc/instruction_map_free_benchmark.md)
-2. [Instruction in Running Visual Navigation with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
+2. [Instruction in Running LiteVloc with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
 <!-- 3. [Instruction in Performing Map Merging](doc/instruction_map_merging.md) -->
 
 ### Issues
