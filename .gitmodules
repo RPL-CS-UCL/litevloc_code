@@ -1,6 +1,0 @@
-[submodule "thirdparty/rviz_camera_stream"]
-	path = thirdparty/rviz_camera_stream
-	url = git@github.com:lucasw/rviz_camera_stream.git
-[submodule "thirdparty/rviz_textured_quads"]
-	path = thirdparty/rviz_textured_quads
-	url = git@github.com:lucasw/rviz_textured_quads.git
