@@ -1,12 +1,12 @@
 ## Instraction of Running LiteVloc with Simulated Matterport3d
 
-This repository provides a setup for visual navigation using ROS, the CMU Navigation Stack, and the Matterport3D environment. Follow the steps below to configure your workspace and dependencies.
+This repository provides a setup for visual navigation using ROS, the CMU Navigation Stack, IPlanner, and the Matterport3D environment. Follow the steps below to configure your workspace and dependencies.
 
 ---
 
-### Prerequisites
+### Tested with These Prerequisites
 - **ROS Noetic** (other versions may require adjustments)
-- **Python 3.8 or above** (required for compatibility with some packages)
+- **Python 3.8** (tested with this version)
 - **OpenCV** and `cv_bridge`
 - Basic ROS workspace setup (`catkin_ws`).
 
@@ -22,7 +22,7 @@ Clone the CMU navigation stack (some settings were changed)
 ```bash
 git clone git@github.com:RPL-CS-UCL/autonomous_exploration_development_environment.git
 cd autonomous_exploration_development_environment
-git checkout noetic-matterport
+git checkout noetic-matterport-anymal_dev
 ```
 Clone the iPlanner path-follow package (modified for visual navigation)
 ```bash
@@ -39,7 +39,15 @@ sudo apt install ros-noetic-diagnostic-aggregator
 ```
 
 #### Setup Matterport3D Environment
-Follow the instructions in the [CMU VLA Challenge Repository](https://github.com/jizhang-cmu/cmu_vla_challenge_matterport) to download models from Matterport3D and install the habitat engine. And move the environemnt files to `benchmark_visual_nav/data/matterport/{env_id}`. An example is shown below:
+Follow the instructions in the [CMU VLA Challenge Repository](https://github.com/jizhang-cmu/cmu_vla_challenge_matterport) to download models from Matterport3D and install the habitat engine. Or use this simple command
+```bash
+conda create --name habitat python=3.8
+conda activate habitat
+conda install habitat-sim==0.2.1  -c conda-forge -c aihabitat\
+pip install numba==0.58.1 numpy==1.24.0
+```
+
+And move the environemnt files to `benchmark_visual_nav/data/matterport/{env_id}`. An example is shown below:
 ```bash
 benchmark_visual_nav/data/matterport/17DRP5sb8fy
     navigation_environment/meshes/
@@ -80,11 +88,11 @@ Start the environment
 ```bash
 roslaunch benchmark_visual_nav system_17DRP5sb8fy.launch useLocalPlanner:=true gazebo_gui:=false
 ```
-Run habitat_sim to render image
+Run habitat_sim to render image (python)
 ```bash
-cd cmu_autonomous_exploration_development/src/segmentation_proc/scripts
+cd autonomous_exploration_development_environment/src/segmentation_proc/scripts
 conda activate habitat
-export PATH_ENV=benchmark_visual_nav/matterport/17DRP5sb8fy/navigation_environment/segmentations/matterport.glb
+export PATH_ENV=../../../../benchmark_visual_nav/data/matterport/17DRP5sb8fy/navigation_environment/segmentations/matterport.glb
 python habitat_online_v0.2.1.py --scene $PATH_ENV
 ```
 You can see these output if you have successfully install the simulated environment
@@ -95,20 +103,42 @@ You can see these output if you have successfully install the simulated environm
     </a>   
 </div>
 
+#### Launching the CMU Navigation Stack with IPlanner
+Follow the [tutorial](https://github.com/leggedrobotics/iPlanner) to install **iPlanner** for local planning.
+Start the environment
+```bash
+roslaunch benchmark_visual_nav system_17DRP5sb8fy.launch useLocalPlanner:=false gazebo_gui:=false
+```
+Run the iPlanner
+```bash
+conda activate iplanner
+roslaunch benchmark_visual_nav iplanner.launch config:=vehicle_sim
+```
+<div align="center">
+    <a href="">
+      <img src="media/ins_simu_matterport3d_iplanner.gif" width="50%" 
+      alt="ins_simu_matterport3d_iplanner">
+    </a>
+</div>
+
+
 ### Running the Complete Visual Navigation in Matterport3d
-Follow the [tutorial](../README.md) to install **LiteVloc** for visual localization and [tutorial](https://github.com/leggedrobotics/iPlanner) to install **iPlanner** for local planning.
+Follow the [tutorial](../README.md) to install **LiteVloc** for visual localization.
 
 Run habitat_sim to render image
 ```bash
-cd cmu_autonomous_exploration_development/src/segmentation_proc/scripts
+cd autonomous_exploration_development_environment/src/segmentation_proc/scripts
 conda activate habitat
 export PATH_ENV=benchmark_visual_nav/matterport/17DRP5sb8fy/navigation_environment/segmentations/matterport.glb
 python habitat_online_v0.2.1.py --scene $PATH_ENV
 ```
-Run liteVLoc
+Run LiteVLoc
 ```bash
 conda activate litevloc
-roslaunch litevloc run_vloc_online_simuenv.launch env_id:=17DRP5sb8fy map_path:=data_litevloc/matterport3d/vloc_17DRP5sb8fy/out_map/ use_nav:=true
+roslaunch litevloc run_vloc_online_simuenv.launch \
+  env_id:=17DRP5sb8fy \
+  map_path:=data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap/ \
+  use_nav:=true
 ```
 Run the iPlanner
 ```bash
