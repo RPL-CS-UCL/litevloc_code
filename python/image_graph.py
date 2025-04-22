@@ -31,7 +31,7 @@ class ImageGraphLoader:
 		load_depth: bool = False, 
 		normalized: bool = False,
 		color_correct: bool = False,
-		edge_type: str = 'odometry'
+		edge_type: str = 'covis'
 	):
 		"""
 		Load data from the specified map directory and create an image graph.
@@ -44,8 +44,7 @@ class ImageGraphLoader:
 			load_depth (bool, optional): Whether to load depth images. Defaults to False.
 			normalized (bool, optional): Whether to normalize the RGB images. Defaults to False.
 			edge_type (str, optional): The type of edges to read from the map directory. 
-										Can be 'odometry', 'covisible', or 'traversable'. 
-										Defaults to 'odometry'.
+				Can be covis (default) and others.
 
 		Returns:
 			ImageGraph: The created image graph.
