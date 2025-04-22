@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# Usage: python utils_viz2d_graph.py --dataset_dir /path/to/dataset/ --scenes 0 1 2 --viz
+
 import os
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -10,7 +12,6 @@ import pathlib
 import numpy as np
 import matplotlib.pyplot as plt
 from map_manager import MapManager
-from utils.utils_geom import convert_vec_to_matrix
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Map processing and visualization')
@@ -66,7 +67,7 @@ def process_and_visualize_map(args):
         print(str(final_map))
 
         # Visualize the three graphs
-        fig, axes = plt.subplots(1, 3, figsize=(18, 6), subplot_kw={'projection': '3d'})
+        fig, axes = plt.subplots(1, 3, figsize=(18, 5), subplot_kw={'projection': '3d'})
         for ax, graph_type, title in zip(axes, graph_types, titles):
             graph = final_map.graphs[graph_type]
             nodes = list(graph.nodes.values())
@@ -98,7 +99,10 @@ def process_and_visualize_map(args):
         if args.viz:
             plt.show()
         else:
+            (final_map.map_root / 'preds').mkdir(parents=True, exist_ok=True)
             plt.savefig(str(final_map.map_root / 'preds' / 'viz_graph.png'))
+        
+        plt.close()
 
 if __name__ == '__main__':
     args = parse_arguments()
