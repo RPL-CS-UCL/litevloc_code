@@ -56,7 +56,11 @@ class PoseGraph:
 	@staticmethod
 	def add_robust_kernel(graph):
 		graph_robust = gtsam.NonlinearFactorGraph()
-		robust_model = gtsam.noiseModel.mEstimator.Huber.Create(k=1.345)
+		##### Huber robust kernel
+		# robust_model = gtsam.noiseModel.mEstimator.Huber.Create(k=1.345)
+		##### Cauchy robust kernel
+		robust_model = gtsam.noiseModel.mEstimator.Cauchy.Create(k=0.3)
+		#####
 		for key in range(graph.size()):
 			factor = graph.at(key)
 			# TODO(gogojjh): Add robust kernel to othre factors
