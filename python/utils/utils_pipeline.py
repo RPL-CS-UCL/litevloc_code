@@ -43,6 +43,7 @@ def setup_log_environment(out_dir, args):
 	os.makedirs(os.path.join(log_dir, 'preds'))
 	os.system(f"rm {os.path.join(tmp_dir, 'latest')}")
 	os.system(f"ln -s {log_dir} {os.path.join(tmp_dir, 'latest')}")
+	
 	return log_dir
 
 def parse_arguments():

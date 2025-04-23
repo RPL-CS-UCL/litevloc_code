@@ -23,12 +23,14 @@ import argparse
 import matplotlib
 from pathlib import Path
 import numpy as np
+
 from matching import available_models, get_matcher
 from matching.utils import to_numpy, get_image_pairs_paths
+
 from utils.utils_image_matching_method import *
 from utils.utils_image import load_rgb_image, load_depth_image
 from utils.pose_solver import available_solvers, get_solver
-from utils.pose_solver_default import cfg
+from benchmark_rpe.rpe_default import cfg
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):
