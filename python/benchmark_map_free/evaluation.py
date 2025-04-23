@@ -1,3 +1,5 @@
+# The evaluation code is refered to  Mickey Evaluation Scripts: https://github.com/nianticlabs/mickey
+
 import os
 import sys
 import argparse
@@ -57,8 +59,9 @@ def compute_scene_metrics(dataset_path: Path, submission_zip: ZipFile, scene: st
 	else:
 		logging.info(f'Loaded estimated poses for scene {scene}')
 
-	# The val/test set is subsampled by a factor of 1
-	gt_poses = subsample_poses(gt_poses, subsample=1)
+	# The val/test set is subsampled by a factor of 5
+	gt_poses.pop('seq0/frame_00000.jpg')
+	gt_poses = subsample_poses(gt_poses, subsample=5)
 
 	# failures encode how many frames did not have an estimate
 	# e.g. user/method did not provide an estimate for that frame
@@ -85,7 +88,7 @@ def compute_scene_metrics(dataset_path: Path, submission_zip: ZipFile, scene: st
 
 
 def aggregate_results(all_results, all_failures, eval_config):
-	config = importlib.import_module(f"benchmark.{eval_config}")
+	config = importlib.import_module(f"utils.benchmark.{eval_config}")
 
 	# aggregate metrics
 	median_metrics = defaultdict(list)
@@ -131,6 +134,7 @@ def aggregate_results(all_results, all_failures, eval_config):
 	output_metrics[f'Precision @ VCRE < {config.vcre_threshold}px'] = prec_vcre
 	output_metrics[f'AUC @ VCRE < {config.vcre_threshold}px'] = auc_vcre
 	output_metrics[f'Estimates for % of frames'] = len(all_metrics['trans_err']) / total_samples
+	
 	return output_metrics, curves_data
 
 
@@ -171,6 +175,7 @@ def main(args):
 			f'Submission does not have any valid pose estimates')
 		return
 
+	logging.info('aggregate_results')
 	output_metrics, curves_data = aggregate_results(all_results, all_failures, args.eval_config)
 	output_json = json.dumps(output_metrics, indent=2)
 	print(output_json)

@@ -22,6 +22,10 @@ export CONFIG_FILE="$PROJECT_PATH/python/config/dataset/$DATASET_NAME.yaml"
 export OUT_DIR="/Rocket_ssd/dataset/data_litevloc/map_free_eval/$DATASET_NAME/map_free_eval/results_mf"
 export MODELS="roma tiny-roma duster master loftr eloftr matchformer xfeat-star sift-lg superpoint-lg gim-lg xfeat-lg sift-nn orb-nn gim-dkm xfeat"
 
-python $PROJECT_PATH/python/benchmark_map_free/submission.py --config $CONFIG_FILE --models $MODELS --pose_solver pnp \
+python $PROJECT_PATH/python/benchmark_map_free/submission.py \
+  --config $CONFIG_FILE \
+  --models $MODELS \
+  --pose_solver pnp \
   --out_dir $OUT_DIR \
-  --split test --debug
+  --split test \
+  --debug
