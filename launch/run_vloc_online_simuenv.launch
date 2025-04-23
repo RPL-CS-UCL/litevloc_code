@@ -2,7 +2,8 @@
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
-	<arg name="map_path" default="data_litevloc/vnav_eval/matterport3d/s$(arg env_id)/merge_finalmap" />
+	<arg name="data_path" default="data_litevloc/vnav_eval/matterport3d" />
+	<arg name="map_path" default="$(arg data_path)/s$(arg env_id)/merge_finalmap" />
 	<arg name="setup_simu_env" default="true" />
 	<arg name="use_rviz" default="true" />
 	<arg name="use_nav" default="true" />

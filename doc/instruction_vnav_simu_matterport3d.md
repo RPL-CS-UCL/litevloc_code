@@ -137,7 +137,7 @@ Run LiteVLoc
 conda activate litevloc
 roslaunch litevloc run_vloc_online_simuenv.launch \
   env_id:=17DRP5sb8fy \
-  map_path:=data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap/ \
+  data_path:=/Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d \
   useLocalPlanner:=false \
   use_nav:=true
 ```

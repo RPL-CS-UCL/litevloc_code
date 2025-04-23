@@ -26,7 +26,7 @@ class ROSPublishGraph:
 	def read_trav_graph_from_file(self):
 		map_root = pathlib.Path(args.map_path)
 		self.point_graph = GraphLoader.load_data(map_root, edge_type='trav')
-		print(str(self.point_grpah))
+		print(str(self.point_graph))
 
 	def publish_message(self):
 		header = Header(stamp=rospy.Time.now(), frame_id='vloc_map')
