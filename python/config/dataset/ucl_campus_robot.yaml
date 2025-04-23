@@ -2,8 +2,8 @@ MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
   DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/map_free_eval/ucl_campus_robot/map_free_eval'
-  TRAIN_SCENES: [s00000, s00006]
-  TEST_SCENES: s00001, s00002, s00003, s00004, s00005, s00007, s00008]
+  # TRAIN_SCENES: [s00001, s00006]
+  TEST_SCENES: [s00000, s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008]
   ESTIMATED_DEPTH: zed   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
   AUGMENTATION_TYPE: None
   HEIGHT: 288             # Images are resized
