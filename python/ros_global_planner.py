@@ -21,7 +21,7 @@ from global_planner import GlobalPlanner
 
 if __name__ == '__main__':
 	args = parse_arguments()
-	out_dir = pathlib.Path(os.path.join(args.dataset_path, 'output_ros_global_planner'))
+	out_dir = pathlib.Path(os.path.join(args.map_path, 'output_ros_global_planner'))
 	out_dir.mkdir(exist_ok=True, parents=True)
 	log_dir = setup_log_environment(out_dir, args)
 

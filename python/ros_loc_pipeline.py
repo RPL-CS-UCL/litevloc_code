@@ -37,6 +37,9 @@ from utils.utils_pipeline import *
 from image_node import ImageNode
 from loc_pipeline import LocPipeline
 
+from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error, correct_intrinsic_scale
+from utils.utils_ros import ros_msg, ros_vis
+
 import pycpptools.src.python.utils_math as pytool_math
 import pycpptools.src.python.utils_ros as pytool_ros
 import pycpptools.src.python.utils_sensor as pytool_sensor
@@ -54,13 +57,13 @@ def rgb_depth_image_callback(rgb_img_msg, depth_img_msg, camera_info_msg):
 
 def odom_callback(odom_msg):
 	time = odom_msg.header.stamp.to_sec()
-	trans, quat = pytool_ros.ros_msg.convert_rosodom_to_vec(odom_msg)
-	T = pytool_math.tools_eigen.convert_vec_to_matrix(trans, quat)
+	trans, quat = ros_msg.convert_rosodom_to_vec(odom_msg)
+	T = convert_vec_to_matrix(trans, quat)
 	fused_poses.add(time, T)
 
 def perform_localization(loc: LocPipeline, args):
 	obs_id = 0
-	resize = args.image_size
+	resize = args.image_size # WxH
 	r = rospy.Rate(loc.main_freq)
 	while not rospy.is_shutdown():
 		if not rgb_depth_queue.empty():
@@ -70,8 +73,8 @@ def perform_localization(loc: LocPipeline, args):
 			lock.release()
 			loc.child_frame_id = rgb_img_msg.header.frame_id
 			rgb_img_time = rgb_img_msg.header.stamp.to_sec()
-			rgb_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(rgb_img_msg)
-			depth_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(depth_img_msg)
+			rgb_img = ros_msg.convert_rosimg_to_cvimg(rgb_img_msg)
+			depth_img = ros_msg.convert_rosimg_to_cvimg(depth_img_msg)
 			if depth_img_msg.encoding == "mono16": depth_img *= 0.001
 			depth_img[(depth_img < loc.depth_range[0]) | (depth_img > loc.depth_range[1])] = 0.0
 			# To tensor
@@ -79,17 +82,20 @@ def perform_localization(loc: LocPipeline, args):
 			depth_img_tensor = depth_image_to_tensor(depth_img, depth_scale=1.0)
 			# Intrinsic matrix
 			raw_K = np.array(camera_info_msg.K).reshape((3, 3))
-			raw_img_size = (camera_info_msg.width, camera_info_msg.height)
-			K = pytool_sensor.utils.correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]) if resize is not None else raw_K
-			img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_img_size
+			raw_img_size = (int(camera_info_msg.width), int(camera_info_msg.height))
+			if resize is not None:
+				K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1])
+				img_size = (int(resize[0]), int(resize[1]))
+			else:
+				K = raw_K
+				img_size = raw_img_size
 
 			# Create observation node
 			with torch.no_grad():
 				desc = loc.vpr_model(rgb_img_tensor.unsqueeze(0).to(args.device)).cpu().numpy()
 			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, desc,
 								 rgb_img_time, np.zeros(3), np.array([0, 0, 0, 1]),
-								 K, img_size, 
-								 '', '')
+								 K, img_size, None, None)
 			obs_node.set_raw_intrinsics(raw_K, raw_img_size)
 			loc.curr_obs_node = obs_node
 
@@ -114,10 +120,14 @@ def perform_localization(loc: LocPipeline, args):
 					init_trans, init_quat = loc.ref_map_node.trans, loc.ref_map_node.quat
 				# Use the closest fused pose as the initial guess
 				else:
-					init_trans, init_quat = pytool_math.tools_eigen.convert_matrix_to_vec(stamped_pose_closest[1])
+					init_trans, init_quat = convert_matrix_to_vec(stamped_pose_closest[1])
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
 				
-				dis_trans, _ = pytool_math.tools_eigen.compute_relative_dis(init_trans, init_quat, loc.ref_map_node.trans, loc.ref_map_node.quat)
+				dis_trans, _ = compute_pose_error(
+					init_trans, init_quat, 
+					loc.ref_map_node.trans, loc.ref_map_node.quat,
+					mode='vector'
+				)
 				if dis_trans > loc.args.global_pos_threshold:
 					rospy.logwarn('Too far distance from the ref_map_node. Losing Visual Tracking. Reset the global position.')
 					loc.has_global_pos = False
@@ -130,7 +140,7 @@ def perform_localization(loc: LocPipeline, args):
 				rospy.loginfo(f"Local localization cost: {time.time() - loc_start_time:.3f}s")
 				if result['succ']:
 					T_w_obs = result['T_w_obs']
-					trans, quat = pytool_math.tools_eigen.convert_matrix_to_vec(T_w_obs, 'xyzw')
+					trans, quat = convert_matrix_to_vec(T_w_obs, 'xyzw')
 					loc.curr_obs_node.set_pose(trans, quat)
 					loc.has_local_pos = True
 					rospy.logwarn(f'Estimated Poses: {trans.T}\n')

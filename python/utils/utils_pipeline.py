@@ -55,6 +55,7 @@ def parse_arguments():
 	Common parameters
 	"""
 	parser.add_argument("--map_path", type=str, default="matterport3d", help="path to map_path")
+	parser.add_argument("--query_data_path", type=str, default="out_general", help="path to query data for test")
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
 										help="Resizing shape for images (WxH). If a single int is passed, set the"
 										"smallest edge of all images to this value, while keeping aspect ratio")

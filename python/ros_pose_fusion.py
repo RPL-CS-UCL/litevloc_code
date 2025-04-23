@@ -12,11 +12,9 @@ import numpy as np
 import threading
 
 from pose_fusion import parse_arguments, PoseFusion
-
-# TODO(gogojjh)
-from pycpptools.src.python.utils_algorithm.stamped_poses import StampedPoses
-from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3, convert_matrix_to_vec
-from pycpptools.src.python.utils_ros import ros_msg
+from utils.utils_geom import convert_vec_gtsam_pose3, convert_matrix_to_vec
+from utils.utils_ros import ros_msg
+from utils.utils_stamped_poses import StampedPoses
 
 args = parse_arguments()
 
@@ -43,7 +41,7 @@ tf_buffer, listener = None, None
 
 # Odometry covariance
 SIGMA_ODOMETRY = np.array([np.deg2rad(1.0), np.deg2rad(1.0), np.deg2rad(1.0), 0.01, 0.01, 0.1])
-if args.odom_type == 'depth_registration':
+if args.odom_type == 'depth_reg':
 	# depth_registration: 
 	SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.1, 0.1, 0.1])
 else:
@@ -83,8 +81,11 @@ def odom_local_callback(odom_msg):
 		sigma = SIGMA_ODOMETRY
 		pose_fusion.add_odometry_factor(prev_idx, stamped_prev_pose_local[1], curr_idx, curr_pose_local, sigma)
 		# Update the current pose
-		curr_stamped_pose = (curr_time, 
-							 curr_stamped_pose[1] * stamped_prev_pose_local[1].between(curr_pose_local))
+		curr_stamped_pose = (
+			curr_time, 
+			curr_stamped_pose[1] * stamped_prev_pose_local[1].between(curr_pose_local)
+		)
+	
 	poses_local.add(curr_time, curr_pose_local)
 
 	# the odometry is aligned with the global frame

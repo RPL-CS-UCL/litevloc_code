@@ -4,26 +4,26 @@ python pose_fusion.py data_path /Rocket_ssd/dataset/data_litevloc/17DRP5sb8fy/
 """
 
 import os
-
 import gtsam
 import argparse
 import numpy as np
 import rospy
 from nav_msgs.msg import Odometry, Path
 
-from pycpptools.src.python.utils_math.tools_eigen import convert_vec_gtsam_pose3
-from pycpptools.src.python.utils_algorithm.gtsam_pose_graph import PoseGraph
+from utils.utils_geom import convert_vec_gtsam_pose3
+from utils.gtsam_pose_graph import PoseGraph
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(description="Pose Fusion", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 	parser.add_argument("--isam_params", action="store_true", help="use ISAM2 specific parameters setting")
 	parser.add_argument("--viz", action="store_true", help="visualize the result")
 	parser.add_argument("--data_path", type=str, default="/tmp/", help="path to data")
-	parser.add_argument("--env_type", type=str, default="indoor", help="environmental type: indoor or outdoor")
+	parser.add_argument("--odom_type", type=str, default="depth_reg", help="odometry type: depth_reg, leg_odom")
 	args, unknown = parser.parse_known_args()
 	return args	
 
 class PoseFusion(PoseGraph):
+	# The key difference from PoseGraph is the inclusion of timestamp information of each pose
 	def __init__(self, args):
 		super().__init__()
 		self.timestamp = dict()
@@ -94,6 +94,7 @@ def perform_pose_fusion(pose_fusion: PoseFusion, args):
 				current_pose = pose_fusion.current_estimate.atPose3(i)
 				init_system = True
 				break
+			
 	result = pose_fusion.perform_optimization()
 	current_estimate = result['current_estimate']
 

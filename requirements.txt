@@ -54,6 +54,7 @@ catkin_pkg
 rospkg
 defusedxml
 netifaces
+rosnumpy
 # Others
 yacs
 colorama
