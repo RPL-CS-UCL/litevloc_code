@@ -9,7 +9,7 @@
 # Check if DATASET_NAME is provided
 if [ -z "$1" ]; then
   echo "Error: DATASET_NAME is not specified."
-  echo "Usage: ./run_benchmark_mf_evaluation.sh <DATASET_NAME> (matterport3d, hkustgz_campus, ucl_campus, mapfree)"
+  echo "Usage: ./run_benchmark_mf_evaluation.sh <DATASET_NAME> (matterport3d, hkustgz_campus, ucl_campus_robot, mapfree)"
   exit 1
 fi
 
