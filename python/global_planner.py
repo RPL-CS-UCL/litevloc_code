@@ -2,11 +2,10 @@
 
 """
 Usage: 
-python ros_global_planner.py \
---dataset_path /Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_17DRP5sb8fy/out_map \
---image_size 288 512 --device cuda \
---vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 512 --save_descriptors \
---num_preds_to_save 3 
+python python/global_planner.py \
+	--map_path /Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
+	--image_size 512 288 --device cuda \
+	--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 512
 """
 
 import os
@@ -27,12 +26,10 @@ from image_node import ImageNode
 from point_node import PointNode
 from sensor_msgs.msg import Image
 from loc_pipeline import LocPipeline
-from utils.utils_image import rgb_image_to_tensor
-from utils.utils_pipeline import parse_arguments, setup_log_environment
+from utils.utils_image import rgb_image_to_tensor, to_numpy
+from utils.utils_pipeline import parse_arguments
 from utils.utils_shortest_path import dijk_shortest_path
-
-# TODO(gogojjh):
-import pycpptools.src.python.utils_ros as pytool_ros
+from utils.utils_ros import ros_msg, ros_vis
 
 class GlobalPlanner:
 	def __init__(self, args):
@@ -68,31 +65,31 @@ class GlobalPlanner:
 		self.pub_waypoint = rospy.Publisher('/vloc/way_point', PointStamped, queue_size=1)
 		self.status_pub = rospy.Publisher('/global_planner/status', Int16, queue_size=10)
 
-	def read_map_from_file(self):
-		map_root = Path(self.args.map_path)
+	def read_trav_graph_from_files(self):
+		map_root = pathlib.Path(self.args.map_path)
 		self.point_graph = GraphLoader.load_data(map_root, edge_type='trav')
 		self.map_node_position = np.array([node.trans for _, node in self.point_graph.nodes.items()])
-		rospy.loginfo(f"Loaded {self.point_graph} from {data_path}")
+		rospy.loginfo(str(self.point_graph))
 
-	def publish_path(self):
-		header = Header(stamp=rospy.Time.now(), frame_id=f'{self.frame_id_map}_graph')
-		pytool_ros.ros_vis.publish_shortest_path(self.subgoals, header, self.pub_shortest_path)
+	def publish_path(self, subgoals, timestamp):
+		header = Header(stamp=timestamp, frame_id=f'{self.frame_id_map}_graph')
+		ros_vis.publish_shortest_path(subgoals, header, self.pub_shortest_path)
 
-	def publish_waypoint(self, subgoal_node):
-		header = Header(stamp=rospy.Time.now(), frame_id=self.frame_id_map)
+	def publish_waypoint(self, subgoal_node, timestamp):
+		header = Header(stamp=timestamp, frame_id=self.frame_id_map)
 		waypoint_pos = subgoal_node.trans
-		pytool_ros.ros_vis.publish_waypoint(waypoint_pos, header, self.pub_waypoint)
+		ros_vis.publish_waypoint(waypoint_pos, header, self.pub_waypoint)
 
 	def goal_img_callback(self, img_msg):
 		if self.manual_goal_img is None:
 			self.img_lock.acquire()
 			rospy.loginfo('Receive goal image')
-			self.manual_goal_img = pytool_ros.ros_msg.convert_rosimg_to_cvimg(img_msg)
+			self.manual_goal_img = ros_msg.convert_rosimg_to_cvimg(img_msg)
 			self.img_lock.release()
 
 	def odom_callback(self, odom_msg):
 		time = odom_msg.header.stamp.to_sec()
-		trans, quat = pytool_ros.ros_msg.convert_rosodom_to_vec(odom_msg)
+		trans, quat = ros_msg.convert_rosodom_to_vec(odom_msg)
 		robot_node = PointNode(self.robot_id, None, time, trans, quat, None, None)
 		self.robot_id += 1
 
@@ -109,15 +106,20 @@ class GlobalPlanner:
 				self.img_lock.acquire()
 				img_tensor = rgb_image_to_tensor(self.manual_goal_img, resize, normalized=False)
 				self.img_lock.release()
+
 				with torch.no_grad():
-					desc = self.loc_pipeline.vpr_model(img_tensor.unsqueeze(0).to(self.args.device)).cpu().numpy()
-				obs_node = ImageNode(0, img_tensor, None, desc, 
-									rospy.Time.now().to_sec(), np.zeros(3), np.array([0, 0, 0, 1]), 
-									None, resize, None, None)
+					desc = to_numpy(self.loc_pipeline.vpr_model(img_tensor.unsqueeze(0).to(self.args.device)))
+
+				obs_node = ImageNode(
+					0, img_tensor, None, desc, 
+					rospy.Time.now().to_sec(), 
+					np.zeros(3), np.array([0, 0, 0, 1]), 
+					None, resize, None, None
+				)
 				self.loc_pipeline.curr_obs_node = obs_node
 
 				# find the goal image
-				result = self.loc_pipeline.perform_global_loc(save=False)
+				result = self.loc_pipeline.perform_global_loc(save_viz=False)
 				self.manual_goal_img = None
 				self.loc_pipeline.curr_obs_node = None
 				if not result['succ']:
@@ -152,38 +154,43 @@ class GlobalPlanner:
 
 		# Perform shortest path planning
 		if self.is_goal_init:
+			viz_subgoals = self.subgoals.copy()
+
 			subgoal = self.subgoals[0]
 			# Check whetherthe subgoal less than converage range
-			dis_goal = np.linalg.norm(robot_node.trans - subgoal.trans)
+			dis_goal, _ = robot_node.compute_distance(subgoal)
 			if dis_goal < self.conv_dist:
 				self.subgoals.pop(0) # Remove the first subgoal
 				rospy.loginfo(f'[Global Planning] SubGoal {subgoal.id} arrived')
+			
 			# Reach the goal
 			if len(self.subgoals) == 0:
 				self.is_goal_init = False
 				# planner status -> Success
 				self.planner_status.data = 2
 				return
+			
 			# Publish the closest subgoal as waypoint
-			self.publish_path()
-			self.publish_waypoint(self.subgoals[0])
+			timestamp = rospy.Time.now()
+			self.publish_path(viz_subgoals, timestamp)
+			self.publish_waypoint(self.subgoals[0], timestamp)
 
 		rospy.Rate(self.main_freq).sleep()
 
 if __name__ == '__main__':
 	args = parse_arguments()
-	out_dir = pathlib.Path(os.path.join(args.dataset_path, 'output_global_planner'))
-	out_dir.mkdir(exist_ok=True, parents=True)
-	log_dir = setup_log_environment(out_dir, args)
 
+	# Set map path and log folder
+	map_root = pathlib.Path(args.map_path)
+	
 	# Initialize the global planner
 	global_planner = GlobalPlanner(args)
-	global_planner.read_map_from_file()
+	global_planner.read_trav_graph_from_files()
 
 	# Initialize the localization pipeline
-	global_planner.loc_pipeline = LocPipeline(args, log_dir)
+	global_planner.loc_pipeline = LocPipeline(args, map_root/'output_global_planner')
 	global_planner.loc_pipeline.init_vpr_model()
-	global_planner.loc_pipeline.read_map_from_file()
+	global_planner.loc_pipeline.read_covis_graph_from_files()
 	
 	rospy.init_node('global_planner', anonymous=True)
 	global_planner.loc_pipeline.initalize_ros()
@@ -192,8 +199,15 @@ if __name__ == '__main__':
 	global_planner.main_freq = 1.0
 	global_planner.conv_dist = 3.0
 
+	# Initialize the ROS interface
+	from geometry_msgs.msg import PoseArray
+	import tf2_ros
+
+	br = tf2_ros.TransformBroadcaster()
+	pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
+	pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
+
 	img_idx = 0
-	map_root = Path(args.map_path)
 	while not rospy.is_shutdown():
 		path_goal_img = str(map_root / 'goal_images' / f'goal_img_{img_idx}.jpg')
 		print(f'Loading goal image: {path_goal_img}')
@@ -212,13 +226,24 @@ if __name__ == '__main__':
 			odom_msg.pose.pose.orientation.z = 0
 			odom_msg.pose.pose.orientation.w = 1
 			time = odom_msg.header.stamp.to_sec()
-			# TODO(gogojjh):
-			trans, quat = pytool_ros.ros_msg.convert_rosodom_to_vec(odom_msg)
-			robot_node = PointNode(global_planner.robot_id, None, time, trans, quat, None, None)
+			trans, quat = ros_msg.convert_rosodom_to_vec(odom_msg)
+			robot_node = PointNode(global_planner.robot_id, time, trans, quat, None)
 			global_planner.robot_id += 1
 			global_planner.perform_planning(robot_node)
+
+			# Publish other ROS message
+			header = Header(stamp=odom_msg.header.stamp, frame_id=global_planner.frame_id_map)
+			tf_msg = ros_msg.convert_vec_to_rostf(
+				np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, f"{global_planner.frame_id_map}_graph"
+			)
+			br.sendTransform(tf_msg)
+			header.frame_id += '_graph'
+			ros_vis.publish_graph(
+				global_planner.point_graph, header, pub_graph, pub_graph_poses
+			)
 
 			img_idx += 1
 		else:
 			img_idx = 0
+
 		rospy.Rate(1).sleep()

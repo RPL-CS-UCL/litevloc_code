@@ -2,18 +2,18 @@
 
 """
 Usage: 
-python loc_pipeline.py \
---dataset_path /Rocket_ssd/dataset/data_litevloc/matterport3d/out_17DRP5sb8fy/out_map \
---image_size 512 288 --device=cuda \
---vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 --save_descriptors --num_preds_to_save 3 \
---img_matcher master --save_img_matcher \
---pose_solver pnp --config_pose_solver config/dataset/matterport3d.yaml \
---viz \
---global_pos_threshold 20.0 --min_inliers_threshold 300
+python python/loc_pipeline.py \
+	--map_path /Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
+	--image_size 512 288 --device=cuda \
+	--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 \
+	--save_descriptors --num_preds_to_save 3 \
+	--img_matcher master --save_img_matcher \
+	--pose_solver pnp --config_pose_solver config/dataset/matterport3d.yaml \
+	--global_pos_threshold 20.0 --min_inliers_threshold 300 --viz
 
 Usage: 
 rosbag record -O /Titan/dataset/data_litevloc/anymal_lab_upstair_20240722_0/vloc.bag \
-/vloc/odometry /vloc/path /vloc/path_gt /vloc/image_map_obs
+	/vloc/odometry /vloc/path /vloc/path_gt /vloc/image_map_obs
 """
 
 import os
@@ -33,34 +33,31 @@ from visualization_msgs.msg import MarkerArray
 import tf2_ros
 import matplotlib
 
-import rospkg
-rospkg = rospkg.RosPack()
-pack_path = rospkg.get_path('litevloc')
-sys.path.append(os.path.join(pack_path, '../image_matching_models'))
-
-from matching.utils import to_numpy
 from utils.utils_pipeline import *
-from utils.utils_geom import read_intrinsics, read_poses, read_descriptors, read_img_names, correct_intrinsic_scale
+from utils.utils_geom import read_intrinsics, read_poses, read_descriptors, correct_intrinsic_scale
 from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error
 from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search, compute_euclidean_dis
 from utils.utils_vpr_method import save_visualization as save_vpr_visualization
 from utils.utils_image_matching_method import initialize_img_matcher
 from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
-from utils.utils_image import load_rgb_image, load_depth_image
+from utils.utils_image import load_rgb_image, load_depth_image, to_numpy
+from utils.utils_ros import ros_msg, ros_vis
 from utils.pose_solver import get_solver
 from utils.pose_solver_default import cfg
 from image_graph import ImageGraphLoader as GraphLoader
 from image_node import ImageNode
 
-import pycpptools.src.python.utils_ros as pytool_ros
-
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
 
 class LocPipeline:
-	def __init__(self, args, log_dir):
+	def __init__(self, args, out_dir):
 		self.args = args
+
+		out_dir.mkdir(exist_ok=True, parents=True)
+		log_dir = setup_log_environment(out_dir, args)
 		self.log_dir = log_dir
+	
 		self.has_global_pos = False
 		self.has_local_pos = False
 		self.frame_id_map = 'map'
@@ -94,23 +91,26 @@ class LocPipeline:
 		self.path_msg = Path()
 		self.path_gt_msg = Path()
 
-	def read_map_from_file(self):
-		data_path = self.args.dataset_path
+	def read_covis_graph_from_files(self):
+		map_root = pathlib.Path(self.args.map_path)
 		self.image_graph = GraphLoader.load_data(
-			data_path,
-			self.args.image_size,
+			map_root=map_root,
+			resize=self.args.image_size,
 			depth_scale=self.args.depth_scale,
-			normalized=False
+			load_rgb=True, 
+			load_depth=True, 
+			normalized=True,
+			edge_type='covis'
 		)
-		logging.info(f"Loaded {self.image_graph} from {data_path}")
+		logging.info(str(self.image_graph))
 
 		# Extract VPR descriptors for all nodes in the map
-		self.DB_DESCRIPTORS = np.array([map_node.get_descriptor() for _, map_node in self.image_graph.nodes.items()], dtype="float32")
+		self.DB_DESCRIPTORS = np.array([node.get_descriptor() for _, node in self.image_graph.nodes.items()], dtype="float32")
 		print(f"Extracted {self.DB_DESCRIPTORS.shape} VPR descriptors from the map.")
 		self.DB_POSES = np.empty((self.image_graph.get_num_node(), 7), dtype="float32")
-		for indices, (_, map_node) in enumerate(self.image_graph.nodes.items()):
-			self.DB_POSES[indices, :3] = map_node.trans
-			self.DB_POSES[indices, 3:] = map_node.quat
+		for indices, (_, node) in enumerate(self.image_graph.nodes.items()):
+			self.DB_POSES[indices, :3] = node.trans
+			self.DB_POSES[indices, 3:] = node.quat
 
 	def perform_vpr(self, db_descs: np.array, query_desc: np.array):
 		dis, pred = perform_knn_search(
@@ -164,31 +164,37 @@ class LocPipeline:
 		rospy.loginfo(out_str)
 		return node_min_dis
 
-	def perform_global_loc(self, save=False):
+	def perform_global_loc(self, save_viz=False):
 		_, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, self.curr_obs_node.get_descriptor())
-		if len(vpr_pred[0]) == 0: return {'succ': False, 'map_id': None}
-		if save:
+		
+		if len(vpr_pred[0]) == 0: 
+			return {'succ': False, 'map_id': None}
+		
+		if save_viz:
 			list_of_images_paths = [self.curr_obs_node.rgb_img_path]
 			for i in range(len(vpr_pred[0, :self.args.num_preds_to_save])):
 				map_node = self.image_graph.get_node(vpr_pred[0, i])
 				list_of_images_paths.append(map_node.rgb_img_path)
 			preds_correct = [None] * len(list_of_images_paths)
 			save_vpr_visualization(self.log_dir, 0, list_of_images_paths, preds_correct)
+		
 		return {'succ': True, 'map_id': vpr_pred[0, 0]}
 	
 	def perform_local_loc(self):
+		result_fail = {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
+
 		matching_start_time = time.time()
 		ref_node = self.search_keyframe_from_graph(self.curr_obs_node)
-		if ref_node is None: return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
+		if ref_node is None: return result_fail
 		self.ref_map_node = ref_node
 
 		matcher_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
 		num_kpts_inliers, num_H_inliers = matcher_result["num_inliers_kpts"], matcher_result["num_inliers"]
 		mkpts0, mkpts1 = (matcher_result["inliers0"], matcher_result["inliers1"])
-		mkpts0_raw = mkpts0 * [self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0], 
-								self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]]
-		mkpts1_raw = mkpts1 * [self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0], 
-								self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]]
+		w_ratio = self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0] 
+		h_ratio = self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]
+		mkpts0_raw = mkpts0 * [w_ratio, h_ratio]
+		mkpts1_raw = mkpts1 * [w_ratio, h_ratio]
 		self.ref_map_node.set_matched_kpts(mkpts0, num_kpts_inliers)
 		self.curr_obs_node.set_matched_kpts(mkpts1, num_kpts_inliers)
 		rospy.loginfo(f'Number of kpts inliers: {num_kpts_inliers}, H inliers: {num_H_inliers}')
@@ -196,21 +202,16 @@ class LocPipeline:
 
 		if num_kpts_inliers < self.args.min_kpts_inliers_thre:
 			rospy.logwarn(f'[Fail] No sufficient matching kpts')
-			return {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
+			return result_fail
 		try:
-			if self.args.img_matcher == "mickey": # Not used in this project
-				R, t = self.img_matcher.scene["R"].squeeze(0), self.img_matcher.scene["t"].squeeze(0)
-				R, t = to_numpy(R), to_numpy(t)
-				num_solver_inliers = self.img_matcher.scene["inliers"]
-			else:
-				depth_img1 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
-				R, t, num_solver_inliers = self.pose_solver.estimate_pose(
-					mkpts1_raw, mkpts0_raw,
-					self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
-					depth_img1, None)
+			depth_img1 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
+			R, t, num_solver_inliers = self.pose_solver.estimate_pose(
+				mkpts1_raw, mkpts0_raw,
+				self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
+				depth_img1, None)
 			if num_solver_inliers < self.args.min_solver_inliers_thre:
 				rospy.logwarn(f'[Fail] No sufficient number {num_solver_inliers} solver inliers')
-				return {'succ': False, 'T_w_obs': None, 'num_solver_inliers': 0}
+				return result_fail
 			else:
 				T_mapnode_obs = np.eye(4)
 				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
@@ -220,30 +221,30 @@ class LocPipeline:
 				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': num_solver_inliers}
 		except Exception as e:
 			rospy.logwarn(f'[Fail] to estimate pose with error:', e)
-			return {'succ': False, 'T_w_obs': None, 'solver_inliers': num_solver_inliers}
+			return result_fail
 
 	def publish_message(self):
 		header = Header(stamp=rospy.Time.now(), frame_id=self.frame_id_map)
-		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, f"{self.frame_id_map}_graph")
+		tf_msg = ros_msg.convert_vec_to_rostf(np.array([0, 0, -2.0]), np.array([0, 0, 0, 1]), header, f"{self.frame_id_map}_graph")
 		self.br.sendTransform(tf_msg)
 		header = Header(stamp=rospy.Time.now(), frame_id=f"{self.frame_id_map}_graph")
-		pytool_ros.ros_vis.publish_graph(self.image_graph, header, self.pub_graph, self.pub_graph_poses)
+		ros_vis.publish_graph(self.image_graph, header, self.pub_graph, self.pub_graph_poses)
 
 		if self.curr_obs_node is not None:
 			header = Header(stamp=rospy.Time.from_sec(self.curr_obs_node.time), frame_id=self.frame_id_map)
 			
 			# Publish odometry and path if the local position is available
 			if self.has_local_pos:
-				odom = pytool_ros.ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, self.child_frame_id)
+				odom = ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, self.child_frame_id)
 				self.pub_odom.publish(odom)
-				pose_msg = pytool_ros.ros_msg.convert_odom_to_rospose(odom)
+				pose_msg = ros_msg.convert_odom_to_rospose(odom)
 				
 				self.path_msg.header = header
 				self.path_msg.poses.append(pose_msg)
 				self.pub_path.publish(self.path_msg)
 
 			if self.curr_obs_node.has_pose_gt:
-				pose_msg = pytool_ros.ros_msg.convert_vec_to_rospose(self.curr_obs_node.trans_gt, self.curr_obs_node.quat_gt, header)
+				pose_msg = ros_msg.convert_vec_to_rospose(self.curr_obs_node.trans_gt, self.curr_obs_node.quat_gt, header)
 				self.path_gt_msg.header = header
 				self.path_gt_msg.poses.append(pose_msg)
 				self.pub_path_gt.publish(self.path_gt_msg)
@@ -270,54 +271,55 @@ class LocPipeline:
 					text_x = (merged_img.shape[1] - text_size[0])
 					text_y = (merged_img.shape[0] - text_size[1])
 					cv2.putText(merged_img, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3, cv2.LINE_AA)
-					img_msg = pytool_ros.ros_msg.convert_cvimg_to_rosimg(merged_img, "bgr8", header, compressed=False)
+					img_msg = ros_msg.convert_cvimg_to_rosimg(merged_img, "bgr8", header, compressed=False)
 					self.pub_map_obs.publish(img_msg)
 
+
+# Test loc_pipeline without using ROS
 def perform_localization(loc: LocPipeline, args):
 	"""Main loop for processing observations"""
-	obs_poses_gt = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'poses.txt'))
-	obs_cam_intr = np.loadtxt(os.path.join(args.dataset_path, '../out_general', 'intrinsics.txt'))
+	poses = read_poses(os.path.join(args.query_data_path, 'poses.txt'))
+	intrs = read_intrinsics(os.path.join(args.query_data_path, 'intrinsics.txt'))
+	descs = read_descriptors(os.path.join(args.query_data_path, 'descriptors.txt'))
 	resize = args.image_size
+	
 	loc.last_obs_node = None
+	for node_id, (img_name, pose) in enumerate(poses.items()):
+		if node_id % 20 != 0: continue
+		if rospy.is_shutdown(): break	
+		print(f"Loading observation {img_name}")
 
-	for obs_id in range(0, len(obs_poses_gt), 20):
-		if rospy.is_shutdown(): break
-		print(f"Loading observation with id {obs_id}")
-
-		rgb_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.color.jpg')
+		rgb_img_path = os.path.join(args.query_data_path, img_name)
 		rgb_img = load_rgb_image(rgb_img_path, resize, normalized=False)
 
-		depth_img_path = os.path.join(args.dataset_path, '../out_general/seq', f'{obs_id:06d}.depth.png')
+		depth_img_path = os.path.join(args.query_data_path, img_name.replace('color.jpg', 'depth.png'))
 		depth_img = load_depth_image(depth_img_path, depth_scale=0.001)
 
-		raw_K = np.array([
-			obs_cam_intr[obs_id, 0], 0, obs_cam_intr[obs_id, 2],
-			0, obs_cam_intr[obs_id, 1], obs_cam_intr[obs_id, 3],
-			0, 0, 1], dtype=np.float32).reshape(3, 3)
-		raw_size = (int(obs_cam_intr[obs_id, 4]), int(obs_cam_intr[obs_id, 5])) # width, height
-		if resize:
-			K = correct_intrinsic_scale(raw_K, resize[0] / raw_size[0], resize[1] / raw_size[1]) 
+		intr = intrs[img_name]
+		width, height = int(intr[4]), int(intr[5])
+		raw_K = np.array([intr[0], 0, intr[2], 0, intr[1], intr[3], 0, 0, 1], dtype=np.float32).reshape(3, 3)
+		raw_size = (width, height)
+		if resize is not None:
+			K = correct_intrinsic_scale(raw_K, resize[0] / width, resize[1] / height) 
+			img_size = np.array([int(resize[0]), int(resize[1])])
 		else:
 			K = raw_K
-		img_size = (int(resize[0]), int(resize[1])) if resize is not None else raw_size
-		
-		with torch.no_grad():
-			desc = loc.vpr_model(rgb_img.unsqueeze(0).to(args.device)).cpu().numpy()
+			img_size = raw_size
 
 		# Create observation node
-		obs_node = ImageNode(obs_id, rgb_img, depth_img, desc,
+		obs_node = ImageNode(node_id, rgb_img, depth_img, descs[img_name],
 							 rospy.Time.now().to_sec(),
 							 np.zeros(3), np.array([0, 0, 0, 1]),
 							 K, img_size,
 							 rgb_img_path, depth_img_path)
 		obs_node.set_raw_intrinsics(raw_K, raw_size)
-		obs_node.set_pose_gt(obs_poses_gt[obs_id, 1:4], obs_poses_gt[obs_id, 4:])
+		obs_node.set_pose_gt(pose[1:4], pose[4:])
 		loc.curr_obs_node = obs_node
 
 		"""Perform global localization via. visual place recognition"""
 		if not loc.has_global_pos:
 			loc_start_time = time.time()
-			result = loc.perform_global_loc(save=(args.num_preds_to_save!=0))
+			result = loc.perform_global_loc(save_viz=(args.num_preds_to_save!=0))
 			rospy.loginfo(f"Global localization costs: {time.time() - loc_start_time:.3f}s")
 			if result['succ']:
 				matched_map_id = result['map_id']
@@ -363,11 +365,12 @@ def perform_localization(loc: LocPipeline, args):
 		# Set as the initial guess of the next observation
 		loc.last_obs_node = loc.curr_obs_node
 		time.sleep(0.01)
+
 		input()
 
 if __name__ == '__main__':
 	args = parse_arguments()
-	out_dir = pathlib.Path(os.path.join(args.dataset_path, 'output_loc_pipeline'))
+	out_dir = pathlib.Path(os.path.join(args.map_path, 'output_loc_pipeline'))
 	out_dir.mkdir(exist_ok=True, parents=True)
 	log_dir = setup_log_environment(out_dir, args)
 
@@ -379,7 +382,7 @@ if __name__ == '__main__':
 	loc_pipeline.init_img_matcher()
 	rospy.loginfo('Initialize Pose Solver')
 	loc_pipeline.init_pose_solver()
-	loc_pipeline.read_map_from_file()
+	loc_pipeline.read_covis_graph_from_files()
 
 	rospy.init_node('loc_pipeline_node', anonymous=True)
 	loc_pipeline.initalize_ros()
