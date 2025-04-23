@@ -134,7 +134,7 @@ def save_rgb_image(
 ):
 	if isinstance(rgb_img, torch.Tensor):
 		np_img = to_numpy(rgb_img.permute(1, 2, 0) * 255).astype(np.uint8)
-		np_img = np_img[:, :, [2, 1, 0]]
+		# np_img = np_img[:, :, [2, 1, 0]]
 		pil_img = Image.fromarray(np_img)
 	else:
 		pil_img = Image.fromarray(rgb_img.astype(np.uint8))

@@ -152,27 +152,21 @@ def convert_vec_to_rosodom_scale(tx, ty, tz, qx, qy, qz, qw, header, child_frame
 
 def convert_vec_to_rospose(trans, quat, header, mode='xyzw'):
 	if mode == 'xyzw':
-		pose = convert_vec_to_rospose_scale(
-			trans[0], trans[1], trans[2], 
-			quat[0], quat[1], quat[2], quat[3], 
-			header)
+		pose = convert_vec_to_rospose_scale(trans, quat, header)
 	elif mode == 'wxyz':
-		pose = convert_vec_to_rospose_scale(
-			trans[0], trans[1], trans[2], 
-			quat[3], quat[0], quat[1], quat[2], 
-			header)
+		pose = convert_vec_to_rospose_scale(trans, np.roll(quat, 1), header)
 	return pose
 
-def convert_vec_to_rospose_scale(tx, ty, tz, qx, qy, qz, qw, header):
+def convert_vec_to_rospose_scale(trans, quat, header):
 	pose = PoseStamped()
 	pose.header = header
-	pose.pose.position.x = tx
-	pose.pose.position.y = ty
-	pose.pose.position.z = tz
-	pose.pose.orientation.x = qx
-	pose.pose.orientation.y = qy
-	pose.pose.orientation.z = qz
-	pose.pose.orientation.w = qw
+	pose.pose.position.x = trans[0]
+	pose.pose.position.y = trans[1]
+	pose.pose.position.z = trans[2]
+	pose.pose.orientation.x = quat[0]
+	pose.pose.orientation.y = quat[1]
+	pose.pose.orientation.z = quat[2]
+	pose.pose.orientation.w = quat[3]
 	return pose
 
 def convert_vec_to_ros_tfmsg(trans, quat, header, child_frame_id, mode='xyzw'):
