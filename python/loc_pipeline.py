@@ -36,7 +36,7 @@ import matplotlib
 
 from utils.utils_pipeline import *
 from utils.utils_geom import read_intrinsics, read_poses, read_descriptors, correct_intrinsic_scale
-from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error
+from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error, convert_pose_inv
 from utils.utils_vpr_method import initialize_vpr_model, perform_knn_search, compute_euclidean_dis
 from utils.utils_vpr_method import save_visualization as save_vpr_visualization
 from utils.utils_image_matching_method import initialize_img_matcher
@@ -107,7 +107,7 @@ class LocPipeline:
 
 		# Extract VPR descriptors for all nodes in the map
 		self.DB_DESCRIPTORS = np.array([node.get_descriptor() for _, node in self.image_graph.nodes.items()], dtype="float32")
-		print(f"Extracted {self.DB_DESCRIPTORS.shape} VPR descriptors from the map.")
+		rospy.logdebug(f"Extracted {self.DB_DESCRIPTORS.shape} VPR descriptors from the map.")
 		self.DB_POSES = np.empty((self.image_graph.get_num_node(), 7), dtype="float32")
 		for indices, (_, node) in enumerate(self.image_graph.nodes.items()):
 			self.DB_POSES[indices, :3] = node.trans
@@ -190,15 +190,14 @@ class LocPipeline:
 			return result_fail
 		
 		self.ref_map_node = ref_node
-		result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
-		
+		match_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
 		w_ratio = self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0] 
 		h_ratio = self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]
-		mkpts0, mkpts1 = (result["inlier_kpts0"], result["inlier_kpts1"])
+		mkpts0, mkpts1 = (match_result["inlier_kpts0"], match_result["inlier_kpts1"])
 		mkpts0_raw = mkpts0 * [w_ratio, h_ratio]
 		mkpts1_raw = mkpts1 * [w_ratio, h_ratio]
 		
-		num_inliers = result["num_inliers"]
+		num_inliers = match_result["num_inliers"]
 		self.ref_map_node.set_matched_kpts(mkpts0, num_inliers)
 		self.curr_obs_node.set_matched_kpts(mkpts1, num_inliers)
 		rospy.loginfo(f'Number of matched inliers: {num_inliers}')
@@ -211,8 +210,10 @@ class LocPipeline:
 			depth_img1 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
 			R, t, num_solver_inliers = self.pose_solver.estimate_pose(
 				mkpts1_raw, mkpts0_raw,
-				self.curr_obs_node.raw_K, self.ref_map_node.raw_K,
-				depth_img1, None)
+				self.curr_obs_node.raw_K, 
+				self.ref_map_node.raw_K,
+				depth_img1, None
+			)
 			if num_solver_inliers < self.args.min_solver_inliers_thre:
 				rospy.logwarn(f'[Fail] No sufficient number {num_solver_inliers} solver inliers')
 				return result_fail
@@ -222,6 +223,7 @@ class LocPipeline:
 				T_w_mapnode = convert_vec_to_matrix(self.ref_map_node.trans_gt, self.ref_map_node.quat_gt, 'xyzw')
 				T_w_obs = T_w_mapnode @ T_mapnode_obs
 				rospy.logwarn(f'[Succ] sufficient number {num_solver_inliers} solver inliers')
+		
 				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': num_solver_inliers}
 		except Exception as e:
 			rospy.logwarn(f'[Fail] to estimate pose with error:', e)
@@ -323,7 +325,13 @@ def perform_localization(loc: LocPipeline, args):
 			rgb_img_name, depth_img_name
 		)
 		obs_node.set_raw_intrinsics(raw_K, raw_size)
-		obs_node.set_pose_gt(pose[4:], pose[:4])
+		trans, quat = convert_pose_inv(
+			pose[4:], 
+			np.roll(pose[:4], -1), 
+			'xyzw'
+		)
+		obs_node.set_pose_gt(trans, quat)
+
 		loc.curr_obs_node = obs_node
 
 		"""Perform global localization via. visual place recognition"""
@@ -346,7 +354,10 @@ def perform_localization(loc: LocPipeline, args):
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
 
 				dis_trans, _ = compute_pose_error(
-					init_trans, init_quat, loc.ref_map_node.trans, loc.ref_map_node.quat, mode='vector')
+					(init_trans, init_quat), 
+					(loc.ref_map_node.trans, loc.ref_map_node.quat), 
+					mode='vector'
+				)
 				if dis_trans > loc.args.global_pos_threshold:
 					rospy.logwarn('Too far distance from the ref_map_node. Losing Visual Tracking. Reset the global position.')
 					loc.has_global_pos = False
@@ -394,7 +405,7 @@ if __name__ == '__main__':
 
 	rospy.init_node('loc_pipeline_node', anonymous=True)
 	loc_pipeline.initalize_ros()
-	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'map')
+	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'vloc_map')
 	loc_pipeline.child_frame_id = rospy.get_param('~child_frame_id', 'camera')
 
 	perform_localization(loc_pipeline, args)
