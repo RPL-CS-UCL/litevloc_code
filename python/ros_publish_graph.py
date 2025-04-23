@@ -30,7 +30,7 @@ class ROSPublishGraph:
 
 	def publish_message(self):
 		header = Header(stamp=rospy.Time.now(), frame_id='vloc_map')
-		tf_msg = ros_msg.convert_vec_to_rostf(np.array([0, 2.0, 0.0]), np.array([0, 0, 0, 1]), header, 'vloc_map_graph')
+		tf_msg = ros_msg.convert_vec_to_rostf(np.array([0, 0.0, *0.0]), np.array([0, 0, 0, 1]), header, 'vloc_map_graph')
 		self.br.sendTransform(tf_msg)
 		header.frame_id += '_graph'
 		ros_vis.publish_graph(self.point_graph, header, self.pub_graph, self.pub_graph_poses)
