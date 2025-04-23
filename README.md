@@ -1,4 +1,5 @@
-## LiteVloc: Map-Lite Visual Localization for Image-Goal Navigation
+## LiteVloc: Map-Lite Visual Localization for Image-Goal Navigation 
+Accepted by ICRA2025
 ### Requirements
 Create the workspace
 ```bash
@@ -59,3 +60,30 @@ ln -s /usr/lib/x86_64-linux-gnu/libtiff.so.5 /Rocket_ssd/miniconda3/envs/litevlo
 ```
 Issue: ```ImportError: /lib/aarch64-linux-gnu/libgomp.so.1: cannot allocate memory in static TLS block```
 > Set this in the bash file: ```export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1```
+
+### Acknowledgement
+
+```bibtex
+@inproceedings{jiao2025litevloc,
+  title = {LiteVLoc: Map-Lite Visual Localization for Image Goal Navigation},
+  author = {Jiao, Jianhao and He, Jinhao and Liu, Changkun and Aegidius, Sebastian and Hu, Xiangcheng and Braud, Tristan and Kanoulas, Dimitrios},
+  booktitle = {International Conference on Robotics and Automation (ICRA)},
+  pages = {},
+  year = {2025},
+  organization = {IEEE},
+  doi = {},
+  url = {},
+  video = {https://youtu.be/3udVK6HFk6M},
+  dimensions = {true},
+}
+```
+
+```bibtex
+This work was supported by the UKRI FLF [MR/V025333/1] (RoboHike).
+For the purpose of Open Access, the author has applied a CC BY public copyright license to any Author Accepted Manuscript version arising from this submission.
+Prof.Dimitrios Kanoulas is also with Archimedes/Athena RC, Greece.
+```
+
+
+
+ 
