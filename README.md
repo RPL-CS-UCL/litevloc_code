@@ -1,12 +1,41 @@
 ## LiteVloc: Map-Lite Visual Localization for Image-Goal Navigation 
 Accepted by ICRA2025
+
+### Overview of LiteVloc
+LiteVLoc is a **hierarchical visual localization** framework designed to enable efficient and precise camera pose estimation using lightweight topometric maps. Our goal is for this package to serve as a foundational tool for scalable navigation, empowering researchers and developers to build advanced robotic systems with ease.
+
+
+<div align="center">
+    <a href="">
+      <img src="doc/media/litevloc_overview.png" width="50%" 
+      alt="ins_simu_results">
+    </a>
+</div>
+<br>
+
+We use the AR glass to create a lightweight topometric map for camera pose estimation and path planning. We can show an image to the robot, and the robot can autonomously navigate to the goal. Please check our [paper](https://arxiv.org/abs/2410.04419) for the technical explanation and [website](https://rpl-cs-ucl.github.io/LiteVLoc/) for more demonstrations.
+<div align="center">
+    <a href="">
+      <img src="doc/media/exp_real_world_map_meta.png" width="70%" 
+      alt="ins_simu_results">
+    </a>
+</div>
+
+<div align="center">
+    <a href="">
+      <img src="doc/media/litevloc_real_world_result.png" width="70%" 
+      alt="ins_simu_results">
+    </a>
+</div>
+
+
 ### Requirements
 Create the workspace
 ```bash
 mkdir -p catkin_ws/src/
 cd catkin_ws/src/
 ```
-Create conda environment (NVIDIA GeForce RTX 4090 and CUDA 11.8)
+Create conda environment
 ```bash
 conda create --name litevloc python=3.8
 conda activate litevloc
