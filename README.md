@@ -7,7 +7,7 @@ LiteVLoc is a **hierarchical visual localization** framework designed to enable 
 
 <div align="center">
     <a href="">
-      <img src="doc/media/litevloc_overview.png" width="50%" 
+      <img src="doc/media/litevloc_overview.png" width="40%" 
       alt="ins_simu_results">
     </a>
 </div>
@@ -16,14 +16,14 @@ LiteVLoc is a **hierarchical visual localization** framework designed to enable 
 We use the AR glass to create a lightweight topometric map for camera pose estimation and path planning. We can show an image to the robot, and the robot can autonomously navigate to the goal. Please check our [paper](https://arxiv.org/abs/2410.04419) for the technical explanation and [website](https://rpl-cs-ucl.github.io/LiteVLoc/) for more demonstrations.
 <div align="center">
     <a href="">
-      <img src="doc/media/exp_real_world_map_meta.png" width="70%" 
+      <img src="doc/media/exp_real_world_map_meta.png" width="60%" 
       alt="ins_simu_results">
     </a>
 </div>
 
 <div align="center">
     <a href="">
-      <img src="doc/media/litevloc_real_world_result.png" width="70%" 
+      <img src="doc/media/litevloc_real_world_result.png" width="60%" 
       alt="ins_simu_results">
     </a>
 </div>
