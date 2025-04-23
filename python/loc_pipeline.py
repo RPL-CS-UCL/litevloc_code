@@ -10,7 +10,8 @@ python python/loc_pipeline.py \
 	--save_descriptors --num_preds_to_save 3 \
 	--img_matcher master --save_img_matcher \
 	--pose_solver pnp --config_pose_solver python/config/dataset/matterport3d.yaml \
-	--global_pos_threshold 10.0 --min_inliers_threshold 300 --viz
+	--global_pos_threshold 10.0 --min_inliers_threshold 300 \
+	--viz
 
 Usage: 
 rosbag record -O /Titan/dataset/data_litevloc/anymal_lab_upstair_20240722_0/vloc.bag \
@@ -393,7 +394,7 @@ def perform_localization(loc: LocPipeline, args):
 
 if __name__ == '__main__':
 	args = parse_arguments()
-	out_dir = pathlib.Path(os.path.join(args.map_path, 'output_loc_pipeline'))
+	out_dir = pathlib.Path(os.path.join(args.map_path, 'tmp/output_loc_pipeline'))
 
 	# Initialize the localization pipeline
 	loc_pipeline = LocPipeline(args, out_dir)

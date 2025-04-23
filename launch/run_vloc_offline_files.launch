@@ -2,22 +2,22 @@
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/matterport3d/vloc_$(arg env_id)/out_map/" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d/s$(arg env_id)/merge_finalmap/" />
 	<arg name="use_rviz" default="false" />
-
 	<param name="use_sim_time" value="false" />
 
 	<!-- Localization -->
 	<node name="loc_pipeline" pkg="litevloc" type="loc_pipeline.py" output="screen"
-		args="--dataset_path $(arg map_path)
-					--image_size 512 288 --device=cuda
-					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256
-					--save_descriptors --num_preds_to_save 3
-					--img_matcher master --save_img_matcher --n_kpts 1024
-					--pose_solver pnp --config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml
-					--viz
-					--global_pos_threshold 20.0
-					--min_inliers_threshold 300" >
+		args="--map_path $(arg map_path)
+					--query_data_path $(arg map_path)
+					--image_size 512 288
+					--device cuda --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 
+					--img_matcher master --pose_solver pnp 
+					--config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml
+					--global_pos_threshold 10.0
+					--min_master_conf_thre 1.5
+					--min_kpts_inliers_thre 200 
+					--min_solver_inliers_thre 200 --viz" >
 		<param name="frame_id_map" value="vloc_map" />
 		<param name="child_frame_id" value="habitat_camera" />
 	</node>

@@ -188,7 +188,7 @@ if __name__ == '__main__':
 	global_planner.read_trav_graph_from_files()
 
 	# Initialize the localization pipeline
-	global_planner.loc_pipeline = LocPipeline(args, map_root/'output_global_planner')
+	global_planner.loc_pipeline = LocPipeline(args, map_root/'tmp/output_global_planner')
 	global_planner.loc_pipeline.init_vpr_model()
 	global_planner.loc_pipeline.read_covis_graph_from_files()
 	
