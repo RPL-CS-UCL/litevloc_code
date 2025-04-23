@@ -23,6 +23,7 @@
 			<arg name="environment_directory" value="$(find benchmark_visual_nav)/data/matterport/$(arg env_id)" />
 			<arg name="gazebo_gui" value="$(arg gazebo_gui)" />
 			<arg name="useLocalPlanner" value="$(arg useLocalPlanner)" />
+			<arg name="use_rviz" value="false" />
 			
 			<group if="$(arg useLocalPlanner)">
 				<arg name="odomTopic" value="/state_estimation" />
@@ -37,7 +38,7 @@
 	<!-- Transform the frame_id of localization odometry to robot -->
 	<!-- Publish: /vloc/state_estimation, /vloc/state_estimation_path -->
 	<group if="$(arg use_nav)">
-		<node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="screen">
+		<node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="log">
 			<param name="loc_world_frame_id" value="vloc_map" />
 			<param name="loc_sensor_frame_id" value="habitat_camera" />
 			<param name="world_frame_id" value="vloc_map_not_used" />
@@ -51,7 +52,6 @@
 		</node>	
 	</group>
 
-	<!-- TODO -->
 	<!-- Planning -->
 	<group if="$(arg setup_simu_env)">
 		<node name="ros_global_planner" pkg="litevloc" type="ros_global_planner.py" output="log"
@@ -68,10 +68,9 @@
 		</node>
 	</group>
 
-	<!-- TODO -->
 	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="litevloc" type="ros_loc_pipeline.py" output="screen"
-		args="--dataset_path $(arg map_path)
+		args="--map_path $(arg map_path)
 					--image_size 512 288
 					--device cuda --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 
 					--img_matcher master --pose_solver pnp 
@@ -80,7 +79,7 @@
 					--global_pos_threshold $(arg global_pos_threshold)
 					--min_master_conf_thre 1.5
 					--min_kpts_inliers_thre 300 
-					--min_solver_inliers_thre 300" >
+					--min_solver_inliers_thre 300 --viz" >
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/color/camera_info" to="/habitat_camera/color/camera_info" />
@@ -99,9 +98,8 @@
 		<param name="max_depth" value="10.0" />
 	</node>
 
-	<!-- TODO -->
 	<node name="ros_pose_fusion" pkg="litevloc" type="ros_pose_fusion.py" output="log"
-		args="--odom_type depth_registration">
+		args="--odom_type depth_reg">
 		<remap from="/local/odometry" to="/depth_reg/odometry" />
 		<remap from="/global/odometry" to="/vloc/odometry" />
 		<param name="frame_id_map" value="vloc_map" />

@@ -3,15 +3,16 @@
 import os
 import numpy as np
 import argparse
+import pathlib
 
+import tf2_ros
 import rospy
 from std_msgs.msg import Header
 from visualization_msgs.msg import MarkerArray
 from geometry_msgs.msg import PoseArray
-import tf2_ros
 
 from point_graph import PointGraphLoader as GraphLoader
-import pycpptools.src.python.utils_ros as pytool_ros
+from utils.utils_ros import ros_msg, ros_vis
 
 class ROSPublishGraph:
 	def __init__(self, args):
@@ -22,18 +23,17 @@ class ROSPublishGraph:
 		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
 		self.br = tf2_ros.TransformBroadcaster()
 
-	def read_map_from_file(self):
-		self.point_graph = GraphLoader.load_data(self.args.map_path)
-		print('Loaded point graph from {}'.format(self.args.map_path))
-		print('Number of nodes: {}'.format(len(self.point_graph.nodes)))
+	def read_trav_graph_from_file(self):
+		map_root = pathlib.Path(args.map_path)
+		self.point_graph = GraphLoader.load_data(map_root, edge_type='trav')
+		print(str(self.point_grpah))
 
 	def publish_message(self):
-		header = Header(stamp=rospy.Time.now(), frame_id='map')
-		tf_msg = pytool_ros.ros_msg.convert_vec_to_rostf(np.array([0, 2.0, 0.0]), np.array([0, 0, 0, 1]), header, 'map_graph')
+		header = Header(stamp=rospy.Time.now(), frame_id='vloc_map')
+		tf_msg = ros_msg.convert_vec_to_rostf(np.array([0, 2.0, 0.0]), np.array([0, 0, 0, 1]), header, 'vloc_map_graph')
 		self.br.sendTransform(tf_msg)
-
-		header = Header(stamp=rospy.Time.now(), frame_id='map_graph')
-		pytool_ros.ros_vis.publish_graph(self.point_graph, header, self.pub_graph, self.pub_graph_poses)
+		header.frame_id += '_graph'
+		ros_vis.publish_graph(self.point_graph, header, self.pub_graph, self.pub_graph_poses)
 
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser(
@@ -44,7 +44,7 @@ if __name__ == '__main__':
 	args, unknown = parser.parse_known_args()
 
 	ros_publish_graph = ROSPublishGraph(args)
-	ros_publish_graph.read_map_from_file()
+	ros_publish_graph.read_trav_graph_from_file()
 
 	rospy.init_node('ros_publish_graph', anonymous=True)
 	ros_publish_graph.initialize_ros()
