@@ -106,12 +106,14 @@ class LocPipeline:
 		logging.info(str(self.image_graph))
 
 		# Extract VPR descriptors for all nodes in the map
-		self.DB_DESCRIPTORS = np.array([node.get_descriptor() for _, node in self.image_graph.nodes.items()], dtype="float32")
-		rospy.logdebug(f"Extracted {self.DB_DESCRIPTORS.shape} VPR descriptors from the map.")
+		self.DB_Node_IDS = [node.id for node in self.image_graph.nodes.values()]
+		self.DB_DESCRIPTORS = np.array([node.get_descriptor() for node in self.image_graph.nodes.values()], dtype="float32")
 		self.DB_POSES = np.empty((self.image_graph.get_num_node(), 7), dtype="float32")
 		for indices, (_, node) in enumerate(self.image_graph.nodes.items()):
 			self.DB_POSES[indices, :3] = node.trans
 			self.DB_POSES[indices, 3:] = node.quat
+
+		rospy.logdebug(f"Extracted {self.DB_DESCRIPTORS.shape} VPR descriptors from the map.")
 
 	def perform_vpr(self, db_descs: np.array, query_desc: np.array):
 		dis, pred = perform_knn_search(
@@ -145,23 +147,24 @@ class LocPipeline:
 	def search_keyframe_from_graph(self, obs_node):
 		"""
 		This method searches for the visual-closest keyframe in the covisibility graph for a given observation node.
-
 		Parameters:
-		obs_node (Node): The observation node for which to find the closest keyframe. 
-
+			obs_node (Node): The observation node for which to find the closest keyframe. 
 		Returns:
-		Node: The closest keyframe node in the graph. 
-			  If no keyframe is found within the global position threshold, it returns None.
+			Node: The closest keyframe node in the graph. 
+				If no keyframe is found within the global position threshold, it returns None.
 		"""
+		# Search for the physical closest keyframe in the graph
 		query_pose = obs_node.trans.reshape(1, 3)
 		dis, pred = perform_knn_search(self.DB_POSES[:, :3], query_pose, 3, [1])
 		if len(pred[0]) == 0 or dis[0][0] > self.args.global_pos_threshold: 
 			return None
 		
+		# Search for the visual closest keyframe in the graph
 		closest_map_node = self.image_graph.get_node(pred[0][0])
 		all_nei_nodes = [nei_node for nei_node, _ in closest_map_node.edges.values()] + [closest_map_node]
 		list_dis = [compute_euclidean_dis(obs_node.get_descriptor(), node.get_descriptor()) for node in all_nei_nodes]
 		node_min_dis = all_nei_nodes[np.argmin(list_dis)]
+
 		out_str = 'Keyframe candidate: '
 		out_str += ' '.join([f'{node.id}({dis:.2f})' for node, dis in zip(all_nei_nodes, list_dis)]) + f' Closest node: {node_min_dis.id}'
 		rospy.loginfo(out_str)
@@ -171,23 +174,24 @@ class LocPipeline:
 	def perform_global_loc(self, save_viz=False):
 		query_desc = self.curr_obs_node.get_descriptor()
 		_, vpr_pred = self.perform_vpr(self.DB_DESCRIPTORS, query_desc.reshape(1, -1))
+		
 		if save_viz:
 			img_paths = [str(self.image_graph.map_root / self.curr_obs_node.rgb_img_name)]
 			for i in range(len(vpr_pred[0, :self.args.num_preds_to_save])):
-				map_node = self.image_graph.get_node(vpr_pred[0, i])
+				node_id = self.DB_Node_IDS[vpr_pred[0, i]]
+				map_node = self.image_graph.get_node(node_id)
 				img_paths.append(str(self.image_graph.map_root / map_node.rgb_img_name))
 			preds_correct = [None] * len(img_paths)
 			save_vpr_visualization(self.log_dir, 0, img_paths, preds_correct)
 		
-		return {'succ': True, 'map_id': vpr_pred[0, 0]}
+		return {'succ': True, 'map_id': self.DB_Node_IDS[vpr_pred[0, 0]]}
 	
 	def perform_local_loc(self):
 		result_fail = {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 
 		matching_start_time = time.time()
 		ref_node = self.search_keyframe_from_graph(self.curr_obs_node)
-		if ref_node is None: 
-			return result_fail
+		if ref_node is None: return result_fail
 		
 		self.ref_map_node = ref_node
 		match_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
@@ -248,7 +252,6 @@ class LocPipeline:
 				odom = ros_msg.convert_vec_to_rosodom(self.curr_obs_node.trans, self.curr_obs_node.quat, header, self.child_frame_id)
 				self.pub_odom.publish(odom)
 				pose_msg = ros_msg.convert_odom_to_rospose(odom)
-				
 				self.path_msg.header = header
 				self.path_msg.poses.append(pose_msg)
 				self.pub_path.publish(self.path_msg)
@@ -283,7 +286,6 @@ class LocPipeline:
 					cv2.putText(merged_img, text, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3, cv2.LINE_AA)
 					img_msg = ros_msg.convert_cvimg_to_rosimg(merged_img, "bgr8", header, compressed=False)
 					self.pub_map_obs.publish(img_msg)
-
 
 # Test loc_pipeline without using ROS
 def perform_localization(loc: LocPipeline, args):

@@ -129,7 +129,7 @@ Run habitat_sim to render image
 ```bash
 cd autonomous_exploration_development_environment/src/segmentation_proc/scripts
 conda activate habitat
-export PATH_ENV=benchmark_visual_nav/matterport/17DRP5sb8fy/navigation_environment/segmentations/matterport.glb
+export PATH_ENV=benchmark_visual_nav/data/matterport/17DRP5sb8fy/navigation_environment/segmentations/matterport.glb
 python habitat_online_v0.2.1.py --scene $PATH_ENV
 ```
 Run LiteVLoc
@@ -138,6 +138,7 @@ conda activate litevloc
 roslaunch litevloc run_vloc_online_simuenv.launch \
   env_id:=17DRP5sb8fy \
   map_path:=data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap/ \
+  useLocalPlanner:=false \
   use_nav:=true
 ```
 Run the iPlanner
@@ -148,7 +149,7 @@ roslaunch benchmark_visual_nav iplanner.launch config:=vehicle_sim_vloc
 4. You can see these output
 <div align="center">
     <a href="">
-      <img src="media/ins_simu_results.png" width="50%" 
+      <img src="media/ins_simu_matterport3d_vnav.gif" width="50%" 
       alt="ins_simu_results">
     </a>
 </div>

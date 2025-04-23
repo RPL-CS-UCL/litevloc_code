@@ -90,7 +90,7 @@ class GlobalPlanner:
 	def odom_callback(self, odom_msg):
 		time = odom_msg.header.stamp.to_sec()
 		trans, quat = ros_msg.convert_rosodom_to_vec(odom_msg)
-		robot_node = PointNode(self.robot_id, None, time, trans, quat, None, None)
+		robot_node = PointNode(self.robot_id, time, trans, quat, None)
 		self.robot_id += 1
 
 		self.perform_planning(robot_node)

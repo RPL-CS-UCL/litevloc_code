@@ -2,29 +2,22 @@
 
 """
 Usage: 
-python loc_pipeline.py \
---dataset_path /Rocket_ssd/dataset/data_litevloc/matterport3d/out_17DRP5sb8fy/out_map \
---image_size 288 512 --device=cuda \
---vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=512 --save_descriptors --num_preds_to_save 3 \
---img_matcher master --save_img_matcher \
---pose_solver pnp --config_pose_solver config/dataset/matterport3d.yaml \
---viz
-
-Usage: 
-rosbag record -O /Titan/dataset/data_litevloc/anymal_lab_upstair_20240722_0/vloc.bag \
-/vloc/odom /vloc/path /vloc/path_gt /vloc/image_map_obs
+python python/ros_loc_pipeline.py \
+	--map_path /Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
+	--image_size 512 288 \
+	--device cuda --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256  \
+	--img_matcher master --pose_solver pnp  \
+	--config_pose_solver config/dataset/matterport3d.yaml \
+	--ros_rgb_img_type raw \
+	--global_pos_threshold 10.0 \
+	--min_master_conf_thre 1.5 \
+	--min_kpts_inliers_thre 300  \
+	--min_solver_inliers_thre 300
 """
 
 # General
 import os
 import sys
-
-# ROS
-import rospy
-from nav_msgs.msg import Odometry
-from sensor_msgs.msg import Image, CompressedImage, CameraInfo
-import message_filters
-
 import pathlib
 import numpy as np
 import torch
@@ -32,20 +25,22 @@ import time
 import queue
 import threading
 
-from utils.utils_image import rgb_image_to_tensor, depth_image_to_tensor
+# ROS
+import rospy
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo
+import message_filters
+
+# Others
+from utils.utils_image import rgb_image_to_tensor, depth_image_to_tensor, to_numpy
 from utils.utils_pipeline import *
+from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error, correct_intrinsic_scale
+from utils.utils_ros import ros_msg
+from utils.utils_stamped_poses import StampedPoses
 from image_node import ImageNode
 from loc_pipeline import LocPipeline
 
-from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error, correct_intrinsic_scale
-from utils.utils_ros import ros_msg, ros_vis
-
-import pycpptools.src.python.utils_math as pytool_math
-import pycpptools.src.python.utils_ros as pytool_ros
-import pycpptools.src.python.utils_sensor as pytool_sensor
-import pycpptools.src.python.utils_algorithm as pytool_algo
-
-fused_poses = pytool_algo.stpose.StampedPoses()
+fused_poses = StampedPoses()
 rgb_depth_queue = queue.Queue()
 lock = threading.Lock()
 
@@ -92,17 +87,18 @@ def perform_localization(loc: LocPipeline, args):
 
 			# Create observation node
 			with torch.no_grad():
-				desc = loc.vpr_model(rgb_img_tensor.unsqueeze(0).to(args.device)).cpu().numpy()
+				desc = to_numpy(loc.vpr_model(rgb_img_tensor.unsqueeze(0).to(args.device)))
 			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, desc,
 								 rgb_img_time, np.zeros(3), np.array([0, 0, 0, 1]),
 								 K, img_size, None, None)
 			obs_node.set_raw_intrinsics(raw_K, raw_img_size)
+
 			loc.curr_obs_node = obs_node
 
 			"""Perform global localization via. visual place recognition"""
 			if not loc.has_global_pos:
 				loc_start_time = time.time()
-				result = loc.perform_global_loc(save=False)
+				result = loc.perform_global_loc(save_viz=False)
 				rospy.loginfo(f"Global localization cost: {time.time() - loc_start_time:.3f}s")
 				if result['succ']:
 					matched_map_id = result['map_id']
@@ -121,11 +117,12 @@ def perform_localization(loc: LocPipeline, args):
 				# Use the closest fused pose as the initial guess
 				else:
 					init_trans, init_quat = convert_matrix_to_vec(stamped_pose_closest[1])
+				
 				loc.curr_obs_node.set_pose(init_trans, init_quat)
 				
 				dis_trans, _ = compute_pose_error(
-					init_trans, init_quat, 
-					loc.ref_map_node.trans, loc.ref_map_node.quat,
+					(init_trans, init_quat), 
+					(loc.ref_map_node.trans, loc.ref_map_node.quat),
 					mode='vector'
 				)
 				if dis_trans > loc.args.global_pos_threshold:
@@ -153,16 +150,14 @@ def perform_localization(loc: LocPipeline, args):
 
 if __name__ == '__main__':
 	args = parse_arguments()
-	out_dir = pathlib.Path(os.path.join(args.dataset_path, 'output_ros_loc_pipeline'))
-	out_dir.mkdir(exist_ok=True, parents=True)
-	log_dir = setup_log_environment(out_dir, args)
+	out_dir = pathlib.Path(os.path.join(args.map_path, 'output_ros_loc_pipeline'))
 
 	# Initialize the localization pipeline
-	loc_pipeline = LocPipeline(args, log_dir)
+	loc_pipeline = LocPipeline(args, out_dir)
 	loc_pipeline.init_vpr_model()
 	loc_pipeline.init_img_matcher()
 	loc_pipeline.init_pose_solver()
-	loc_pipeline.read_map_from_file()
+	loc_pipeline.read_covis_graph_from_files()
 
 	rospy.init_node('ros_loc_pipeline_simu', anonymous=False)
 	loc_pipeline.initalize_ros()
