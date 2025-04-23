@@ -20,7 +20,7 @@ from global_planner import GlobalPlanner
 
 if __name__ == '__main__':
 	args = parse_arguments()
-	out_dir = pathlib.Path(os.path.join(args.map_path, 'output_ros_global_planner'))
+	out_dir = pathlib.Path(os.path.join(args.map_path, 'tmp/output_ros_global_planner'))
 
 	# Initialize the global planner
 	global_planner = GlobalPlanner(args)

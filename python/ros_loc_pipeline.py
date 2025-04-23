@@ -150,7 +150,7 @@ def perform_localization(loc: LocPipeline, args):
 
 if __name__ == '__main__':
 	args = parse_arguments()
-	out_dir = pathlib.Path(os.path.join(args.map_path, 'output_ros_loc_pipeline'))
+	out_dir = pathlib.Path(os.path.join(args.map_path, 'tmp/output_ros_loc_pipeline'))
 
 	# Initialize the localization pipeline
 	loc_pipeline = LocPipeline(args, out_dir)

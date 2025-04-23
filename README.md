@@ -34,11 +34,10 @@ Build LiteVloc as the ROS package (optional)
 catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
 ```
 
-
 ### We provide several usage of LiteVloc
 1. [Instruction in Performing Map-free Benchmarking](doc/instruction_map_free_benchmark.md)
-2. [Instruction in Running LiteVloc with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
-<!-- 3. [Instruction in Performing Map Merging](doc/instruction_map_merging.md) -->
+2. [Instruction in Running LiteVloc with Offline Data](doc/instruction_vloc_data.md)
+3. [Instruction in Running LiteVloc with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
 
 ### Issues
 Issue: ```cannot import name 'cache' from 'functools'```
