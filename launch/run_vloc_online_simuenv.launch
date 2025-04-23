@@ -79,8 +79,8 @@
 					--ros_rgb_img_type raw
 					--global_pos_threshold $(arg global_pos_threshold)
 					--min_master_conf_thre 1.5
-					--min_kpts_inliers_thre 300 
-					--min_solver_inliers_thre 300 --viz" >
+					--min_kpts_inliers_thre 200 
+					--min_solver_inliers_thre 200 --viz" >
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />
 		<remap from="/color/camera_info" to="/habitat_camera/color/camera_info" />
