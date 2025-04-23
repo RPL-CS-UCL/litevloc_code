@@ -15,11 +15,6 @@ import argparse
 import faiss
 from matplotlib import pyplot as plt
 
-from utils.vpr_topological_filter import PlaceRecognitionTopologicalFilter
-from utils.vpr_single_matching import PlaceRecognitionSingleMatching
-from utils.vpr_sequence_matching import PlaceRecognitionSeqMatching
-from utils.vpr_sequence_matching_adaptive import PlaceRecognitionSeqMatchingAdaptive
-
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
 	log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -52,19 +47,6 @@ def initialize_vpr_model(model_name, backbone, descriptors_dimension, device):
 	"""Initialize and return the model."""
 	model = vpr_models.get_model(model_name, backbone, descriptors_dimension)
 	return model.eval().to(device)
-
-def initialize_match_model(model_name, seq_len):
-	if model_name == 'single_match':
-		match_model = PlaceRecognitionSingleMatching()
-	elif model_name == 'topo_filter':
-		match_model = PlaceRecognitionTopologicalFilter()
-	elif model_name == 'sequence_match':
-		match_model = PlaceRecognitionSeqMatching(seqLen=seq_len, enable_ransac=False)
-	elif model_name == 'sequence_match_ransac':
-		match_model = PlaceRecognitionSeqMatching(seqLen=seq_len, enable_ransac=True)
-	elif model_name == 'sequence_match_adaptive':
-		match_model = PlaceRecognitionSeqMatchingAdaptive(seqLen=seq_len)
-	return match_model
 
 def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):
 	"""Perform kNN search and return predictions."""
