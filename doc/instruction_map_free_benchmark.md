@@ -7,13 +7,13 @@ git clone https://github.com/nianticlabs/map-free-reloc
 ```
 
 ### Download dataset
-We follow [Map-free reloc](https://github.com/nianticlabs/map-free-reloc) to structure the data
+Please download [LiteVloc data](https://drive.google.com/drive/folders/1SLhkXY0JsmGsJZqz9JJnl123E9QndBab?usp=drive_link) in your folder. 
+The data is structured as the ```map-free``` format:
 ```bash
 map_free_eval/
 ├── test/
 ├── s00000
 │   ├── intrinsics.txt
-│   ├── overlaps.npz
 │   ├── poses.txt
 │   ├── seq0
 │   │   ├── frame_00000.jpg
@@ -42,28 +42,24 @@ where $q$ is the quaternion encoding rotation and $t$ is the **metric** translat
 Note:
 - The pose is given in world-to-camera format, i.e. $R(q), t$ transform a world point $p$ in seq0 to the camera coordinate system in seq1 as $Rp + t$.
 - The reference frame (`seq0/frame_00000.jpg`) always has identity pose and the pose of query frames (`seq1/frame_*.jpg`) are given relative to the reference frame. 
-<!-- Thus, the absolute pose of a given query frame is equivalent to the relative pose between the reference and the query frames. -->
 
 ### Available Models
 You can choose any of the following methods (input to `get_matcher()`):
-
 **Dense**: ```roma, tiny-roma, dust3r, mast3r```
-
 **Semi-dense**: ```loftr, eloftr, se2loftr, aspanformer, matchformer, xfeat-star```
-
 **Sparse**: ```[sift, superpoint, disk, aliked, dedode, doghardnet, gim, xfeat]-lg, dedode, steerers, dedode-kornia, [sift, orb, doghardnet]-nn, patch2pix, superglue, r2d2, d2net,  gim-dkm, xfeat, omniglue, [dedode, xfeat, aliked]-subpx```
 
 
 ### Use
 Setup path for dataset and matcher for your evaluation. We support above image matchers defined in [image-matching-models](https://github.com/gmberton/image-matching-models)
 ```bash
-bash scripts/run_benchmark_loc_submission.sh
+bash scripts/run_benchmark_mf_submission.sh matterport3d
 ```
-Perform evaluation using [Mickey Evaluation Scripts](https://github.com/nianticlabs/mickey)
+Perform evaluation
 ```bash
-bash scripts/run_benchmark_loc_evaluation.sh
+bash scripts/run_benchmark_mf_evaluation.sh matterport3d
 ```
-You can output a file named ```results/report_evaluation_025_5.txt``` with content similar to
+You can see the similar output in the terminal:
 ```bash
 Evaluate matching methods: master_pnp
 {

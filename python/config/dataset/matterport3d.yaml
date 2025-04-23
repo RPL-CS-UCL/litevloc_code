@@ -2,8 +2,11 @@ MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'  # To determine the dataloader
   DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/map_free_eval/matterport3d/map_free_eval'
-  TRAIN_SCENES: [s00000]
-  TEST_SCENES: [s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008,
+  # TRAIN_SCENES: [s00000]
+  # TEST_SCENES: [s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008,
+  #               s00009, s00010, s00011, s00012, s00013, s00014, s00015, s00016, s00017,
+  #               s00018, s00019, s00020, s00021, s00022, s00023, s00024, s00025, s00026]
+  TEST_SCENES: [s00000, s00001, s00002, s00003, s00004, s00005, s00006, s00007, s00008,
                 s00009, s00010, s00011, s00012, s00013, s00014, s00015, s00016, s00017,
                 s00018, s00019, s00020, s00021, s00022, s00023, s00024, s00025, s00026]
   ESTIMATED_DEPTH: zed   # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'

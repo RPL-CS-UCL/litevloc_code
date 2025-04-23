@@ -5,6 +5,8 @@
 
 import os
 import sys
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
+
 import argparse
 from pathlib import Path
 from collections import defaultdict
@@ -15,9 +17,7 @@ import numpy as np
 from tqdm import tqdm
 from transforms3d.quaternions import mat2quat
 
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../"))
 from utils.pose_solver import available_solvers, get_solver
-# from utils.pose_solver_default import cfg
 from benchmark_rpe.rpe_default import cfg
 from utils.utils_image_matching_method import save_visualization
 from utils.utils_geom import correct_intrinsic_scale
@@ -69,7 +69,7 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             num_inliers, mkpts0, mkpts1 = (
                 matcher_result["num_inliers"],
                 matcher_result["inlier_kpts0"],
-                matcher_result["inlier_kpts0"],
+                matcher_result["inlier_kpts1"],
             )
 
             """Pose Estimation"""
@@ -95,7 +95,9 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
                 # R01 (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate depth_img1 to depth_img0.
                 # t01 (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate depth_img1 to depth_img0.
                 # inliers_solver (int): Number of inliers used in the final pose estimation.
-                R01, t01, inliers_solver = solver.estimate_pose(mkpts1_raw, mkpts0_raw, K1_raw, K0_raw, depth_img1, depth_img0)
+                R01, t01, inliers_solver = solver.estimate_pose(
+                    mkpts1_raw, mkpts0_raw, K1_raw, K0_raw, depth_img1, depth_img0
+                )
                 T01 = np.eye(4); T01[:3, :3] = R01; T01[:3,  3] = t01.reshape(3)
                 T10 = np.linalg.inv(T01); R = T10[:3, :3]; t = T10[:3,  3].reshape(3, 1)
             solver_time = time.time() - start_time           

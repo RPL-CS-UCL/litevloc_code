@@ -45,7 +45,8 @@ do
   python $PROJECT_PATH/python/benchmark_map_free/evaluation.py \
     --submission_path $DATASET_PATH/results_mf/"$model"_pnp/submission.zip \
     --dataset_path $DATASET_PATH \
+    --eval_config config_025_5 \
     --split test \
-    --log error
+    --log warning
   echo ""
 done
