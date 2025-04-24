@@ -103,7 +103,7 @@ You can see these output if you have successfully install the simulated environm
     </a>   
 </div>
 
-#### Launching the CMU Navigation Stack with IPlanner
+#### Launching the CMU Navigation Stack with iPlanner
 Follow the [tutorial](https://github.com/leggedrobotics/iPlanner) to install **iPlanner** for local planning.
 Start the environment
 ```bash
