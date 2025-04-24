@@ -2,7 +2,7 @@
 Accepted by ICRA2025
 
 ### Overview of LiteVloc
-LiteVLoc is a **hierarchical visual localization** framework designed to enable efficient and precise camera pose estimation using lightweight topometric maps. Our goal is for this package to serve as a foundational tool for scalable navigation, empowering researchers and developers to build advanced robotic systems with ease.
+LiteVLoc is a **hierarchical visual localization** framework designed to enable efficient and robust camera pose estimation using lightweight topometric maps. Our goal is for this package to serve as a foundational tool for scalable navigation, empowering researchers and developers to build advanced robotic systems with ease.
 
 
 <div align="center">
