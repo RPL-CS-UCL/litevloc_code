@@ -35,7 +35,7 @@ Create the workspace
 mkdir -p catkin_ws/src/
 cd catkin_ws/src/
 ```
-Create conda environment
+Create conda environment (python>=3.8 should be compatible, but have not tested)
 ```bash
 conda create --name litevloc python=3.8
 conda activate litevloc
