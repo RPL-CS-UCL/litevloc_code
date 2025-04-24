@@ -13,7 +13,7 @@ LiteVLoc is a **hierarchical visual localization** framework designed to enable 
 </div>
 <br>
 
-We use the AR glass to create a lightweight topometric map for camera pose estimation and path planning. We can show an image as a goal (like the picture previously captured by your friend) a to the robot, and the robot can autonomously guide you to navigate to the goal. Please check our [paper](https://arxiv.org/abs/2410.04419) for the technical explanation and [website](https://rpl-cs-ucl.github.io/LiteVLoc/) for more demonstrations.
+We use the AR glass to create a lightweight topometric map for camera pose estimation and path planning. We can show an image as a goal (like the picture previously captured by your friend) a to the robot, and the robot can autonomously guide you to navigate to the goal. Please check our [paper](https://arxiv.org/abs/2410.04419) for the technical details and [website](https://rpl-cs-ucl.github.io/LiteVLoc/) for more demonstrations.
 <div align="center">
     <a href="">
       <img src="doc/media/exp_real_world_map_meta.png" width="60%" 
