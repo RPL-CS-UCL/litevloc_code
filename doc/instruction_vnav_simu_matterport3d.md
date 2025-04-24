@@ -146,7 +146,7 @@ Run the iPlanner
 conda activate iplanner
 roslaunch benchmark_visual_nav iplanner.launch config:=vehicle_sim_vloc
 ```
-4. You can see these output
+You can see these output
 <div align="center">
     <a href="">
       <img src="media/ins_simu_matterport3d_vnav.gif" width="50%" 
