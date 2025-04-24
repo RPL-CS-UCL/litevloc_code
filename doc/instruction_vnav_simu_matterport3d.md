@@ -1,4 +1,4 @@
-## Instraction of Running LiteVloc with Simulated Matterport3d
+## Instruction of Running Visual Navigation with Simulated Matterport3d
 
 This repository provides a setup for visual navigation using ROS, the CMU Navigation Stack, IPlanner, and the Matterport3D environment. Follow the steps below to configure your workspace and dependencies.
 
