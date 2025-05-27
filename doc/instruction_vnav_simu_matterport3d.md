@@ -39,15 +39,16 @@ sudo apt install ros-noetic-diagnostic-aggregator
 ```
 
 #### Setup Matterport3D Environment
-Follow the instructions in the [CMU VLA Challenge Repository](https://github.com/jizhang-cmu/cmu_vla_challenge_matterport) to download models from Matterport3D and install the habitat engine. Or use this simple command
+Follow the instructions in the [Habitat](https://github.com/facebookresearch/habitat-sim) to install the habitat engine, or use this simple command
 ```bash
 conda create --name habitat python=3.8
 conda activate habitat
 conda install habitat-sim==0.2.1  -c conda-forge -c aihabitat
 pip install numba==0.58.1 numpy==1.24.0
 ```
+Follow the instructions in [CMU VLA Challenge Repository](https://github.com/jizhang-cmu/cmu_vla_challenge_matterport) to download models from Matterport3D. 
 
-And move the environemnt files to `benchmark_visual_nav/data/matterport/{env_id}`. An example is shown below:
+Move the environemnt files to `benchmark_visual_nav/data/matterport/{env_id}`. We use ID:17DRP5sb8fy as the example:
 ```bash
 benchmark_visual_nav/data/matterport/17DRP5sb8fy
     navigation_environment/meshes/
