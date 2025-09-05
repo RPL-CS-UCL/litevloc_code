@@ -20,7 +20,7 @@ cd ~/catkin_ws/src
 ```
 Clone the CMU navigation stack (some settings were changed)
 ```bash
-git clone git@github.com:RPL-CS-UCL/autonomous_exploration_development_environment.git
+git clone https://github.com/RPL-CS-UCL/autonomous_exploration_development_environment.git
 cd autonomous_exploration_development_environment
 git checkout noetic-matterport-anymal_dev
 ```
@@ -30,8 +30,8 @@ git clone https://github.com/MichaelFYang/iplanner_path_follow.git
 ```
 Clone the navigation interface and benchmark_visual_nav
 ```bash
-git clone git@github.com:RPL-CS-UCL/navigation_interface.git
-git clone git@github.com:RPL-CS-UCL/benchmark_visual_nav.git
+git clone https://github.com/RPL-CS-UCL/navigation_interface.git
+git clone https://github.com/RPL-CS-UCL/benchmark_visual_nav.git
 ```
 Install other dependencies
 ```bash
