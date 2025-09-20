@@ -1,5 +1,5 @@
-## LiteVloc: Map-Lite Visual Localization for Image-Goal Navigation 
-Accepted by ICRA2025
+## LiteVloc: Map-Lite Visual Localization for Image-Goal Navigation (ICRA2025)
+Authors: [Jianhao Jiao](https://gogojjh.github.io/), [Jinhao He](https://scholar.google.com/citations?user=IpnYOGkAAAAJ&hl=en), [Changkun Liu](https://lck666666.github.io/), [Sebastian Aegidius](https://scholar.google.com/citations?user=gIpqBF4AAAAJ&hl=en), Xiangcheng Hu, [Tristan Braud](https://braudt.people.ust.hk/), [Dimitrios Kanoulas](https://dkanou.github.io/)
 
 ### Overview of LiteVloc
 LiteVLoc is a **hierarchical visual localization** framework designed to enable efficient and robust camera pose estimation using lightweight topometric maps. Our goal is for this package to serve as a foundational tool for scalable navigation, empowering researchers and developers to build advanced robotic systems with ease.
