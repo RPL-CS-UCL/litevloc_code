@@ -91,6 +91,7 @@ Issue: ```ImportError: /lib/aarch64-linux-gnu/libgomp.so.1: cannot allocate memo
 > Set this in the bash file: ```export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1```
 
 ### Acknowledgement
+If this work is helpful to your research, please consider citing LiteVLoc.
 
 ```bibtex
 @inproceedings{jiao2025litevloc,
