@@ -49,7 +49,7 @@ Install  ```VPR-evaluation-methods```
 ```bash
 git clone git@github.com:gogojjh/VPR-methods-evaluation.git
 ```
-Create conda environment (NVIDIA GeForce RTX 4090 and CUDA 11.8)
+Create conda environment (NVIDIA GeForce RTX 4090 and CUDA 11.8 with Python 3.8)
 ```bash
 git clone https://github.com/RPL-CS-UCL/litevloc_code
 conda install pytorch=2.0.1 torchvision=0.15.2 pytorch-cuda=11.8 numpy=1.24.3 -c pytorch -c nvidia # use the correct version of cuda for your system
