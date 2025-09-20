@@ -94,16 +94,12 @@ Issue: ```ImportError: /lib/aarch64-linux-gnu/libgomp.so.1: cannot allocate memo
 
 ```bibtex
 @inproceedings{jiao2025litevloc,
-  title = {LiteVLoc: Map-Lite Visual Localization for Image Goal Navigation},
-  author = {Jiao, Jianhao and He, Jinhao and Liu, Changkun and Aegidius, Sebastian and Hu, Xiangcheng and Braud, Tristan and Kanoulas, Dimitrios},
-  booktitle = {International Conference on Robotics and Automation (ICRA)},
-  pages = {},
-  year = {2025},
-  organization = {IEEE},
-  doi = {},
-  url = {},
-  video = {https://youtu.be/3udVK6HFk6M},
-  dimensions = {true},
+  title={LiteVLoc: Map-lite visual localization for image goal navigation},
+  author={Jiao, Jianhao and He, Jinhao and Liu, Changkun and Aegidius, Sebastian and Hu, Xiangcheng and Braud, Tristan and Kanoulas, Dimitrios},
+  booktitle={2025 IEEE International Conference on Robotics and Automation (ICRA)},
+  pages={5244--5251},
+  year={2025},
+  organization={IEEE}
 }
 ```
 
