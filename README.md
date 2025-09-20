@@ -1,7 +1,7 @@
-## LiteVloc: Map-Lite Visual Localization for Image-Goal Navigation (ICRA2025)
+## LiteVLoc: Map-Lite Visual Localization for Image-Goal Navigation (ICRA2025)
 Authors: [Jianhao Jiao](https://gogojjh.github.io/), [Jinhao He](https://scholar.google.com/citations?user=IpnYOGkAAAAJ&hl=en), [Changkun Liu](https://lck666666.github.io/), [Sebastian Aegidius](https://scholar.google.com/citations?user=gIpqBF4AAAAJ&hl=en), Xiangcheng Hu, [Tristan Braud](https://braudt.people.ust.hk/), [Dimitrios Kanoulas](https://dkanou.github.io/)
 
-### Overview of LiteVloc
+### Overview of LiteVLoc
 LiteVLoc is a **hierarchical visual localization** framework designed to enable efficient and robust camera pose estimation using lightweight topometric maps. Our goal is for this package to serve as a foundational tool for scalable navigation, empowering researchers and developers to build advanced robotic systems with ease.
 
 
@@ -59,15 +59,15 @@ Enter this code to check whether torch-related packages are installed
 ```bash
 python test_torch_install.py
 ```
-Build LiteVloc as the ROS package (optional)
+Build LiteVLoc as the ROS package (optional)
 ```bash
 catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
 ```
 
-### We provide several usage of LiteVloc
+### We provide several usage of LiteVLoc
 1. [Instruction in Performing Map-free Benchmarking](doc/instruction_map_free_benchmark.md)
-2. [Instruction in Running LiteVloc with Offline Data](doc/instruction_vloc_data.md)
-3. [Instruction in Running LiteVloc with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
+2. [Instruction in Running LiteVLoc with Offline Data](doc/instruction_vloc_data.md)
+3. [Instruction in Running LiteVLoc with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
 
 ### Issues
 Issue: ```cannot import name 'cache' from 'functools'```
