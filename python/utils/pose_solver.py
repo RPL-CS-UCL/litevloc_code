@@ -301,7 +301,6 @@ class PnPSolver:
 
 class ProcrustesSolver:
     """Estimate relative pose (metric) using 3D-3D correspondences"""
-
     def __init__(self, cfg):
 
         # Procrustes RANSAC parameters

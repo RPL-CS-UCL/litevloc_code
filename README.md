@@ -1,9 +1,10 @@
-## LiteVLoc: Map-Lite Visual Localization for Image-Goal Navigation (ICRA2025)
-Authors: [Jianhao Jiao](https://gogojjh.github.io/), [Jinhao He](https://scholar.google.com/citations?user=IpnYOGkAAAAJ&hl=en), [Changkun Liu](https://lck666666.github.io/), [Sebastian Aegidius](https://scholar.google.com/citations?user=gIpqBF4AAAAJ&hl=en), Xiangcheng Hu, [Tristan Braud](https://braudt.people.ust.hk/), [Dimitrios Kanoulas](https://dkanou.github.io/)
+## LiteVloc: Map-Lite Visual Localization for Image-Goal Navigation 
+Accepted by ICRA2025
 
-### Overview of LiteVLoc
-LiteVLoc is a **hierarchical visual localization** framework designed to enable efficient and robust camera pose estimation using lightweight topometric maps. Our goal is for this package to serve as a foundational tool for scalable navigation, empowering researchers and developers to build advanced robotic systems with ease.
+### Overview of LiteVloc
+LiteVLoc is an independently runnable ROS/Python visual localization package. It is used by OpenNavMap (https://github.com/RPL-CS-UCL/OpenNavMap) as a git submodule, but can also be used as a standalone localization system.
 
+LiteVLoc is a **hierarchical visual localization** framework designed to enable efficient and precise camera pose estimation using lightweight topometric maps. Our goal is for this package to serve as a foundational tool for scalable navigation, empowering researchers and developers to build advanced robotic systems with ease.
 
 <div align="center">
     <a href="">
@@ -13,7 +14,7 @@ LiteVLoc is a **hierarchical visual localization** framework designed to enable 
 </div>
 <br>
 
-We use the AR glass to create a lightweight topometric map for camera pose estimation and path planning. We can show an image as a goal (like the picture previously captured by your friend) a to the robot, and the robot can autonomously guide you to navigate to the goal. Please check our [paper](https://arxiv.org/abs/2410.04419) for the technical details and [website](https://rpl-cs-ucl.github.io/LiteVLoc/) for more demonstrations.
+We use the AR glass to create a lightweight topometric map for camera pose estimation and path planning. We can show an image to the robot, and the robot can autonomously navigate to the goal. Please check our [paper](https://arxiv.org/abs/2410.04419) for the technical explanation and [website](https://rpl-cs-ucl.github.io/LiteVLoc/) for more demonstrations.
 <div align="center">
     <a href="">
       <img src="doc/media/exp_real_world_map_meta.png" width="60%" 
@@ -35,7 +36,7 @@ Create the workspace
 mkdir -p catkin_ws/src/
 cd catkin_ws/src/
 ```
-Create conda environment (python>=3.8 should be compatible, but have not tested)
+Create conda environment
 ```bash
 conda create --name litevloc python=3.8
 conda activate litevloc
@@ -49,7 +50,7 @@ Install  ```VPR-evaluation-methods```
 ```bash
 git clone git@github.com:gogojjh/VPR-methods-evaluation.git
 ```
-Create conda environment (NVIDIA GeForce RTX 4090 and CUDA 11.8 with Python 3.8)
+Create conda environment (NVIDIA GeForce RTX 4090 and CUDA 11.8)
 ```bash
 git clone https://github.com/RPL-CS-UCL/litevloc_code
 conda install pytorch=2.0.1 torchvision=0.15.2 pytorch-cuda=11.8 numpy=1.24.3 -c pytorch -c nvidia # use the correct version of cuda for your system
@@ -59,16 +60,16 @@ Enter this code to check whether torch-related packages are installed
 ```bash
 python test_torch_install.py
 ```
-Build LiteVLoc as the ROS package (optional)
+Build LiteVloc as the ROS package (optional)
 ```bash
 catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
 ```
 
-### We provide several usage of LiteVLoc
+### We provide several usage of LiteVloc
 1. [Instruction in Performing Map-free Benchmarking](doc/instruction_map_free_benchmark.md)
-2. [Instruction in Running LiteVLoc with Offline Data](doc/instruction_vloc_data.md)
-3. [Instruction in Running LiteVLoc with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
-
+2. [Instruction in Running LiteVloc with Offline Data](doc/instruction_vloc_data.md)
+3. [Instruction in Running LiteVloc with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
+4. [Instruction in Processing Dataset](doc/instruction_dataset.md)
 ### Issues
 Issue: ```cannot import name 'cache' from 'functools'```
 > Replace the original code with [Link](https://stackoverflow.com/questions/66846743/importerror-cannot-import-name-cache-from-functools)
@@ -84,32 +85,8 @@ rm /Rocket_ssd/miniconda3/envs/litevloc/lib/libffi.so.7
 ln -s /usr/lib/aarch64-linux-gnu/libffi.so.7 /Rocket_ssd/miniconda3/envs/litevloc/lib/libffi.so.7
 ```
 ```bash
-/Rocket_ssd/miniconda3/envs/litevloc/lib/libtiff.so.5
+rm /Rocket_ssd/miniconda3/envs/litevloc/lib/libtiff.so.5
 ln -s /usr/lib/x86_64-linux-gnu/libtiff.so.5 /Rocket_ssd/miniconda3/envs/litevloc/lib/libtiff.so.5
 ```
 Issue: ```ImportError: /lib/aarch64-linux-gnu/libgomp.so.1: cannot allocate memory in static TLS block```
 > Set this in the bash file: ```export LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgomp.so.1```
-
-### Acknowledgement
-If this work is helpful to your research, please consider citing LiteVLoc.
-
-```bibtex
-@inproceedings{jiao2025litevloc,
-  title={LiteVLoc: Map-lite visual localization for image goal navigation},
-  author={Jiao, Jianhao and He, Jinhao and Liu, Changkun and Aegidius, Sebastian and Hu, Xiangcheng and Braud, Tristan and Kanoulas, Dimitrios},
-  booktitle={2025 IEEE International Conference on Robotics and Automation (ICRA)},
-  pages={5244--5251},
-  year={2025},
-  organization={IEEE}
-}
-```
-
-```bibtex
-This work was supported by the UKRI FLF [MR/V025333/1] (RoboHike).
-For the purpose of Open Access, the author has applied a CC BY public copyright license to any Author Accepted Manuscript version arising from this submission.
-Prof.Dimitrios Kanoulas is also with Archimedes/Athena RC, Greece.
-```
-
-
-
- 

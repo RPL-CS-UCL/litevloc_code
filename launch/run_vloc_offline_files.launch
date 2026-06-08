@@ -10,13 +10,14 @@
 	<node name="loc_pipeline" pkg="litevloc" type="loc_pipeline.py" output="screen"
 		args="--map_path $(arg map_path)
 					--query_data_path $(arg map_path)
-					--image_size 512 288
-					--device cuda --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 
+					--image_size 512 288 --device cuda 
+					--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 
+					--vpr_match_model sequence_match --vpr_match_seq_len 5
+					--num_preds_to_save 1
 					--img_matcher master --pose_solver pnp 
 					--config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml
 					--global_pos_threshold 10.0
 					--min_master_conf_thre 1.5
-					--min_kpts_inliers_thre 200 
 					--min_solver_inliers_thre 200 --viz" >
 		<param name="frame_id_map" value="vloc_map" />
 		<param name="child_frame_id" value="habitat_camera" />

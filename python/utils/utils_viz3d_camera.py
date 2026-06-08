@@ -20,8 +20,11 @@ Map_free_reloc/
 """
 
 """Usage
-# Visualize specific scenes
-# python viz.py --dataset_dir /path/to/mapfree --scenes s00000 --cam_scale 0.2 --show_image
+python utils_viz3d_camera.py --dataset_dir /path/to/mapfree --scenes s00000 --cam_scale 0.2 --show_image --step 1
+
+python utils_viz3d_camera.py --dataset_dir /path/to/mapfree --scenes s00000 s00001 --cam_scale 0.2 --show_image --step 1
+
+python utils_viz3d_camera.py --dataset_dir /path/to/mapfree --scenes all --cam_scale 0.2 --show_image --step 1
 """
 
 """MapFree dataset visualization tool with camera frustums and images."""
@@ -35,6 +38,7 @@ import cv2
 import numpy as np
 import PIL.Image
 import trimesh
+from trimesh.creation import cylinder
 from scipy.spatial.transform import Rotation
 from PIL import Image, ImageDraw, ImageFont
 
@@ -103,7 +107,7 @@ def load_scene_data(dataset_dir, target_scenes):
         dict: Scene data containing intrinsics, poses and images
     """
     if 'all' in target_scenes or len(target_scenes) > 1:
-        print("Show multiple scenes using poses_abs.txt")
+        print("Show multiple scenes using poses_abs.txt/poses_abs_gt.txt")
         pose_file_name = 'poses_abs.txt'
         is_multi_frame = True
     else:
@@ -113,7 +117,7 @@ def load_scene_data(dataset_dir, target_scenes):
 
     scene_paths = []
     if 'all' in target_scenes:
-        scene_paths = sorted(glob(os.path.join(dataset_dir, "s*")))
+        scene_paths = sorted(glob(os.path.join(dataset_dir, "*")))
     else:
         for scene in target_scenes:
             path = os.path.join(dataset_dir, scene)
@@ -146,6 +150,7 @@ def _load_intrinsics(filepath):
             intrinsics[frame_path] = np.array(list(map(float, parts[1:])))
             
     return intrinsics
+
 def _load_poses(filepath):
     """Loads camera poses from text file (world-to-camera format)."""
     poses = {}
@@ -158,10 +163,10 @@ def _load_poses(filepath):
             quat = list(map(float, parts[1:5]))
             trans = list(map(float, parts[5:8]))
             
-            pose = np.eye(4)
-            pose[:3, :3] = Rotation.from_quat(np.roll(quat, -1)).as_matrix()
-            pose[:3, 3] = trans
-            poses[frame_path] = pose
+            pose_w2c = np.eye(4)
+            pose_w2c[:3, :3] = Rotation.from_quat(np.roll(quat, -1)).as_matrix()
+            pose_w2c[:3, 3] = trans
+            poses[frame_path] = pose_w2c
 
     return poses
 
@@ -281,13 +286,36 @@ def _add_scene_cam(scene, scene_name, pose_w2c, color, image, focal, imsize, cam
     uv_coords = np.float32([[0, 0], [1, 0], [1, 1], [0, 1]])
     # this is the image
     if image is not None and show_image:
-        img.visual = trimesh.visual.TextureVisuals(uv_coords, image=PIL.Image.fromarray(image))
+        img_raw = PIL.Image.fromarray(image)
+        img_resize = img_raw.resize(
+            (int(img_raw.width * 0.25), int(img_raw.height * 0.25)),
+            resample=PIL.Image.LANCZOS
+        )
+        img.visual = trimesh.visual.TextureVisuals(uv_coords, image=img_resize)
     else:
         img.visual.face_colors = [*[255, 255, 255], 0.3]  # RGBA with 10% opacity
     scene.add_geometry(img)
 
     ##### Add camera
-    # this is the camera mesh
+    # Add thicker edge visualization by adding tubes (as cylinders) along the frustum edges
+    frustum_corners = _geotrf(transform, cam.vertices[[1, 3, 4, 5]])
+    edge_radius = cam.bounding_box.extents.max() * 0.025  # thickness relative to cam size
+    edges = [
+        (frustum_corners[0], frustum_corners[1]),
+        (frustum_corners[1], frustum_corners[2]),
+        (frustum_corners[2], frustum_corners[3]),
+        (frustum_corners[3], frustum_corners[0])
+    ]
+    rgb_color = (np.array(color) * 255).astype(np.uint8)
+    edge_color = np.append(rgb_color, [255])
+    for start, end in edges:
+        cyl = cylinder(radius=edge_radius, 
+                       segment=[start, end], 
+                       sections=10)
+        cyl.visual.face_colors = edge_color
+        scene.add_geometry(cyl)
+
+    # Solid mesh of camera as before but more transparent
     rot2 = np.eye(4)
     rot2[:3, :3] = Rotation.from_euler('z', np.deg2rad(2)).as_matrix()
     vertices = np.r_[cam.vertices, 0.95*cam.vertices, _geotrf(rot2, cam.vertices)]
@@ -311,47 +339,15 @@ def _add_scene_cam(scene, scene_name, pose_w2c, color, image, focal, imsize, cam
 
     # no culling
     faces += [(c, b, a) for a, b, c in faces]
+    cam_mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
 
-    cam = trimesh.Trimesh(vertices=vertices, faces=faces)
-    cam.visual.face_colors[:, :3] = color
-    scene.add_geometry(cam)
+    if cam_mesh.faces.shape[0] > 0:
+        colors = np.tile(np.append(rgb_color, [60]), (cam_mesh.faces.shape[0], 1))  # RGBA 60/255 transparent
+        cam_mesh.visual.face_colors = colors
+    else:
+        cam_mesh.visual.face_colors = np.append(rgb_color, [60])
 
-    ##### Add text - scene_name
-    # TODO(gogojjh): cannnot visualize text
-    # Create text mesh with scaling based on camera size
-    camera_position = pose_c2w[:3, 3]
-    
-    text_size = cam_size * 0.5  # Adjust text size relative to camera
-    text_depth = text_size * 0.05  # Text extrusion depth
-        
-    # Create 3D text mesh (oriented to face default view)
-    img_text = Image.new('RGB', (256, 64), (255, 255, 255, 255))
-    try:
-        font = ImageFont.truetype("DejaVuSans.ttf", 40)
-    except:
-        font = ImageFont.load_default()
-    d = ImageDraw.Draw(img_text)
-    d.text((60, 10), scene_name, 
-           fill=(0, 0, 0, 255), 
-           font=font, 
-           stroke_fill=(0, 0, 0, 255))
-
-    text_mesh = trimesh.creation.box((text_size, text_size*0.5, 0.001))
-    text_mesh.visual = trimesh.visual.TextureVisuals(
-        uv=[[0,0], [1,0], [1,1], [0,1]],
-        image=img_text
-    )
-
-    text_offset = np.array([0, text_size*1.5, text_size*0.5])
-    text_transform = np.eye(4)
-    text_transform[:3, 3] = camera_position + text_offset
-
-    # Align text to face the camera's viewing direction
-    text_transform[:3, :3] = pose_c2w[:3, :3] @ Rotation.from_euler('x', -45).as_matrix()
-    text_mesh.apply_transform(text_transform)
-
-    # Add text to scene
-    scene.add_geometry(text_mesh)    
+    scene.add_geometry(cam_mesh)
 
 def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True, step=1):
     """Visualizes multiple scenes with cameras and images.
@@ -369,13 +365,6 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
             if idx % step != 0: 
                 continue
 
-            if img_path in data['images']:
-                # The rgb image exists
-                exist_image = True
-            else:
-                # The rgb image is removed
-                exist_image = False          
-
             # Get camera parameters
             pose_w2c = data['poses'][img_path]
             if is_multi_frame:
@@ -385,6 +374,7 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
                 # T^ct_c0 = T^ct_w @ T^w_c0
                 pose_w2c = pose_w2c @ np.linalg.inv(pose_w2c0)
 
+            exist_image = (img_path in data['images'])
             try:
                 if exist_image:
                     show_cam_size = cam_size
@@ -397,7 +387,8 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
                     image = None
                     imsize = (int(width), int(height))
 
-                if 'seq0/frame_000000' in img_path or 'seq/000000' in img_path:
+                # NOTE(gogojjh): seq0 with 5 0, while seq with 6 0
+                if 'seq0/frame_00000' in img_path or 'seq/000000' in img_path:
                     show_cam_size = cam_size * 5
                     _add_scene_cam(
                         scene=scene,
@@ -411,6 +402,7 @@ def visualize_scenes(scene_data, is_multi_frame, cam_size=0.03, show_image=True,
                         show_image=(True and exist_image)
                     )
                 else:
+                    show_cam_size = cam_size
                     _add_scene_cam(
                         scene=scene,
                         scene_name=scene_name,

@@ -5,13 +5,9 @@ from pathlib import Path
 class BaseGraph:
 	# Initialize an empty dictionary to store nodes
 	def __init__(self, map_root: Path, edge_type: str):
-		self.map_root = map_root
-		map_root.mkdir(exist_ok=True, parents=True)
-		
-		self.edge_type = edge_type
-		
-		# Use dict() to ensure the keys (node.id) are uniques
-		self._nodes = {}
+		self.map_root = map_root		
+		self.edge_type = edge_type	
+		self._nodes = dict() # ensure the keys (node.id) are unique and sorted
 
 	def __str__(self):
 		num_edge = 0
@@ -36,11 +32,13 @@ class BaseGraph:
 			self.nodes.pop(node.id)
 
 	def remove_invalid_edges(self, nodes_to_remove: list):
+		node_pairs_removed = []
 		for node in self.nodes.values():
 			for node_rm in nodes_to_remove:
 				if node_rm.id in node.edges:
 					node.edges.pop(node_rm.id)
-					# print(f"Removed edges {node.id} -> {node_rm.id} from graph")
+					node_pairs_removed.append((node.id, node_rm.id))
+		return node_pairs_removed
 
 	def read_edge_list(self, edge_list_path: Path):
 		if edge_list_path.exists():
@@ -181,6 +179,7 @@ class BaseGraph:
 		subgraphs = []
 		for id, component in enumerate(sorted_components):
 			# Create subgraph, but use reference operation to store nodes
+			(self.map_root/f"submap_disc_{id}").mkdir(parents=True, exist_ok=True)
 			subgraph = type(self)(self.map_root/f"submap_disc_{id}", self.edge_type)
 			for node in component:
 				subgraph.add_node(node)

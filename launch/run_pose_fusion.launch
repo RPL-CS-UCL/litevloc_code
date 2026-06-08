@@ -1,0 +1,8 @@
+<launch>
+	<node name="ros_pose_fusion" pkg="litevloc" type="ros_pose_fusion.py" output="screen" 
+		args="--env_type outdoor">
+		<remap from="/local/odometry" to="/state_estimator/odometry" />
+		<remap from="/global/odometry" to="/vloc/odometry" />
+		<param name="frame_id_map" value="vloc_map" />
+	</node>
+</launch>

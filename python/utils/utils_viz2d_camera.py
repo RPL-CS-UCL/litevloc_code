@@ -33,18 +33,18 @@ def _draw_orientation_arrow(ax, transform, length, style):
     head_length = style['head_length']
     zorder = style['zorder']
     fc = style['fc']
-    ax.arrow(start[0], start[2], direction[0], direction[2], 
+    ax.arrow(start[0], start[1], direction[0], direction[1], 
              head_width=head_width*1.5, head_length=head_length*1.4,
              width=head_width*0.3, fc=fc, ec=fc, zorder=zorder)
 
 def _configure_axes(ax, positions, padding):
     """Configures plot axes limits and appearance."""
     min_x, max_x = np.min(positions[:, 0]), np.max(positions[:, 0])
-    min_z, max_z = np.min(positions[:, 2]), np.max(positions[:, 2])
+    min_y, max_y = np.min(positions[:, 1]), np.max(positions[:, 1])
     
     ax.set_xlim(min_x - padding, max_x + padding)
-    ax.set_ylim(min_z - padding, max_z + padding)
-    ax.set(xlabel='X [m]', ylabel='Z [m]', aspect='equal')
+    ax.set_ylim(min_y - padding, max_y + padding)
+    ax.set(xlabel='X [m]', ylabel='Y [m]', aspect='equal')
     ax.grid(ls='--', color='0.7')
 
 def _parse_pose_row(row):
@@ -65,7 +65,7 @@ def plot_camera_poses(poses: np.ndarray, sample_rate: int, title: str) -> plt.Fi
         title: Plot title
     
     Returns:
-        Matplotlib figure object
+        Matplotlib figure object: Green (database), Gray (Query), Red (Remove)
     """
     bounds = np.max(poses[:, :3], axis=0) - np.min(poses[:, :3], axis=0)
     max_bound = np.max(bounds) / 2
@@ -152,8 +152,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--dataset", required=True, 
                         help="Path to dataset directory")
     parser.add_argument("--dataset_name", required=True,
-                        choices=["Matterport3d", "UCLCampus", "HKUSTGZCampus", "UCLCampusAria"],
-                        help="Name of the dataset")
+                        help="Name of the dataset: Matterport3d, UCLCampus, HKUSTGZCampus, UCLCampusAria, RoboCar")
     parser.add_argument("--sample_rate", type=int, default=1,
                         help="Subsampling rate for visualization")
     return parser.parse_args()

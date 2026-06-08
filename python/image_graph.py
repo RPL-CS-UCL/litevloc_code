@@ -1,10 +1,13 @@
 #! /usr/bin/env python
 
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 import numpy as np
 import shutil
-
 from pathlib import Path
+
 from utils.utils_geom import read_timestamps, read_intrinsics, read_poses, read_descriptors, read_gps
 from utils.utils_geom import convert_pose_inv, correct_intrinsic_scale
 from utils.utils_image import load_rgb_image, load_depth_image
@@ -30,7 +33,6 @@ class ImageGraphLoader:
 		load_rgb: bool = False, 
 		load_depth: bool = False, 
 		normalized: bool = False,
-		color_correct: bool = False,
 		edge_type: str = 'covis'
 	):
 		"""
@@ -68,11 +70,11 @@ class ImageGraphLoader:
 			for node_id, key in enumerate(poses.keys()):
 				# Read rgb image
 				rgb_img_name = key
-				rgb_img_path = os.path.join(str(map_root/key))
+				rgb_img_path = str(map_root/key)
 				if not load_rgb:
 					rgb_image = None
 				elif load_rgb and os.path.exists(rgb_img_path):
-					rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized, color_correct=color_correct)
+					rgb_image = load_rgb_image(rgb_img_path, resize, normalized=normalized)
 				else:
 					continue
 
@@ -236,7 +238,7 @@ class TestImageGraph():
 	
 	def run_test(self):
 		# Initialize the image graph
-		graph = ImageGraph(map_root=Path('/tmp'))
+		graph = ImageGraph(map_root=Path('/tmp'), edge_type='covis')
 
 		# Add nodes to the graph
 		graph.add_node(ImageNode(

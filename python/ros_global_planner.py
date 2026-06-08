@@ -21,6 +21,10 @@ from global_planner import GlobalPlanner
 if __name__ == '__main__':
 	args = parse_arguments()
 	out_dir = pathlib.Path(os.path.join(args.map_path, 'tmp/output_ros_global_planner'))
+	config = dict(
+		resize=args.image_size, depth_scale=args.depth_scale, 
+		load_rgb=False, load_depth=False, normalized=False
+	)
 
 	# Initialize the global planner
 	global_planner = GlobalPlanner(args)
@@ -29,10 +33,10 @@ if __name__ == '__main__':
 	# Initialize the localization pipeline
 	global_planner.loc_pipeline = LocPipeline(args, out_dir)
 	global_planner.loc_pipeline.init_vpr_model()
-	global_planner.loc_pipeline.read_covis_graph_from_files()
+	global_planner.loc_pipeline.read_covis_graph_from_files(config)
+	global_planner.loc_pipeline.init_vpr_match_model()
 	
 	rospy.init_node('ros_global_planner', anonymous=True)
-	global_planner.loc_pipeline.initalize_ros()
 	global_planner.initalize_ros()
 	global_planner.frame_id_map = rospy.get_param('~frame_id_map', 'map')
 	global_planner.main_freq = rospy.get_param('~main_freq', 1)

@@ -11,7 +11,6 @@ python python/ros_loc_pipeline.py \
 	--ros_rgb_img_type raw \
 	--global_pos_threshold 10.0 \
 	--min_master_conf_thre 1.5 \
-	--min_kpts_inliers_thre 300  \
 	--min_solver_inliers_thre 300
 """
 
@@ -33,7 +32,7 @@ import message_filters
 
 # Others
 from utils.utils_image import rgb_image_to_tensor, depth_image_to_tensor, to_numpy
-from utils.utils_pipeline import *
+from utils.utils_pipeline import parse_arguments
 from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error, correct_intrinsic_scale
 from utils.utils_ros import ros_msg
 from utils.utils_stamped_poses import StampedPoses
@@ -79,7 +78,9 @@ def perform_localization(loc: LocPipeline, args):
 			raw_K = np.array(camera_info_msg.K).reshape((3, 3))
 			raw_img_size = (int(camera_info_msg.width), int(camera_info_msg.height))
 			if resize is not None:
-				K = correct_intrinsic_scale(raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1])
+				K = correct_intrinsic_scale(
+					raw_K, resize[0] / raw_img_size[0], resize[1] / raw_img_size[1]
+				)
 				img_size = (int(resize[0]), int(resize[1]))
 			else:
 				K = raw_K
@@ -88,12 +89,16 @@ def perform_localization(loc: LocPipeline, args):
 			# Create observation node
 			with torch.no_grad():
 				desc = to_numpy(loc.vpr_model(rgb_img_tensor.unsqueeze(0).to(args.device)))
-			obs_node = ImageNode(obs_id, rgb_img_tensor, depth_img_tensor, desc,
-								 rgb_img_time, np.zeros(3), np.array([0, 0, 0, 1]),
-								 K, img_size, None, None)
+			obs_node = ImageNode(
+				obs_id, rgb_img_tensor, depth_img_tensor, desc,
+				rgb_img_time, np.zeros(3), np.array([0, 0, 0, 1]),
+				K, img_size, 
+				f"seq/{obs_id:06d}.color.jpg", 
+				f"seq/{obs_id:06d}.depth.png"
+			)
 			obs_node.set_raw_intrinsics(raw_K, raw_img_size)
-
 			loc.curr_obs_node = obs_node
+			obs_id += 1
 
 			"""Perform global localization via. visual place recognition"""
 			if not loc.has_global_pos:
@@ -151,13 +156,18 @@ def perform_localization(loc: LocPipeline, args):
 if __name__ == '__main__':
 	args = parse_arguments()
 	out_dir = pathlib.Path(os.path.join(args.map_path, 'tmp/output_ros_loc_pipeline'))
+	config = dict(
+		resize=args.image_size, depth_scale=args.depth_scale, 
+		load_rgb=True, load_depth=False, normalized=False,
+	)
 
 	# Initialize the localization pipeline
 	loc_pipeline = LocPipeline(args, out_dir)
 	loc_pipeline.init_vpr_model()
 	loc_pipeline.init_img_matcher()
 	loc_pipeline.init_pose_solver()
-	loc_pipeline.read_covis_graph_from_files()
+	loc_pipeline.read_covis_graph_from_files(config)
+	loc_pipeline.init_vpr_match_model()
 
 	rospy.init_node('ros_loc_pipeline_simu', anonymous=False)
 	loc_pipeline.initalize_ros()

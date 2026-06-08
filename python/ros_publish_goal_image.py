@@ -23,20 +23,20 @@ class PublishGoalImage():
         self.image_pub = rospy.Publisher('/goal_image', Image, queue_size=10)
 
     def planner_status_callback(self, msg):
-        # if msg.data == 0: # not start planning, need to repeatedly publish the same goal image
-        #     pass
-        # if msg.data == 1: # in planning, no need to publish goal image
-        #     return
+        if msg.data == 0: # not start planning, need to repeatedly publish the same goal image
+            pass
+        if msg.data == 1: # in planning, no need to publish goal image
+            return
         if msg.data == 2:  # Reach the original goal, need to publish a new goal
             self.goal_img_start_idx += 1
 
         bridge = CvBridge()
         goal_img_path = f'{self.args.map_path}/goal_images/goal_img_{self.goal_img_start_idx}.jpg'
+        rospy.loginfo(goal_img_path)
         if os.path.exists(goal_img_path) == False:
             rospy.loginfo(f'{goal_img_path} does not exist')
             rospy.loginfo(f'Switch to goal_img_0')
             self.goal_img_start_idx = 0
-
             return
         
         goal_img = cv2.imread(goal_img_path)

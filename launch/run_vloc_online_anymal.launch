@@ -2,10 +2,11 @@
 <launch>
 
 	<!-- Base Parameters -->
-	<arg name="env_id" default="ops_msg" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/ucl_campus/vloc_$(arg env_id)/out_map/" />
+	<arg name="env_id" default="ucl_campus" />
+	<arg name="scene_id" default="sops_msg_202411" />
+	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/vnav_eval/$(arg env_id)/$(arg scene_id)" />
 	<arg name="use_rviz" default="false" />
-	<arg name="use_nav" default="false" />
+	<arg name="use_nav" default="false" /> <!-- true for debug -->
 	<param name="use_sim_time" value="false" />
 
 	<!-- Localization -->
@@ -13,46 +14,20 @@
 	<!-- trigger global localization if distance to the closest map node exceeds it -->
 	<!-- indoor: 10.0; outdoor: 15.0 -->
 	<arg name="global_pos_threshold" default="10.0" /> 
-	<arg name="vloc_freq" default="1.0" />
-
-	<node name="ros_loc_pipeline" pkg="litevloc" type="ros_loc_pipeline.py" output="screen"
-		args="--dataset_path $(arg map_path)
-					--image_size 512 288
-					--device=cuda --vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 
-					--img_matcher master --pose_solver pnp 
-					--config_pose_solver $(find litevloc)/python/config/dataset/ucl_campus.yaml --viz
-					--ros_rgb_img_type compressed
-					--global_pos_threshold $(arg global_pos_threshold)
-					--min_master_conf_thre 1.2
-					--min_kpts_inliers_thre 300 
-					--min_solver_inliers_thre 150" >
-		<remap from="/color/image" to="/zed2/zed_node/left/image_rect_color/compressed" />
-		<remap from="/depth/image" to="/zed2/zed_node/depth/depth_registered" />
-		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />
-		<param name="main_freq" value="1.0" />
-		<param name="min_depth" value="0.001" />
-		<param name="max_depth" value="13.0" />
-		<param name="frame_id_map" value="vloc_map" />
-	</node>
-
-	<node name="ros_pose_fusion" pkg="litevloc" type="ros_pose_fusion.py" output="log" 
-		args="--env_type indoor">
-		<remap from="/local/odometry" to="/state_estimator/odometry" />
-		<remap from="/global/odometry" to="/vloc/odometry" />
-		<param name="frame_id_map" value="vloc_map" />
-	</node>
+	<arg name="vloc_freq" default="0.5" />
 
   <!-- Navigation Interface -->
 	<!-- Transform the frame_id of localization odometry to robot -->
-	<!-- Publish: /vloc/state_estimation, /vloc/state_estimation_path -->
+	<!-- Convert loc_world_frame_id to world_frame_id compatible with robot's frames -->
+	<!-- Publish: /registered_scan, /state_estimation, /state_estimation_path, /tf: map->base, vloc_map->base -->
 	<group if="$(arg use_nav)">
-		<node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="log">
+		<node pkg="navigation_interface" type="vis_navigation_interface" name="vis_navigation_interface" output="screen">
 			<param name="loc_world_frame_id" value="vloc_map" />
 			<param name="loc_sensor_frame_id" value="zed2_left_camera_optical_frame" />
 			<param name="world_frame_id" value="map" />
 			<param name="sensor_frame_id" value="zed2_left_camera_optical_frame" />
 			<param name="base_frame_id" value="base" /> <!-- robot_id -->
-			<param name="point_skip" type="int" value="100" />
+			<param name="point_skip" value="20" />
 
 			<remap from="/odometry" to="/pose_fusion/odometry" />
 			<remap from="/camera_info" to="/zed2/zed_node/depth/camera_info" />
@@ -60,26 +35,58 @@
 			<remap from="/vloc/state_estimation" to="/state_estimation" />
 			<remap from="/vloc/state_estimation_path" to="/state_estimation_path" />
 			<remap from="/vloc/registered_scan" to="/registered_scan" />
-		</node>	
+		</node>
 	</group>
 
 	<!-- Global Planning -->
 	<node name="ros_global_planner" pkg="litevloc" type="ros_global_planner.py" output="screen"
-		args="--dataset_path $(arg map_path) \
-					--image_size 512 288 --device=cuda \
-					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256" >
+		args="--map_path $(arg map_path)
+					--image_size 512 288 --device=cuda
+					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256
+					--vpr_match_model single_match" >
 		<param name="frame_id_map" value="vloc_map" />
-		<param name="main_freq" value="1" />
-		<param name="conv_dist" value="5.0" />
+		<param name="main_freq" value="$(arg vloc_freq)" />
+		<param name="conv_dist" value="1.0" />
 	</node>
 
 	<node name="ros_publish_goal_image" pkg="litevloc" type="ros_publish_goal_image.py" output="screen"
-		args="--goal_image_path $(arg map_path)" >
+		args="--map_path $(arg map_path)" >
 	</node>
 	
-	<!-- RVIZ -->
+	<!-- Localization -->
+	<node name="ros_loc_pipeline" pkg="litevloc" type="ros_loc_pipeline.py" output="screen"
+		args="--map_path $(arg map_path)
+					--image_size 512 288 --device=cuda 
+					--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 
+					--vpr_match_model single_match
+					--img_matcher master --pose_solver pnp 
+					--config_pose_solver $(find litevloc)/python/config/dataset/ucl_campus_robot.yaml
+					--ros_rgb_img_type compressed
+					--global_pos_threshold $(arg global_pos_threshold)
+					--min_master_conf_thre 0.5 --min_solver_inliers_thre 50 --viz" >
+		<remap from="/color/image" to="/zed2/zed_node/left/image_rect_color/compressed" />
+		<remap from="/depth/image" to="/zed2/zed_node/depth/depth_registered" />
+		<remap from="/color/camera_info" to="/zed2/zed_node/left/camera_info" />
+		<param name="main_freq" value="$(arg vloc_freq)" />
+		<param name="min_depth" value="0.001" />
+		<param name="max_depth" value="13.0" />
+		<param name="frame_id_map" value="vloc_map" />
+	</node>
+
+	<node name="ros_pose_fusion" pkg="litevloc" type="ros_pose_fusion.py" output="log" 
+		args="--odom_type leg_odom">
+		<remap from="/local/odometry" to="/state_estimator/odometry" />
+		<remap from="/global/odometry" to="/vloc/odometry" />
+		<param name="frame_id_map" value="vloc_map" />
+	</node>
+
+	<!-- RVIZ and Visualization-->
 	<group if="$(arg use_rviz)">
 		<node name="rviz" pkg="rviz" type="rviz" args="-d $(find litevloc)/rviz_cfg/topo_graph_anymal.rviz" required="false" />
 	</group>
+
+	<node name="ros_publish_graph" pkg="litevloc" type="ros_publish_graph.py" output="log" 
+		args="--map_path $(arg map_path)">
+	</node>
 
 </launch>

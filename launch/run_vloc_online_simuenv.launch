@@ -1,9 +1,10 @@
 <launch>
 
 	<!-- Base Parameters -->
-	<arg name="env_id" default="17DRP5sb8fy" />
-	<arg name="data_path" default="data_litevloc/vnav_eval/matterport3d" />
-	<arg name="map_path" default="$(arg data_path)/s$(arg env_id)/merge_finalmap" />
+	<arg name="env_id" default="matterport3d" />
+	<arg name="scene_id" default="17DRP5sb8fy" />
+	<arg name="data_path" default="/Rocket_ssd/dataset/data_litevloc/vnav_eval" />
+	<arg name="map_path" default="$(arg data_path)/$(arg env_id)/s$(arg scene_id)/merge_finalmap" />
 	<arg name="setup_simu_env" default="true" />
 	<arg name="use_rviz" default="true" />
 	<arg name="use_nav" default="true" />
@@ -12,8 +13,8 @@
 
 	<!-- Localization Parameters -->
 	<!-- trigger global localization if distance to the closest map node exceeds it -->
-	<!-- indoor: 10.0; outdoor: 15.0 -->
-	<arg name="global_pos_threshold" default="10.0" /> 
+	<!-- indoor: 7.5; outdoor: 15.0 -->
+	<arg name="global_pos_threshold" default="7.5" /> 
 	<arg name="vloc_freq" default="1" />
 
 	<!-- Launch Environment -->
@@ -24,7 +25,9 @@
 			<arg name="environment_directory" value="$(find benchmark_visual_nav)/data/matterport/$(arg env_id)" />
 			<arg name="gazebo_gui" value="$(arg gazebo_gui)" />
 			<arg name="useLocalPlanner" value="$(arg useLocalPlanner)" />
-			<arg name="use_rviz" value="false" />
+			<group unless="$(arg use_nav)">
+				<arg name="use_rviz" value="false" />
+			</group>
 			
 			<group if="$(arg useLocalPlanner)">
 				<arg name="odomTopic" value="/state_estimation" />
@@ -56,9 +59,10 @@
 	<!-- Planning -->
 	<group if="$(arg setup_simu_env)">
 		<node name="ros_global_planner" pkg="litevloc" type="ros_global_planner.py" output="log"
-			args="--map_path $(arg map_path) \
-						--image_size 512 288 --device cuda \
-						--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256" >
+			args="--map_path $(arg map_path)
+						--image_size 512 288 --device cuda
+						--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256
+						--vpr_match_model single_match" >
 			<param name="frame_id_map" value="vloc_map" />
 			<param name="main_freq" value="1" />
 			<param name="conv_dist" value="0.5" />
@@ -72,14 +76,14 @@
 	<!-- Localization -->
 	<node name="ros_loc_pipeline" pkg="litevloc" type="ros_loc_pipeline.py" output="screen"
 		args="--map_path $(arg map_path)
-					--image_size 512 288
-					--device cuda --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 
+					--image_size 512 288 --device cuda 
+					--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 
+					--vpr_match_model single_match
 					--img_matcher master --pose_solver pnp 
 					--config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml
 					--ros_rgb_img_type raw
 					--global_pos_threshold $(arg global_pos_threshold)
 					--min_master_conf_thre 1.5
-					--min_kpts_inliers_thre 200 
 					--min_solver_inliers_thre 200 --viz" >
 		<remap from="/color/image" to="/habitat_camera/color/image" />
 		<remap from="/depth/image" to="/habitat_camera/depth/image" />

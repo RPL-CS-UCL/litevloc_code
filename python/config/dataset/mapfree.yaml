@@ -1,10 +1,15 @@
 MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'
-  DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/mapfree/map_free_eval'
-  SCENES: [s00460]
-  # SCENES: [s00460, s00461, s00462, s00463, s00464, s00465, s00466, s00467, s00468, s00469, s00470]  # should be a list [] or None. If none, use all scenes.
-  ESTIMATED_DEPTH: mickey  # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti'
+  DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/map_free_eval/mapfree/map_free_eval'
+  # VAL_SCENES: [s00460]
+  VAL_SCENES: [s00460, s00461, s00462, s00463, s00464, s00465, s00466, s00467, s00468, s00469, s00470, 
+               s00471, s00472, s00473, s00474, s00475, s00476, s00477, s00478, s00479, s00480, s00481, 
+               s00482, s00483, s00484, s00485, s00486, s00487, s00488, s00489, s00490, s00491, s00492, 
+               s00493, s00494, s00495, s00496, s00497, s00498, s00499, s00500, s00501, s00502, s00503, 
+               s00504, s00505, s00506, s00507, s00508, s00509, s00510, s00511, s00512, s00513, s00514, 
+               s00515, s00516, s00517, s00518, s00519, s00520, s00521, s00522, s00523, s00524] # should be a list [] or None. If none, use all scenes.
+  ESTIMATED_DEPTH: mickey  # To load estimated depth map, provide the suffix to the depth files, e.g. 'dptnyu', 'dptkitti', 'mickey'
   AUGMENTATION_TYPE: None
   HEIGHT: 512
   WIDTH: 288

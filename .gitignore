@@ -14,3 +14,19 @@ dataset/
 *.rviz
 
 *vis*
+!third_party/
+!third_party/vismatch
+!third_party/vismatch/
+
+paper*
+tmp/
+
+cache/
+
+# Multi-session mapping benchmark generated outputs
+python/benchmark_mms/output/
+python/benchmark_mms/*.npy
+python/benchmark_mms/*.png
+python/benchmark_mms/*.gif
+python/benchmark_mms/*.log
+python/benchmark_mms/__pycache__/

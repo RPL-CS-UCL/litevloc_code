@@ -239,7 +239,7 @@ def compute_pose_error(
     if mode == 'matrix':
         return _compute_error_from_matrices(pose1, pose2)
     elif mode == 'vector':
-        return _compute_error_from_vectors(*pose1, *pose2)
+        return _compute_error_from_vectors(*pose1, *pose2, mode='xyzw')
     else:
         raise ValueError(f"Invalid mode: {mode}")
 

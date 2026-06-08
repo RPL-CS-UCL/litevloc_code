@@ -15,6 +15,22 @@ import argparse
 import faiss
 from matplotlib import pyplot as plt
 
+# Use relative imports when part of a package, absolute imports when run directly
+if __package__:
+    from .vpr_topological_filter import PlaceRecognitionTopologicalFilter
+    from .vpr_single_matching import PlaceRecognitionSingleMatching
+    from .vpr_sequence_matching import PlaceRecognitionSeqMatching
+    from .vpr_sequence_matching_adaptive import PlaceRecognitionSeqMatchingAdaptive
+    from .vpr_graph_search import PlaceRecognitionGraphSearch
+    from .utils_setting_color_font import acquire_color_palette, acquire_marker, setting_font
+else:
+    from vpr_topological_filter import PlaceRecognitionTopologicalFilter
+    from vpr_single_matching import PlaceRecognitionSingleMatching
+    from vpr_sequence_matching import PlaceRecognitionSeqMatching
+    from vpr_sequence_matching_adaptive import PlaceRecognitionSeqMatchingAdaptive
+    from vpr_graph_search import PlaceRecognitionGraphSearch
+    from utils_setting_color_font import acquire_color_palette, acquire_marker, setting_font
+
 def setup_logging(log_dir, stdout_level='info'):
 	os.makedirs(log_dir, exist_ok=True)
 	log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -48,6 +64,19 @@ def initialize_vpr_model(model_name, backbone, descriptors_dimension, device):
 	model = vpr_models.get_model(model_name, backbone, descriptors_dimension)
 	return model.eval().to(device)
 
+def initialize_match_model(model_name, seq_len):
+	if model_name == 'single_match':
+		match_model = PlaceRecognitionSingleMatching()
+	elif model_name == 'topo_filter':
+		match_model = PlaceRecognitionTopologicalFilter()
+	elif model_name == 'sequence_match':
+		match_model = PlaceRecognitionSeqMatching(seqLen=seq_len)
+	elif model_name == 'sequence_match_adaptive':
+		match_model = PlaceRecognitionSeqMatchingAdaptive(seqLen=seq_len)
+	elif model_name == 'graph_search':
+		match_model = PlaceRecognitionGraphSearch()
+	return match_model
+
 def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):
 	"""Perform kNN search and return predictions."""
 	faiss_index = faiss.IndexFlatL2(descriptors_dimension)
@@ -75,17 +104,17 @@ def save_descriptors(log_dir, queries_descriptors, database_descriptors):
 	np.save(os.path.join(log_dir, 'preds', "queries_descriptors.npy"), queries_descriptors)
 	np.save(os.path.join(log_dir, 'preds', "database_descriptors.npy"), database_descriptors)
 
-def save_visualization(log_dir, query_index, list_of_images_paths, preds_correct):
+def save_visualization(pred_dir, query_index, list_of_images_paths, preds_correct):
 	"""Save visualization to files."""
-	logging.debug(f"Saving the visualization in {log_dir}")
+	logging.debug(f"Saving the visualization in {pred_dir}")
 	prediction_image = build_prediction_image(list_of_images_paths, preds_correct)
-	pred_image_path = os.path.join(log_dir, 'preds', f"vpr_{query_index:06d}.jpg")
+	pred_image_path = os.path.join(pred_dir, f"vpr_{query_index:06d}.jpg")
 	prediction_image.save(pred_image_path)
 	save_file_with_paths(
 		query_path=list_of_images_paths[0],
 		preds_paths=list_of_images_paths[1:],
 		positives_paths=None,
-		output_path=os.path.join(log_dir, 'preds', f"vpr_{query_index:06d}.txt"),
+		output_path=os.path.join(pred_dir, f"vpr_{query_index:06d}.txt"),
 		use_labels=False
 	)
 
@@ -113,25 +142,40 @@ def save_vis_diff_matrix(save_dir, diff_matrix):
 	diff_matrix_path = os.path.join(save_dir, 'preds', "diff_matrix.jpg")
 	plt.savefig(diff_matrix_path)
 
-def save_prec_recall_curve(save_dir, precision_curve, recall_curve, avg_precision):
+def save_prec_recall_curve(save_dir, curve_metrics_methods, title):
+	# Set basic format
+	# setting_font()
+	# Set color
+	PALLETE = acquire_color_palette()
+	MARKERS = acquire_marker()
+	min_y = 1.0
+
 	plt.figure(figsize=(8, 6))
-	plt.plot(recall_curve, precision_curve, 
-			 color='b', lw=2, 
-			 label=f'Precision-Recall Curve')
+	for i, (method, metrics) in enumerate(curve_metrics_methods.items()):
+		prec_values, recall_values, max_recall = \
+			metrics['Precision Values'], metrics['Recall Values'], metrics['Maximum Recall']
+		min_y = min(min_y, np.min(prec_values))
+		plt.plot(recall_values, prec_values, color=PALLETE[i%len(PALLETE)], lw=2, label=f"{method}-{max_recall*100:.1f}")
+		plt.vlines(max_recall, np.min(prec_values), np.max(prec_values), color=PALLETE[i%len(PALLETE)], linestyles='dashed')
+		plt.scatter(max_recall, np.max(prec_values), marker=MARKERS[i%len(MARKERS)], color=PALLETE[i%len(PALLETE)])
+
 	plt.xlim([0.0, 1.0])
-	plt.ylim([0.0, 1.05])
+	plt.ylim([min_y, 1.02])
 	plt.xlabel('Recall')
 	plt.ylabel('Precision')
-	plt.title(f"Precision-Recall Curve with Average Precision: {avg_precision:.3f}")
-	plt.legend(loc="upper right")
+	# plt.legend(loc="upper right", bbox_to_anchor=(1.02, 1.2))
+	plt.title(title)
 	plt.grid(axis='y', linestyle='--', alpha=0.7)
+	plt.tight_layout()
+
 	curve_path = os.path.join(save_dir, "prec_recall_curve.jpg")
 	plt.savefig(curve_path, dpi=300)
+	plt.close()
 
 def parse_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-	parser.add_argument("--dataset_path", type=str, default="matterport3d", help="path to dataset_path")
+	parser.add_argument("--map_path", type=str, default="matterport3d", help="path to dataset_path")
 	parser.add_argument("--image_size", type=int, default=None, nargs="+",
 											help="Resizing shape for images (WxH). If a single int is passed, set the"
 											"smallest edge of all images to this value, while keeping aspect ratio")
@@ -142,10 +186,10 @@ def parse_arguments():
 											choices=["netvlad", "apgem", "sfrs", "cosplace", "convap", "mixvpr", "eigenplaces", 
 																"eigenplaces-indoor", "anyloc", "salad", "salad-indoor", "cricavpr"],
 											help="_")
-	parser.add_argument("--backbone", type=str, default=None,
+	parser.add_argument("--backbone", type=str, default='ResNet18',
 											choices=[None, "VGG16", "ResNet18", "ResNet50", "ResNet101", "ResNet152"],
 											help="_")
-	parser.add_argument("--descriptors_dimension", type=int, default=None,
+	parser.add_argument("--descriptors_dimension", type=int, default=256,
 											help="_")
 	parser.add_argument("--num_workers", type=int, default=4,
 											help="_")

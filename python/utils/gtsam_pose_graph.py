@@ -31,6 +31,7 @@ class PoseGraph:
 			self.initial_estimate.insert(key, pose)
 
 	def perform_optimization(self):
+		# graph_robust = PoseGraph.add_robust_kernel(graph)
 		self.isam.update(self.graph, self.initial_estimate)
 		self.current_estimate = self.isam.calculateEstimate()
 		self.graph.resize(0)
@@ -57,9 +58,9 @@ class PoseGraph:
 	def add_robust_kernel(graph):
 		graph_robust = gtsam.NonlinearFactorGraph()
 		##### Huber robust kernel
-		# robust_model = gtsam.noiseModel.mEstimator.Huber.Create(k=1.345)
+		robust_model = gtsam.noiseModel.mEstimator.Huber.Create(k=1.345)
 		##### Cauchy robust kernel
-		robust_model = gtsam.noiseModel.mEstimator.Cauchy.Create(k=0.3)
+		# robust_model = gtsam.noiseModel.mEstimator.Cauchy.Create(k=0.5)
 		#####
 		for key in range(graph.size()):
 			factor = graph.at(key)
@@ -121,6 +122,7 @@ class PoseGraph:
 				components.append(component)
 
 		return components
+	
 	@staticmethod
 	def optimize_pose_graph_with_LM(graph, initial, verbose=False, robust_kernel=False):
 		"""
@@ -180,14 +182,17 @@ class PoseGraph:
 					tsl = result.atPose3(keys[0]).translation()
 					ax.text(tsl[0], tsl[1], tsl[2], f'{graph_id}', fontsize=12, color='r', ha='center')
 
+			# Set axis labels
 			ax.set_xlabel('X [m]')
 			ax.set_ylabel('Y [m]')
 			ax.set_zlabel('Z [m]')
+			# Set title
 			ax.set_title(title)
+			# Set view angle
 			if mode == '2d':
 				ax.view_init(elev=90, azim=90)
 			elif mode == '3d':
-				ax.view_init(elev=55, azim=60)
+				ax.view_init(elev=45, azim=60)
 			ax.axis('equal')
 
 		plt.tight_layout()
