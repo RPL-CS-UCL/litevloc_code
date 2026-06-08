@@ -1,5 +1,6 @@
 python/test/logs/
-python/test/*
+!python/test/
+!python/test/*.py
 
 condaenv*
 *.swp
