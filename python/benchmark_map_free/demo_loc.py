@@ -152,11 +152,6 @@ def main(args):
     matcher = get_matcher(
         args.matcher, device=args.device, max_num_keypoints=args.n_kpts
     )
-    if args.matcher == "mickey":
-        matcher.resize = image_size
-        matcher.K0 = torch.from_numpy(K0).unsqueeze(0).to(args.device)
-        matcher.K1 = torch.from_numpy(K0).unsqueeze(0).to(args.device)
-
     """Setup Pose Solver"""
     cfg.merge_from_file(args.config)
     pose_solver_list = []
@@ -191,7 +186,7 @@ def main(args):
     out_str = f"Paths: {str(args.path_rgb_img0), str(args.path_rgb_img1)}. Found {num_inliers} inliers after RANSAC. "
     if args.no_viz:
         viz_path = save_visualization(
-            image0, image1, mkpts0, mkpts1, log_dir, 0, n_viz=50
+            image0, image1, mkpts0, mkpts1, log_dir, 0, n_step=50
         )
         out_str += f"Viz saved in {viz_path}. "
     print(out_str)

@@ -83,12 +83,6 @@ def main(args):
     matcher = get_matcher(
         args.matcher, device=args.device, max_num_keypoints=args.n_kpts
     )
-    if args.matcher == "mickey":
-        print("Problem with Mickey matcher of the intrinsics")
-        exit()
-        matcher.resize = image_size
-        matcher.path_intrinsics = args.path_intrinsics
-
     pairs_of_paths = get_image_pairs_paths(args.input)
     for i, (img0_path, img1_path) in enumerate(pairs_of_paths):
         image0 = load_rgb_image(img0_path, resize=image_size)
@@ -108,7 +102,7 @@ def main(args):
         out_str = f"Paths: {str(img0_path), str(img1_path)}. Found {num_inliers} inliers after RANSAC. "
         if not args.no_viz:
             viz_path = save_visualization(
-                image0, image1, mkpts0, mkpts1, log_dir, i, n_viz=100
+                image0, image1, mkpts0, mkpts1, log_dir, i, n_step=100
             )
             out_str += f"Viz saved in {viz_path}. "
 
