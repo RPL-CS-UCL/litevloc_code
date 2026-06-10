@@ -1,4 +1,4 @@
-# The evaluation code is refered to  Mickey Evaluation Scripts: https://github.com/nianticlabs/mickey
+# Evaluation code reference: https://github.com/nianticlabs/map-free-benchmark
 
 import os
 import sys

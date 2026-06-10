@@ -1,6 +1,6 @@
 # [Computation]:
 # python submission.py --config ../config/dataset/matterport3d.yaml --split test --out_dir xx --models master --debug
-# [Evaluation] (in mickey folder):
+# [Evaluation] using map-free benchmark tools:
 # python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetricmean/submission.zip --dataset_path /Titan/dataset/data_mapfree --split val --log error
 
 import os

@@ -67,7 +67,7 @@ def setup_args():
         "--out_dir", type=str, default=None, help="path where outputs are saved"
     )
 
-    # Path intrinsics for Mickey matcher (if not provided, we use defaults)
+    # Path intrinsics (if not provided, we use defaults)
     parser.add_argument(
         "--path_intrinsics", type=str, default=None, help="path to intrinsics"
     )

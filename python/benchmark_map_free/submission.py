@@ -1,6 +1,6 @@
 # [Computation]:
 # python submission.py --config ../config/dataset/mapfree.yaml --models master --pose_solver essentialmatrixmetricmean --out_dir /Titan/dataset/data_mapfree/results --split val
-# [Evaluation] (in mickey folder):
+# [Evaluation] using map-free benchmark tools:
 # python -m benchmark.mapfree --submission_path /Titan/dataset/data_mapfree/results/master_essentialmatrixmetricmean/submission.zip --dataset_path /Titan/dataset/data_mapfree --split val --log error
 
 import os

@@ -87,7 +87,7 @@ def setup_args():
         "--path_depth_img1", type=str, default=None, help="path to path_depth_img1"
     )
 
-    # Path intrinsics for Mickey matcher (if not provided, we use defaults)
+    # Path intrinsics (if not provided, we use defaults)
     parser.add_argument(
         "--path_intrinsics0", type=str, default=None, help="path to intrinsics0"
     )
