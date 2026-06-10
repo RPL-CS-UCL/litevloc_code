@@ -3,7 +3,7 @@
 
 Entity path conventions
 -----------------------
-map/nodes/{id}              : per-node camera frustum (Transform3D + Pinhole + Image)
+map/nodes/{id}              : per-node camera frustum (Transform3D + Pinhole + Image + Boxes3D)
 map/edges/covis             : covisibility edges (LineStrips3D), white
 map/edges/trav              : traversability edges (LineStrips3D), white
 query/camera                : current query camera frustum
@@ -33,7 +33,7 @@ import rerun as rr
 
 
 def init_rerun(app_id: str = "litevloc_offline") -> None:
-    rr.init(app_id)
+    rr.init(app_id, spawn=False)
 
 
 def save_rrd(output_path: Path) -> None:
@@ -42,18 +42,10 @@ def save_rrd(output_path: Path) -> None:
 
 def log_map_nodes(graph) -> None:
     for node in graph.nodes.values():
-        _log_camera_frustum(
-            entity_path=f"map/nodes/{node.id}",
-            trans=node.trans,
-            quat=node.quat,
-            K=node.raw_K,
-            img_size=node.raw_img_size,
-        )
+        entity = f"map/nodes/{node.id}"
+        _log_camera_frustum(entity, node.trans, node.quat, node.raw_K, node.raw_img_size)
         if node.rgb_image is not None:
-            _log_image_on_frustum(
-                entity_path=f"map/nodes/{node.id}/camera",
-                rgb_tensor=node.rgb_image,
-            )
+            _log_image_on_frustum(entity + "/camera", node.rgb_image)
 
 
 def log_map_edges(graph, edge_type: str = "covis") -> None:
@@ -68,10 +60,7 @@ def log_map_edges(graph, edge_type: str = "covis") -> None:
             strips.append(np.array([node.trans, neighbor.trans], dtype=np.float32))
 
     if strips:
-        rr.log(
-            f"map/edges/{edge_type}",
-            rr.LineStrips3D(strips=strips),
-        )
+        rr.log(f"map/edges/{edge_type}", rr.LineStrips3D(strips=strips))
 
 
 def set_frame_time(frame_id: int, timestamp: float) -> None:
@@ -126,16 +115,14 @@ def log_image_matching(
         rr.log(
             "matching/keypoints_ref",
             rr.Points2D(
-                positions=mkpts_ref,
-                radii=3.0,
+                positions=mkpts_ref, radii=3.0,
                 colors=np.array([[0, 220, 0]], dtype=np.uint8),
             ),
         )
         rr.log(
             "matching/keypoints_query",
             rr.Points2D(
-                positions=mkpts_query,
-                radii=3.0,
+                positions=mkpts_query, radii=3.0,
                 colors=np.array([[0, 220, 0]], dtype=np.uint8),
             ),
         )
@@ -152,30 +139,18 @@ def _log_camera_frustum(
 
     width, height = int(img_size[0]), int(img_size[1])
     rot_mat = R.from_quat(quat).as_matrix()
+    half_size = np.array([0.04, 0.04, 0.04], dtype=np.float32)
 
+    rr.log(entity_path, rr.Transform3D(translation=trans.tolist(), mat3x3=rot_mat.tolist()))
+    rr.log(entity_path + "/camera", rr.Pinhole(image_from_camera=K, width=width, height=height))
     rr.log(
-        entity_path,
-        rr.Transform3D(
-            translation=trans.tolist(),
-            mat3x3=rot_mat.tolist(),
-        ),
-    )
-    rr.log(
-        entity_path + "/camera",
-        rr.Pinhole(
-            image_from_camera=K,
-            width=width,
-            height=height,
-        ),
+        entity_path + "/body",
+        rr.Boxes3D(half_sizes=[half_size], colors=np.array([[0, 180, 100]], dtype=np.uint8)),
     )
 
 
-def _log_image_on_frustum(
-    entity_path: str,
-    rgb_tensor,
-) -> None:
+def _log_image_on_frustum(entity_path: str, rgb_tensor) -> None:
     from utils.utils_image import to_numpy
-
     rgb_np = (np.transpose(to_numpy(rgb_tensor), (1, 2, 0)) * 255).astype(np.uint8)
     rr.log(entity_path, rr.Image(rgb_np))
 
