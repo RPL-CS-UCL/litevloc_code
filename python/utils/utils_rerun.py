@@ -3,23 +3,23 @@
 
 Entity path conventions
 -----------------------
-map/nodes/{id}              : per-node camera frustum (Transform3D + Pinhole + Image + Boxes3D)
-map/edges/covis             : covisibility edges (LineStrips3D), white
-map/edges/trav              : traversability edges (LineStrips3D), white
-query/camera                : current query camera frustum
-query/image                 : current query RGB image
-query/pose_estimated        : estimated pose arrow (Arrows3D)
-query/pose_gt               : ground-truth pose arrow (Arrows3D)
-query/trajectory_est        : accumulated estimated trajectory (LineStrips3D)
-query/trajectory_gt         : accumulated gt trajectory (LineStrips3D)
-matching/ref_image          : matched reference map image
-matching/query_image        : query image with keypoints
-matching/keypoints_ref      : keypoint overlay on reference (Points2D)
-matching/keypoints_query    : keypoint overlay on query (Points2D)
+map/nodes/{id}              : per-node camera frustum (Transform3D + Pinhole + Boxes3D), timeless
+map/gallery/{id}            : per-node standalone RGB image for 2D gallery view, timeless
+map/edges/covis             : covisibility edges (LineStrips3D), timeless
+map/edges/trav              : traversability edges (LineStrips3D), timeless
+query/image                 : current query RGB image, per-frame
+query/pose_estimated        : estimated pose frustum + arrow, per-frame
+query/pose_gt               : ground-truth pose frustum + arrow, per-frame
+query/trajectory_est        : accumulated estimated trajectory (LineStrips3D), per-frame
+query/trajectory_gt         : accumulated gt trajectory (LineStrips3D), per-frame
+query/matching/{node_id}/ref_image   : matched reference map image
+query/matching/{node_id}/query_image : query image with keypoints
+query/matching/{node_id}/keypoints_ref   : keypoint overlay on reference (Points2D)
+query/matching/{node_id}/keypoints_query : keypoint overlay on query (Points2D)
 
 Timeline
 --------
-All map entities are logged before any set_frame_time call → timeless.
+Map entities: explicit timeless=True → visible on all frames.
 Query and matching entities use frame_id / timestamp timelines.
 """
 
@@ -43,9 +43,10 @@ def save_rrd(output_path: Path) -> None:
 def log_map_nodes(graph) -> None:
     for node in graph.nodes.values():
         entity = f"map/nodes/{node.id}"
-        _log_camera_frustum(entity, node.trans, node.quat, node.raw_K, node.raw_img_size)
+        _log_camera_frustum(entity, node.trans, node.quat, node.raw_K, node.raw_img_size, timeless=True)
         if node.rgb_image is not None:
-            _log_image_on_frustum(entity + "/camera", node.rgb_image)
+            _log_image_on_frustum(entity + "/camera", node.rgb_image, timeless=True)
+            _log_map_node_gallery_image(f"map/gallery/{node.id}", node.rgb_image)
 
 
 def log_map_edges(graph, edge_type: str = "covis") -> None:
@@ -60,7 +61,11 @@ def log_map_edges(graph, edge_type: str = "covis") -> None:
             strips.append(np.array([node.trans, neighbor.trans], dtype=np.float32))
 
     if strips:
-        rr.log(f"map/edges/{edge_type}", rr.LineStrips3D(strips=strips))
+        rr.log(
+            f"map/edges/{edge_type}",
+            rr.LineStrips3D(strips=strips),
+            timeless=True,
+        )
 
 
 def set_frame_time(frame_id: int, timestamp: float) -> None:
@@ -107,20 +112,22 @@ def log_image_matching(
     query_image: np.ndarray,
     mkpts_ref: np.ndarray,
     mkpts_query: np.ndarray,
+    node_id: int,
 ) -> None:
-    rr.log("matching/ref_image", rr.Image(ref_image))
-    rr.log("matching/query_image", rr.Image(query_image))
+    prefix = f"query/matching/{node_id}"
+    rr.log(prefix + "/ref_image", rr.Image(ref_image))
+    rr.log(prefix + "/query_image", rr.Image(query_image))
 
     if len(mkpts_ref) > 0:
         rr.log(
-            "matching/keypoints_ref",
+            prefix + "/keypoints_ref",
             rr.Points2D(
                 positions=mkpts_ref, radii=3.0,
                 colors=np.array([[0, 220, 0]], dtype=np.uint8),
             ),
         )
         rr.log(
-            "matching/keypoints_query",
+            prefix + "/keypoints_query",
             rr.Points2D(
                 positions=mkpts_query, radii=3.0,
                 colors=np.array([[0, 220, 0]], dtype=np.uint8),
@@ -134,6 +141,7 @@ def _log_camera_frustum(
     quat: np.ndarray,
     K: np.ndarray,
     img_size: np.ndarray,
+    timeless: bool = False,
 ) -> None:
     from scipy.spatial.transform import Rotation as R
 
@@ -141,18 +149,34 @@ def _log_camera_frustum(
     rot_mat = R.from_quat(quat).as_matrix()
     half_size = np.array([0.04, 0.04, 0.04], dtype=np.float32)
 
-    rr.log(entity_path, rr.Transform3D(translation=trans.tolist(), mat3x3=rot_mat.tolist()))
-    rr.log(entity_path + "/camera", rr.Pinhole(image_from_camera=K, width=width, height=height))
+    rr.log(
+        entity_path,
+        rr.Transform3D(translation=trans.tolist(), mat3x3=rot_mat.tolist()),
+        timeless=timeless,
+    )
+    rr.log(
+        entity_path + "/camera",
+        rr.Pinhole(image_from_camera=K, width=width, height=height),
+        timeless=timeless,
+    )
     rr.log(
         entity_path + "/body",
         rr.Boxes3D(half_sizes=[half_size], colors=np.array([[0, 180, 100]], dtype=np.uint8)),
+        timeless=timeless,
     )
 
 
-def _log_image_on_frustum(entity_path: str, rgb_tensor) -> None:
+def _log_image_on_frustum(entity_path: str, rgb_tensor, timeless: bool = False) -> None:
     from utils.utils_image import to_numpy
     rgb_np = (np.transpose(to_numpy(rgb_tensor), (1, 2, 0)) * 255).astype(np.uint8)
-    rr.log(entity_path, rr.Image(rgb_np))
+    rr.log(entity_path, rr.Image(rgb_np), timeless=timeless)
+
+
+def _log_map_node_gallery_image(entity_path: str, rgb_tensor) -> None:
+    from utils.utils_image import to_numpy
+
+    rgb_np = (np.transpose(to_numpy(rgb_tensor), (1, 2, 0)) * 255).astype(np.uint8)
+    rr.log(entity_path, rr.Image(rgb_np), timeless=True)
 
 
 def _log_pose_arrow(

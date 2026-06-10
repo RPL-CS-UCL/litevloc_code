@@ -12,7 +12,7 @@ python third_party/litevloc_code/python/run_vloc_offline_rerun.py \
   --output_rrd third_party/litevloc_code/output/vloc_s17DRP5sb8fy.rrd \
   --image_size 512 288 --device cuda \
   --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 \
-  --vpr_match_model sequence_match --vpr_match_seq_len 5 \
+  --vpr_match_model single_match \
   --img_matcher master --pose_solver pnp \
   --config_pose_solver third_party/litevloc_code/python/config/dataset/matterport3d.yaml \
   --global_pos_threshold 10.0 --min_master_conf_thre 1.5 --min_solver_inliers_thre 200
@@ -266,7 +266,7 @@ def main() -> None:
             obs_node.set_matched_kpts(mkpts1, num_inliers)
 
             ref_rgb = (np.transpose(to_numpy(ref_map_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
-            log_image_matching(ref_rgb, rgb_np, mkpts0, mkpts1)
+            log_image_matching(ref_rgb, rgb_np, mkpts0, mkpts1, node_id=ref_map_node.id)
 
             if depth_img is not None:
                 try:

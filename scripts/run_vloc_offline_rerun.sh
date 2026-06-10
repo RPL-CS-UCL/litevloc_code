@@ -14,7 +14,7 @@
 #
 # Run from the OpenNavMap workspace root:
 #   cd /Titan/code/robohike_ws/src/opennavmap
-#   bash third_party/litevloc_code/scripts/run_vloc_offline_rerun.sh
+#   bash third_party/litevloc_code/scripts/run_vloc_offline_rerun.sh s17DRP5sb8fy
 #   bash third_party/litevloc_code/scripts/run_vloc_offline_rerun.sh sB6ByNegPMK
 #   bash third_party/litevloc_code/scripts/run_vloc_offline_rerun.sh sEDJbREhghzL
 
@@ -58,8 +58,8 @@ python "${PYTHON}" \
   --vpr_method          cosplace \
   --vpr_backbone        ResNet18 \
   --vpr_descriptors_dimension 256 \
-  --vpr_match_model     sequence_match \
-  --vpr_match_seq_len   5 \
+  --vpr_match_model     single_match \
+  --vpr_match_seq_len   1 \
   --img_matcher         master \
   --pose_solver         pnp \
   --config_pose_solver  "${CONFIG_POSE}" \
