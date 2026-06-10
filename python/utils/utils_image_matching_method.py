@@ -3,13 +3,18 @@ import sys
 import argparse
 from datetime import datetime
 import logging
+from pathlib import Path
 import numpy as np
 
 import torch
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 
-from matching import viz2d, get_matcher, available_models
+import sys as _sys
+import os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '../../../vismatch'))
+from vismatch import get_matcher, available_models
+from vismatch import viz as viz2d
 
 def setup_logging(log_dir, stdout_level="info"):
     os.makedirs(log_dir, exist_ok=True)
@@ -158,20 +163,31 @@ def plot_images(image1, image2, title1="Image 1", title2="Image 2", save_path=No
 
 
 def save_visualization(image0, image1, mkpts0, mkpts1, out_dir, index, n_step=1, line_width=0.2, text=None):
-    """Save visualization of the matching results."""
-    viz2d.plot_images([image0, image1])
-    
-    if len(mkpts0) and len(mkpts1) > 0:
-        viz2d.plot_matches(mkpts0[::n_step], mkpts1[::n_step], color="lime", lw=line_width)
-    if text is not None:
-        viz2d.add_text(0, text, fs=20)
-    else:
-        viz2d.add_text(0, f"{len(mkpts1)} matches", fs=30)
-    
+    """Save visualization of the matching results using vismatch.viz.plot_matches high-level API."""
+    import matplotlib.pyplot as plt
+    from vismatch import viz
+
+    kpts0_sub = mkpts0[::n_step] if len(mkpts0) > 0 else mkpts0
+    kpts1_sub = mkpts1[::n_step] if len(mkpts1) > 0 else mkpts1
+    result = {
+        "matched_kpts0": kpts0_sub,
+        "matched_kpts1": kpts1_sub,
+        "inlier_kpts0": kpts0_sub,
+        "inlier_kpts1": kpts1_sub,
+    }
+
+    out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     viz_path = out_dir / f"match_{index}.jpg" if isinstance(index, str) else out_dir / f"match_{index:06d}.jpg"
-    viz2d.save_plot(viz_path)
-    plt.close()
+
+    axs = viz.plot_matches(image0, image1, result, save_path=viz_path,
+                           color="lime", lw=line_width, show_text=False)
+    if text is not None:
+        viz.add_text(axs[0], text, fs=20)
+    else:
+        viz.add_text(axs[0], f"{len(kpts1_sub)} matches", fs=30)
+    viz.save_plot(axs[0].get_figure(), viz_path)
+    plt.close("all")
 
     return viz_path
 
@@ -183,8 +199,8 @@ def save_output(
     output_dict = {
         "num_inliers": result["num_inliers"],
         "H": result["H"],
-        "mkpts0": result["inliers0"],
-        "mkpts1": result["inliers1"],
+        "mkpts0": result["inlier_kpts0"],
+        "mkpts1": result["inlier_kpts1"],
         "img0_path": img0_path,
         "img1_path": img1_path,
         "matcher": matcher_name,
@@ -250,7 +266,7 @@ def parse_arguments():
     parser.add_argument(
         "--matcher",
         type=str,
-        default="sift-lg",
+        default="sift-lightglue",
         choices=available_models,
         help="choose your matcher",
     )

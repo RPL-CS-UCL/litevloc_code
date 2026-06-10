@@ -27,7 +27,7 @@ Modify ```env_id``` and ```map_path``` in ```run_vloc_offline_files.launch``` to
 ```bash
 conda activate litevloc
 catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
-roslaunch litevloc run_vloc_offline_files.launch
+roslaunch litevloc  .launch
 ```
 You will see similar outputs as follows:
 ```bash

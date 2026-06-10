@@ -5,7 +5,10 @@ from datetime import datetime
 import argparse
 import numpy as np
 import matplotlib
-from matching import available_models
+import sys as _sys
+import os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '../../../vismatch'))
+from vismatch import available_models
 from utils.pose_solver import available_solvers
 
 GV_SCORE_THRESHOLD = 100.0
@@ -115,7 +118,7 @@ def parse_arguments():
 	"""
 	Parameters for image matching
 	"""
-	parser.add_argument("--img_matcher", type=str, default="sift-lg", choices=available_models, help="choose your matcher")
+	parser.add_argument("--img_matcher", type=str, default="sift-lightglue", choices=available_models, help="choose your matcher")
 	parser.add_argument("--n_kpts", type=int, default=2048, help="max num keypoints")
 	parser.add_argument("--save_img_matcher", action="store_true",
 											help="set to True if you want to save image matching by the model")	

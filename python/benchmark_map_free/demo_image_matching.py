@@ -16,8 +16,10 @@ import matplotlib
 from pathlib import Path
 import numpy as np
 
-from matching import available_models, get_matcher
-from matching.utils import to_numpy, get_image_pairs_paths
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '../../../../vismatch'))
+from vismatch import available_models, get_matcher
+from vismatch.utils import to_numpy, get_image_pairs_paths
 
 from utils.utils_image_matching_method import *
 from utils.utils_image import load_rgb_image
@@ -99,8 +101,8 @@ def main(args):
         num_inliers, H, mkpts0, mkpts1 = (
             result["num_inliers"],
             result["H"],
-            result["inliers0"],
-            result["inliers1"],
+            result["inlier_kpts0"],
+            result["inlier_kpts1"],
         )
         print("Found {} matched keypoints".format(num_inliers))
         out_str = f"Paths: {str(img0_path), str(img1_path)}. Found {num_inliers} inliers after RANSAC. "

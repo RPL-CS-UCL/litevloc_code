@@ -24,8 +24,10 @@ import matplotlib
 from pathlib import Path
 import numpy as np
 
-from matching import available_models, get_matcher
-from matching.utils import to_numpy, get_image_pairs_paths
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '../../../../vismatch'))
+from vismatch import available_models, get_matcher
+from vismatch.utils import to_numpy, get_image_pairs_paths
 
 from utils.utils_image_matching_method import *
 from utils.utils_image import load_rgb_image, load_depth_image
@@ -181,8 +183,8 @@ def main(args):
     num_inliers, H, mkpts0, mkpts1 = (
         result["num_inliers"],
         result["H"],
-        result["inliers0"],
-        result["inliers1"],
+        result["inlier_kpts0"],
+        result["inlier_kpts1"],
     )
     print("Found {} matched keypoints".format(num_inliers))
 
@@ -195,13 +197,7 @@ def main(args):
     print(out_str)
 
     """Perform Pose Estimation"""
-    if args.matcher == "mickey":
-        R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0)
-        R, t = to_numpy(R), to_numpy(t)
-        T_cam1_cam0 = np.eye(4)
-        T_cam1_cam0[:3, :3], T_cam1_cam0[:3, 3] = R, t
-        print(f'Mickey Solver:\n', T_cam1_cam0)
-    elif args.matcher == "duster":
+    if args.matcher == "duster":
         im_poses = to_numpy(matcher.scene.get_im_poses())
         T_cam1_cam0 = (
             im_poses[0]

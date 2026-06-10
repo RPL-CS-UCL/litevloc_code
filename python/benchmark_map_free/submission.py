@@ -27,8 +27,10 @@ from lib.datasets.datamodules import DataModule
 from lib.utils.data import data_to_model_device
 
 # Matching framework imports
-from matching import available_models, get_matcher
-from matching.utils import to_numpy
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '../../../../vismatch'))
+from vismatch import available_models, get_matcher
+from vismatch.utils import to_numpy
 
 @dataclass
 class PoseResult:
@@ -60,7 +62,6 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
             rgb_img0 = rgb_img0.squeeze(0)
             rgb_img1 = rgb_img1.squeeze(0)
             K0, K1 = data['K_color0'], data['K_color1']
-            if str_matcher == "mickey": matcher.K0, matcher.K1 = K0, K1
 
             """Image Matching"""
             start_time = time.time()
@@ -74,32 +75,27 @@ def predict(loader, matcher, solver, str_matcher, str_solver):
 
             """Pose Estimation"""
             start_time = time.time()
-            if str_matcher == "mickey":
-                R, t = matcher.scene["R"].squeeze(0), matcher.scene["t"].squeeze(0)
-                R, t = to_numpy(R), to_numpy(t)
-                inliers_solver = to_numpy(matcher.scene["inliers"].squeeze(0))[0]
-            else:
-                depth_img0 = to_numpy(data['depth0'].squeeze(0))
-                depth_img1 = to_numpy(data['depth1'].squeeze(0))
-                if cfg.DATASET.MAX_DEPTH is not None:
-                    depth_img0[depth_img0 > cfg.DATASET.MAX_DEPTH] = 0.0
-                    depth_img1[depth_img1 > cfg.DATASET.MAX_DEPTH] = 0.0
-                K0 = to_numpy(K0.squeeze(0))
-                K1 = to_numpy(K1.squeeze(0))
-                ori_w, ori_h = depth_img0.shape[1], depth_img0.shape[0]
-                K0_raw = correct_intrinsic_scale(K0, ori_w / rgb_img0.shape[2], ori_h / rgb_img0.shape[1])
-                K1_raw = correct_intrinsic_scale(K1, ori_w / rgb_img1.shape[2], ori_h / rgb_img1.shape[1])
-                mkpts0_raw = mkpts0 * [ori_w / rgb_img0.shape[2], ori_h / rgb_img0.shape[1]]
-                mkpts1_raw = mkpts1 * [ori_w / rgb_img1.shape[2], ori_h / rgb_img1.shape[1]]
-                """Definition of solver output"""
-                # R01 (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate depth_img1 to depth_img0.
-                # t01 (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate depth_img1 to depth_img0.
-                # inliers_solver (int): Number of inliers used in the final pose estimation.
-                R01, t01, inliers_solver = solver.estimate_pose(
-                    mkpts1_raw, mkpts0_raw, K1_raw, K0_raw, depth_img1, depth_img0
-                )
-                T01 = np.eye(4); T01[:3, :3] = R01; T01[:3,  3] = t01.reshape(3)
-                T10 = np.linalg.inv(T01); R = T10[:3, :3]; t = T10[:3,  3].reshape(3, 1)
+            depth_img0 = to_numpy(data['depth0'].squeeze(0))
+            depth_img1 = to_numpy(data['depth1'].squeeze(0))
+            if cfg.DATASET.MAX_DEPTH is not None:
+                depth_img0[depth_img0 > cfg.DATASET.MAX_DEPTH] = 0.0
+                depth_img1[depth_img1 > cfg.DATASET.MAX_DEPTH] = 0.0
+            K0 = to_numpy(K0.squeeze(0))
+            K1 = to_numpy(K1.squeeze(0))
+            ori_w, ori_h = depth_img0.shape[1], depth_img0.shape[0]
+            K0_raw = correct_intrinsic_scale(K0, ori_w / rgb_img0.shape[2], ori_h / rgb_img0.shape[1])
+            K1_raw = correct_intrinsic_scale(K1, ori_w / rgb_img1.shape[2], ori_h / rgb_img1.shape[1])
+            mkpts0_raw = mkpts0 * [ori_w / rgb_img0.shape[2], ori_h / rgb_img0.shape[1]]
+            mkpts1_raw = mkpts1 * [ori_w / rgb_img1.shape[2], ori_h / rgb_img1.shape[1]]
+            """Definition of solver output"""
+            # R01 (numpy.ndarray): Estimated rotation matrix. Shape: [3, 3] that rotate depth_img1 to depth_img0.
+            # t01 (numpy.ndarray): Estimated translation vector. Shape: [3, 1] that translate depth_img1 to depth_img0.
+            # inliers_solver (int): Number of inliers used in the final pose estimation.
+            R01, t01, inliers_solver = solver.estimate_pose(
+                mkpts1_raw, mkpts0_raw, K1_raw, K0_raw, depth_img1, depth_img0
+            )
+            T01 = np.eye(4); T01[:3, :3] = R01; T01[:3,  3] = t01.reshape(3)
+            T10 = np.linalg.inv(T01); R = T10[:3, :3]; t = T10[:3,  3].reshape(3, 1)
             solver_time = time.time() - start_time           
             running_time.append(matching_time + solver_time)
 

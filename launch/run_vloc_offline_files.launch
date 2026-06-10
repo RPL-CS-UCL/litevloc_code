@@ -2,7 +2,7 @@
 
 	<!-- Base Parameters -->
 	<arg name="env_id" default="17DRP5sb8fy" />
-	<arg name="map_path" default="/Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d/s$(arg env_id)/merge_finalmap/" />
+	<arg name="map_path" default="/Titan/dataset/data_opennavmap/matterport3d/s$(arg env_id)/merge_finalmap/" />
 	<arg name="use_rviz" default="false" />
 	<param name="use_sim_time" value="false" />
 
@@ -13,7 +13,7 @@
 					--image_size 512 288 --device cuda 
 					--vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 
 					--vpr_match_model sequence_match --vpr_match_seq_len 5
-					--num_preds_to_save 1
+					--num_preds_to_save 0
 					--img_matcher master --pose_solver pnp 
 					--config_pose_solver $(find litevloc)/python/config/dataset/matterport3d.yaml
 					--global_pos_threshold 10.0

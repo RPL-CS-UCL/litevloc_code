@@ -1,62 +1,23 @@
 # usage: pip install -r requirements.txt
+colorama
+evo
 faiss_cpu
-gdown
+gtsam
+matplotlib
 numpy
+open3d
 opencv_python
 Pillow
-scikit_image
-scikit_learn
+pyiqa
+pymap3d
+pytest
+pytorch_lightning
+PyYAML
 scipy
+simplekml
 torch
 torchvision
 tqdm
-einops
-matplotlib
-kornia
 transforms3d
-h5py
-kornia_moons
-yacs
-gdown>=5.1.0
-tables
-imageio
-vispy
-xformers
-pyglet==1.5.28
-tensorboard
 trimesh
-e2cnn
-scikit-learn
-py3_wget
-roma
-huggingface_hub
-open3d
-pytorch_lightning
-# duster
-gradio
-huggingface-hub[torch]>=0.22
-# hloc
-torch>=1.1
-torchvision>=0.3
-tqdm>=4.36.0
-matplotlib
-plotly
-h5py
-pycolmap==0.6.0
-kornia>=0.6.11
-gdown
-lightglue @ git+https://github.com/cvg/LightGlue
-# IQA
-pyiqa
-# ROS
-empy==4.2
-catkin_pkg
-rospkg
-defusedxml
-netifaces
-rosnumpy
-# Others
 yacs
-colorama
-gtsam
-codetiming
