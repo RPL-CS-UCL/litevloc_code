@@ -47,9 +47,9 @@ import rerun.blueprint as rrb
 def init_rerun(app_id: str = "litevloc_offline_vloc") -> None:
     rr.init(app_id, spawn=False)
     blueprint = rrb.Blueprint(
-        rrb.Horizontal(
+        rrb.Vertical(
             rrb.Spatial3DView(name="Map + Trajectory", origin="/"),
-            rrb.Vertical(
+            rrb.Horizontal(
                 rrb.Spatial2DView(name="Query Image", origin="query/image"),
                 rrb.Spatial2DView(name="Keypoint Matching", origin="query/matching/combined"),
             ),
