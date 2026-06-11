@@ -255,9 +255,9 @@ def main() -> None:
 
                 if candidates:
                     dists = [compute_euclidean_dis(obs_node.get_descriptor(), n.get_descriptor()) for n in candidates]
-                    print(f"  Keyframe candidates: " + " ".join(
-                        f"{n.id}({d:.2f})" for n, d in zip(candidates, dists)))
-                    print(f"  Closest node: {candidates[np.argmin(dists)].id}")
+                    candidate_str = " ".join(f"{n.id}({d:.2f})" for n, d in zip(candidates, dists))
+                    closest_id = candidates[np.argmin(dists)].id
+                    print(f"Keyframe candidate: {candidate_str} Closest node: {closest_id}")
                     ref_map_node = candidates[np.argmin(dists)]
 
             t_match = time.time()
@@ -266,8 +266,8 @@ def main() -> None:
             mkpts1 = match_result["inlier_kpts1"]
             num_inliers = match_result["num_inliers"]
             t_match = time.time() - t_match
-            print(f"  Number of matched inliers: {num_inliers}")
-            print(f"  Image matching costs: {t_match:.3f}s")
+            print(f"Number of matched inliers: {num_inliers}")
+            print(f"Image matching costs: {t_match:.3f}s")
 
             ref_map_node.set_matched_kpts(mkpts0, num_inliers)
             obs_node.set_matched_kpts(mkpts1, num_inliers)
@@ -298,18 +298,18 @@ def main() -> None:
                         trans_est, quat_est = convert_matrix_to_vec(T_wo, "xyzw")
                         obs_node.set_pose(trans_est, quat_est)
                         t_local = time.time() - t_local
-                        print(f"  [Succ] sufficient number {n_sol} solver inliers")
-                        print(f"  Local localization costs: {t_local:.3f}s")
-                        print(f"  Groundtruth Poses: {trans_gt}")
-                        print(f"  Estimated Poses: {trans_est}")
+                        print(f"[Succ] sufficient number {n_sol} solver inliers")
+                        print(f"Local localization costs: {t_local:.3f}s")
+                        print(f"Groundtruth Poses: {trans_gt}")
+                        print(f"Estimated Poses: {trans_est}")
                         log_query_camera(trans_est, quat_est, obs_node.K, obs_node.img_size, rgb_image=rgb_np, is_gt=False)
                         traj_est.append(trans_est.copy())
                         t_err, r_err = compute_pose_error(
                             (trans_est, quat_est), (trans_gt, quat_gt), mode="vector"
                         )
-                        logging.info(f"[frame {frame_id}] t_err={t_err:.3f}m r_err={r_err:.2f}° inliers={n_sol}")
+                        print(f"t_err={t_err:.3f}m r_err={r_err:.2f}deg inliers={n_sol}")
                 except Exception as exc:
-                    logging.warning(f"[frame {frame_id}] Pose solve: {exc}")
+                    print(f"Pose solve: {exc}")
 
         traj_gt.append(trans_gt.copy())
         log_trajectory(traj_gt, is_gt=True)
@@ -318,7 +318,7 @@ def main() -> None:
 
     args.output_rrd.parent.mkdir(parents=True, exist_ok=True)
     save_rrd(args.output_rrd)
-    logging.info(f"Saved to {args.output_rrd}")
+    print(f"Saved to {args.output_rrd}")
 
 
 if __name__ == "__main__":

@@ -1,53 +1,128 @@
-## Instraction of Running LiteVloc with Offline Data
+# LiteVLoc Offline Visual Localization
 
-### Prepare the Pre-Built Map for Three Matterport3d Environments
-Please download [matterport3d_map](https://drive.google.com/drive/folders/1GFHUTVhlJrj8mtfjfEqrKMz3JfawEHA6?usp=drive_link) in your folder. The data is structured as follows:
+## Overview
+
+LiteVLoc is a three-stage hierarchical visual localization pipeline that works without ROS dependencies:
+1. **Global localization (VPR)** — coarse retrieval from a pre-built topometric map
+2. **Image matching** — fine-grained keypoint matching between query and map node
+3. **Pose estimation** — PnP solver with depth for full 6-DoF camera pose
+
+Results are saved to a **Rerun `.rrd`** file for interactive 3D visualization.
+
+---
+
+## Quick Start
+
 ```bash
-matterport3d/s17DRP5sb8fy/merge_finalmap/ # 17DRP5sb8fy is the environment id
-  seq/000000.color.jpg       # color image 
-      000000.depth.png       # depth image, each pixel is a uint16 value with mm unit
-      000000.semantic.png    # semantic image
-  preds/viz_graph.png        # visualization of the graph with three edge types
-  goal_images/goal_img_X.jpg # goal images
-  intrinsics.txt             # camera intrinsics (fx, fy, cx, cy, width, height)
-  poses.txt                  # poses of each image represented as the map-free format (qw qx qy qz tx ty tz)
-  poses_abs_gt.txt           # GT poses of each image represented as the map-free format (qw qx qy qz tx ty tz)
-  timestamps.txt             # timestamps of each image
-  edge_covis.txt             # edges between nodes to indicate covisibility relation (0: low visibility, 1: high visibility)
-  edge_odom.txt              # edges between nodes to indicate odometry relation (connection means that nodes are closed)
-  edge_trav.txt              # edges between nodes to indicate traversability relation (connection means that nodes are traversable)
-  database_descriptors.txt   # 256-dimension CosPlace VPR global descriptors of each image
-  gps_data.txt               # GPS data
-  iqa_data.txt               # image quality score (0: bad quality due to low light, motion blur, etc, 100: high quality)
+cd /Titan/code/robohike_ws/src/opennavmap
+conda activate opennavmap
+
+# Run on one environment — outputs a .rrd file
+bash third_party/litevloc_code/scripts/run_vloc_offline_rerun.sh s17DRP5sb8fy
+
+# Open the recording in Rerun Viewer
+rerun third_party/litevloc_code/output/vloc_s17DRP5sb8fy.rrd
 ```
 
-### Build LiteVloc as the ROS Package
-Follow the [tutorial](../README.md) to install **LiteVloc** for visual localization.
-Modify ```env_id``` and ```map_path``` in ```run_vloc_offline_files.launch``` to your environment id and map path, then run
+Supported environments: `s17DRP5sb8fy`, `sB6ByNegPMK`, `sEDJbREhghzL`
+
+---
+
+## Manual Command (Full Control)
+
 ```bash
-conda activate litevloc
-catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
-roslaunch litevloc  .launch
+cd /Titan/code/robohike_ws/src/opennavmap
+LD_LIBRARY_PATH=/root/miniconda3/envs/opennavmap/lib:$LD_LIBRARY_PATH \
+PYTHONPATH=third_party/litevloc_code/python:third_party/VPR-methods-evaluation \
+python third_party/litevloc_code/python/run_vloc_offline_rerun.py \
+  --map_path /Titan/dataset/data_opennavmap/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
+  --query_data_path /Titan/dataset/data_opennavmap/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
+  --output_rrd third_party/litevloc_code/output/vloc_s17DRP5sb8fy.rrd \
+  --image_size 512 288 --device cuda \
+  --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 \
+  --vpr_match_model single_match --vpr_match_seq_len 1 \
+  --img_matcher master --pose_solver pnp \
+  --config_pose_solver third_party/litevloc_code/python/config/dataset/matterport3d.yaml \
+  --global_pos_threshold 10.0 --min_master_conf_thre 1.5 --min_solver_inliers_thre 200
 ```
-You will see similar outputs as follows:
-```bash
+
+---
+
+## Arguments
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--map_path` | *(required)* | Directory of the pre-built topometric map |
+| `--query_data_path` | *(required)* | Directory of query observations |
+| `--output_rrd` | `output/vloc_result.rrd` | Output `.rrd` path |
+| `--image_size` | `512 288` | Resize width and height |
+| `--device` | `cuda` | `cuda` or `cpu` |
+| `--vpr_method` | `cosplace` | VPR model: `cosplace`, `netvlad`, `eigenplaces`, etc. |
+| `--vpr_backbone` | `ResNet18` | Backbone for VPR model |
+| `--vpr_match_model` | `sequence_match` | VPR matching: `single_match`, `sequence_match` |
+| `--vpr_match_seq_len` | `5` | Sequence length for sequence match |
+| `--img_matcher` | `master` | Feature matcher: `master`, `superpoint`, `disk`, etc. |
+| `--n_kpts` | `2048` | Number of keypoints for image matcher |
+| `--pose_solver` | `pnp` | Pose solver: `pnp` |
+| `--config_pose_solver` | `matterport3d.yaml` | YACS config path |
+| `--global_pos_threshold` | `10.0` | Distance threshold (m) for keyframe candidates |
+| `--min_master_conf_thre` | `1.5` | Confidence threshold for Mast3R matcher |
+| `--min_solver_inliers_thre` | `200` | Minimum inliers for PnP solver success |
+| `--depth_scale` | `0.001` | Depth image scale (mm → m) |
+
+---
+
+## Expected Output
+
+Each query frame prints a structured log:
+
+```
 Loading observation seq/000000.color.jpg
-[INFO] [1745440727.584944]: Global localization costs: 0.000s
-[WARN] [1745440727.586771]: Found VPR Node in global position: 0
-[INFO] [1745440727.588302]: Keyframe candidate: 1(1.06) 3(1.02) 5(1.15) 19(1.16) 20(0.87) 0(0.00) Closest node: 0
-[INFO] [1745440727.856415]: Number of matched inliers: 2229
-[INFO] [1745440727.857266]: Image matching costs:  0.269s
-[WARN] [1745440727.860715]: [Succ] sufficient number 2229 solver inliers
-[INFO] [1745440727.861090]: Local localization costs: 0.273s
-[INFO] [1745440727.861476]: Groundtruth Poses: [-0.60591018  1.01205952  1.        ]
-[INFO] [1745440727.861817]: Estimated Poses: [-0.605915    1.0120701   0.99999773]
+Global localization costs: 0.012s
+Found VPR Node in global position: 0
+Keyframe candidate: 1(1.06) 3(1.02) 5(1.15) Closest node: 0
+Number of matched inliers: 2229
+Image matching costs: 0.269s
+[Succ] sufficient number 2229 solver inliers
+Local localization costs: 0.273s
+Groundtruth Poses: [-0.60591018  1.01205952  1.        ]
+Estimated Poses: [-0.605915    1.0120701   0.99999773]
+t_err=0.000m r_err=0.02deg inliers=2229
 ```
-Change ```use_rviz``` as ```true``` to visualize the results in rviz:
-> The green squares and blue lines indicates the graph nodes and traversability edges, respectively. 
-> The red arrow indicates the estimated pose (arrow direction is the x-axis).
-<div align="center">
-    <a href="">
-      <img src="media/ins_simu_matterport3d_vloc.png" width="50%" 
-      alt="ins_simu_results">
-    </a>
-</div>
+
+---
+
+## Rerun `.rrd` Visualization
+
+Open with:
+```bash
+rerun third_party/litevloc_code/output/vloc_s17DRP5sb8fy.rrd
+```
+
+### What You See
+
+| View | Content |
+|------|---------|
+| **3D View** | Green boxes = map nodes; blue lines = topology edges; red/green world axes at origin |
+| **Zoom on a node** | Camera frustum with the node's RGB image textured on it |
+| **Play timeline** | Green trajectory = GT; red trajectory = estimated poses |
+| **query/matching** | Combined ref+query images with green match lines (up to 20 keypoint pairs) |
+
+---
+
+## Data Format
+
+The map directory must contain:
+
+```
+map_root/
+├── seq/                        # RGB-D image sequences
+│   ├── 000000.color.jpg
+│   └── 000000.depth.png        # uint16 in mm, optional (needed for PnP)
+├── intrinsics.txt              # fx fy cx cy width height per image
+├── poses.txt                   # qw qx qy qz tx ty tz per image
+├── database_descriptors.txt    # VPR global descriptors (256-dim CosPlace)
+├── edges_covis.txt             # Covisibility edges (node_a node_b weight)
+├── edges_trav.txt              # Traversability edges
+└── timestamps.txt              # Image timestamps
+```
