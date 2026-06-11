@@ -37,6 +37,45 @@ def save_rrd(output_path: Path) -> None:
     rr.save(str(output_path))
 
 
+def log_world_frame_axes(length: float = 0.5, radii: float = 0.02) -> None:
+    origin = [0.0, 0.0, 0.0]
+    rr.log(
+        "world/axes",
+        rr.Arrows3D(
+            origins=[origin, origin, origin],
+            vectors=[[length, 0, 0], [0, length, 0], [0, 0, length]],
+            radii=radii,
+            colors=np.array([[220, 50, 50], [50, 220, 50], [50, 50, 220]], dtype=np.uint8),
+        ),
+        timeless=True,
+    )
+
+
+def log_pose_axes(
+    trans: np.ndarray,
+    quat: np.ndarray,
+    entity_path: str = "query/pose_estimated/axes",
+    length: float = 0.15,
+    radii: float = 0.015,
+) -> None:
+    from scipy.spatial.transform import Rotation as R
+
+    rot_mat = R.from_quat(quat).as_matrix()
+    x_axis = rot_mat @ np.array([length, 0.0, 0.0])
+    y_axis = rot_mat @ np.array([0.0, length, 0.0])
+    z_axis = rot_mat @ np.array([0.0, 0.0, length])
+    origin = trans.tolist()
+    rr.log(
+        entity_path,
+        rr.Arrows3D(
+            origins=[origin, origin, origin],
+            vectors=[x_axis.tolist(), y_axis.tolist(), z_axis.tolist()],
+            radii=radii,
+            colors=np.array([[220, 50, 50], [50, 220, 50], [50, 50, 220]], dtype=np.uint8),
+        ),
+    )
+
+
 def log_map_nodes(graph) -> None:
     for node in graph.nodes.values():
         entity = f"map/nodes/{node.id}"
