@@ -21,7 +21,6 @@ python third_party/litevloc_code/python/run_vloc_offline_rerun.py \
 from __future__ import annotations
 
 import argparse
-import logging
 import os
 import pathlib
 import sys
@@ -63,7 +62,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--query_data_path", required=True)
     p.add_argument(
         "--output_rrd", type=pathlib.Path,
-        default=_HERE.parent / "logs" / "vloc_result.rrd",
+        default=_HERE.parent / "output" / "vloc_result.rrd",
     )
     p.add_argument("--image_size", nargs=2, type=int, default=[512, 288])
     p.add_argument("--device", default="cuda")
@@ -102,10 +101,6 @@ def get_loadable_query_keys(
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-    )
     args = parse_args()
 
     init_rerun("litevloc_offline_vloc")
@@ -126,7 +121,7 @@ def main() -> None:
         normalized=config["normalized"],
         edge_type="covis",
     )
-    logging.info(str(image_graph))
+    print(str(image_graph))
     
     log_world_frame_axes()
     log_map_nodes(image_graph)
@@ -170,7 +165,7 @@ def main() -> None:
     intrs = read_intrinsics(str(query_root / "intrinsics.txt"))
     descs = read_descriptors(str(query_root / "database_descriptors.txt"))
     query_keys = get_loadable_query_keys(query_root, poses, intrs, descs)
-    logging.info(f"Loadable query frames: {len(query_keys)}")
+    print(f"Loadable query frames: {len(query_keys)}")
 
     traj_est, traj_gt = [], []
     curr_query_descs = []
@@ -178,6 +173,9 @@ def main() -> None:
     ref_map_node = None
 
     for frame_id, rgb_img_name in enumerate(query_keys):
+        print(f"\n{'='*60}")
+        print(f"Frame {frame_id}: {rgb_img_name}")
+        print(f"{'='*60}")
         pose = poses[rgb_img_name]
         intr = intrs[rgb_img_name]
         width, height = int(intr[4]), int(intr[5])
@@ -210,6 +208,7 @@ def main() -> None:
 
         set_frame_time(frame_id, float(frame_id))
         rgb_np = (np.transpose(to_numpy(rgb_img), (1, 2, 0)) * 255).astype(np.uint8)
+        print(f"  Loading {rgb_img_name}")
 
         t_start = time.time()
         query_desc = descs[rgb_img_name].reshape(1, -1)
@@ -217,8 +216,11 @@ def main() -> None:
         curr_query_descs = curr_query_descs[-args.vpr_match_seq_len:]
 
         if len(curr_query_descs) >= args.vpr_match_seq_len:
+            t_vpr = time.time()
             query_descs_stack = np.array(curr_query_descs).reshape(-1, query_desc.shape[1])
             recall_preds, _, _ = vpr_match_model.match(query_descs_stack, recall_values=5)
+            t_vpr = time.time() - t_vpr
+            print(f"Global localization costs: {t_vpr:.3f}s")
 
             best_map_id, max_inliers = db_node_ids[recall_preds[0]], 0
             for pred in recall_preds:
@@ -235,14 +237,14 @@ def main() -> None:
                 has_global_pos = True
                 ref_map_node = image_graph.get_node(best_map_id)
                 obs_node.set_pose(ref_map_node.trans, ref_map_node.quat)
-                logging.info(f"[frame {frame_id}] VPR → node {best_map_id} ({t_start:.1f}s)")
+                print(f"Found VPR Node in global position: {best_map_id}")
             else:
                 has_global_pos = False
                 ref_map_node = None
-                logging.warning(f"[frame {frame_id}] VPR fail, inliers={max_inliers}")
+                print(f"VPR fail, inliers={max_inliers}")
         else:
             has_global_pos = False
-            logging.warning(f"[frame {frame_id}] Not enough query descs for seq match")
+            print(f"Not enough query descs for seq match")
 
         if has_global_pos and ref_map_node is not None:
             dis, pred = perform_knn_search(db_poses[:, :3], obs_node.trans.reshape(1, 3), 3, [1])
@@ -255,12 +257,19 @@ def main() -> None:
 
                 if candidates:
                     dists = [compute_euclidean_dis(obs_node.get_descriptor(), n.get_descriptor()) for n in candidates]
+                    print(f"  Keyframe candidates: " + " ".join(
+                        f"{n.id}({d:.2f})" for n, d in zip(candidates, dists)))
+                    print(f"  Closest node: {candidates[np.argmin(dists)].id}")
                     ref_map_node = candidates[np.argmin(dists)]
 
+            t_match = time.time()
             match_result = img_matcher(ref_map_node.rgb_image, obs_node.rgb_image)
             mkpts0 = match_result["inlier_kpts0"]
             mkpts1 = match_result["inlier_kpts1"]
             num_inliers = match_result["num_inliers"]
+            t_match = time.time() - t_match
+            print(f"  Number of matched inliers: {num_inliers}")
+            print(f"  Image matching costs: {t_match:.3f}s")
 
             ref_map_node.set_matched_kpts(mkpts0, num_inliers)
             obs_node.set_matched_kpts(mkpts1, num_inliers)
@@ -277,6 +286,7 @@ def main() -> None:
                     h_q = height / resize[1]
                     mkpts1_raw = mkpts1 * [w_q, h_q]
                     depth_np = to_numpy(depth_img.squeeze(0))
+                    t_local = time.time()
                     R_est, t_est, n_sol = pose_solver.estimate_pose(
                         mkpts1_raw, mkpts0_raw,
                         raw_K, ref_map_node.raw_K,
@@ -289,6 +299,11 @@ def main() -> None:
                         T_wo = T_wm @ T_mo
                         trans_est, quat_est = convert_matrix_to_vec(T_wo, "xyzw")
                         obs_node.set_pose(trans_est, quat_est)
+                        t_local = time.time() - t_local
+                        print(f"  [Succ] sufficient number {n_sol} solver inliers")
+                        print(f"  Local localization costs: {t_local:.3f}s")
+                        print(f"  Groundtruth Poses: {trans_gt}")
+                        print(f"  Estimated Poses: {trans_est}")
                         log_query_camera(trans_est, quat_est, obs_node.K, obs_node.img_size, rgb_image=rgb_np, is_gt=False)
                         traj_est.append(trans_est.copy())
                         t_err, r_err = compute_pose_error(
