@@ -7,8 +7,10 @@ map/nodes/{id}              : per-node camera frustum (Transform3D + Pinhole), t
 map/nodes/{id}/camera       : per-node RGB image on Pinhole frustum, timeless
 map/edges/covis             : covisibility edges (LineStrips3D), timeless
 map/edges/trav              : traversability edges (LineStrips3D), timeless
+world/axes                  : XYZ world frame axes (red/green/blue Arrows3D), timeless
 query/image                 : current query RGB image, per-frame
 query/pose_estimated        : estimated pose frustum + arrow, per-frame
+query/pose_estimated/axes   : XYZ pose axes for estimated pose (red/green/blue Arrows3D), per-frame
 query/pose_gt               : ground-truth pose frustum + arrow, per-frame
 query/trajectory_est        : accumulated estimated trajectory (LineStrips3D), per-frame
 query/trajectory_gt         : accumulated gt trajectory (LineStrips3D), per-frame
@@ -158,9 +160,7 @@ def log_image_matching(
     h_ref, w_ref = ref_image.shape[:2]
     h_qry, w_qry = query_image.shape[:2]
 
-    if h_ref != h_qry:
-        query_image = cv2.resize(query_image, (w_qry, h_ref))
-        h_qry = h_ref
+    assert h_ref == h_qry, f"Height mismatch: ref={h_ref} vs query={h_qry}"
 
     combined = np.hstack([ref_image, query_image])
 
