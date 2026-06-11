@@ -8,7 +8,7 @@ LiteVLoc is a **hierarchical visual localization** framework designed to enable 
 
 <div align="center">
     <a href="">
-      <img src="doc/media/litevloc_overview.png" width="40%" 
+      <img src="docs/media/litevloc_overview.png" width="40%" 
       alt="ins_simu_results">
     </a>
 </div>
@@ -17,14 +17,14 @@ LiteVLoc is a **hierarchical visual localization** framework designed to enable 
 We use the AR glass to create a lightweight topometric map for camera pose estimation and path planning. We can show an image to the robot, and the robot can autonomously navigate to the goal. Please check our [paper](https://arxiv.org/abs/2410.04419) for the technical explanation and [website](https://rpl-cs-ucl.github.io/LiteVLoc/) for more demonstrations.
 <div align="center">
     <a href="">
-      <img src="doc/media/exp_real_world_map_meta.png" width="60%" 
+      <img src="docs/media/exp_real_world_map_meta.png" width="60%" 
       alt="ins_simu_results">
     </a>
 </div>
 
 <div align="center">
     <a href="">
-      <img src="doc/media/litevloc_real_world_result.png" width="60%" 
+      <img src="docs/media/litevloc_real_world_result.png" width="60%" 
       alt="ins_simu_results">
     </a>
 </div>
@@ -66,10 +66,10 @@ catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
 ```
 
 ### We provide several usage of LiteVloc
-1. [Instruction in Performing Map-free Benchmarking](doc/instruction_map_free_benchmark.md)
-2. [Instruction in Running LiteVloc with Offline Data](doc/instruction_vloc_data.md)
-3. [Instruction in Running LiteVloc with Simulated Matterport3d Environment](doc/instruction_vnav_simu_matterport3d.md)
-4. [Instruction in Processing Dataset](doc/instruction_dataset.md)
+1. [Instruction in Performing Map-free Benchmarking](docs/instruction_map_free_benchmark.md)
+2. [Instruction in Running LiteVloc with Offline Data](docs/instruction_vloc_data.md)
+3. [Instruction in Running LiteVloc with Simulated Matterport3d Environment](docs/instruction_vnav_simu_matterport3d.md)
+4. [Instruction in Processing Dataset](docs/instruction_dataset.md)
 ### Issues
 Issue: ```cannot import name 'cache' from 'functools'```
 > Replace the original code with [Link](https://stackoverflow.com/questions/66846743/importerror-cannot-import-name-cache-from-functools)
