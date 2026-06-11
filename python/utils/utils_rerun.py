@@ -227,4 +227,8 @@ def log_image_matching(
         for (x0, y0), (x1, y1) in zip(mkpts_ref[idx].astype(int), mkpts_query[idx].astype(int)):
             cv2.line(combined, (x0, y0), (x1 + w_ref, y1), (0, 220, 0), 1, cv2.LINE_AA)
 
+    total_kpts = len(mkpts_ref)
+    kpts_text = f"Kpts: {n_kpts}/{total_kpts}" if total_kpts > 0 else "Kpts: 0"
+    cv2.putText(combined, kpts_text, (8, h_ref - 12), font, 0.6, (200, 200, 200), 2, cv2.LINE_AA)
+
     rr.log("query/matching/combined", rr.Image(combined))
