@@ -55,7 +55,7 @@ def set_frame_time(frame_id: int, timestamp: float) -> None:
     rr.set_time_seconds("timestamp", timestamp)
 
 
-def log_world_frame_axes(length: float = 1.0, radii: float = 0.01) -> None:
+def log_world_frame_axes(length: float = 0.33, radii: float = 0.01) -> None:
     """Log XYZ world frame axes as timeless Arrows3D (red=X, green=Y, blue=Z)."""
     origin = [0.0, 0.0, 0.0]
     rr.log(
@@ -102,7 +102,7 @@ def log_map_nodes(graph) -> None:
     from scipy.spatial.transform import Rotation as R
     from utils.utils_image import to_numpy
 
-    half_size = np.array([0.05, 0.05, 0.05], dtype=np.float32)
+    half_size = np.array([0.03, 0.03, 0.03], dtype=np.float32)
     for node in graph.nodes.values():
         entity = f"map/nodes/{node.id}"
         width, height = int(node.img_size[0]), int(node.img_size[1])
