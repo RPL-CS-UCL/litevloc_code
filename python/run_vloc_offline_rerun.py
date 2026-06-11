@@ -9,7 +9,7 @@ PYTHONPATH=third_party/litevloc_code/python:third_party/VPR-methods-evaluation \
 python third_party/litevloc_code/python/run_vloc_offline_rerun.py \
   --map_path /Titan/dataset/data_opennavmap/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
   --query_data_path /Titan/dataset/data_opennavmap/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
-  --output_rrd third_party/litevloc_code/output/vloc_s17DRP5sb8fy.rrd \
+  --output_rrd third_party/litevloc_code/logs/vloc_s17DRP5sb8fy.rrd \
   --image_size 512 288 --device cuda \
   --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256 \
   --vpr_match_model single_match \
@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--query_data_path", required=True)
     p.add_argument(
         "--output_rrd", type=pathlib.Path,
-        default=_HERE.parent / "output" / "vloc_result.rrd",
+        default=_HERE.parent / "logs" / "vloc_result.rrd",
     )
     p.add_argument("--image_size", nargs=2, type=int, default=[512, 288])
     p.add_argument("--device", default="cuda")
