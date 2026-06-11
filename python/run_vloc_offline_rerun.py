@@ -49,9 +49,10 @@ from utils.utils_pipeline import GV_SCORE_THRESHOLD
 from utils.pose_solver import get_solver
 from utils.utils_rerun import (
     init_rerun, save_rrd,
+    log_world_frame_axes,
     log_map_nodes, log_map_edges,
     set_frame_time, log_query_image, log_query_camera,
-    log_trajectory, log_image_matching,
+    log_trajectory, log_image_matching, log_pose_axes,
 )
 from benchmark_rpe.rpe_default import cfg
 
@@ -127,6 +128,7 @@ def main() -> None:
     )
     logging.info(str(image_graph))
     
+    log_world_frame_axes(length=0.5, radii=0.02)
     log_map_nodes(image_graph)
 
     trav_graph = ImageGraphLoader.load_data(
@@ -289,6 +291,7 @@ def main() -> None:
                         trans_est, quat_est = convert_matrix_to_vec(T_wo, "xyzw")
                         obs_node.set_pose(trans_est, quat_est)
                         log_query_camera(trans_est, quat_est, raw_K, (width, height), is_gt=False)
+                        log_pose_axes(trans_est, quat_est, entity_path="query/pose_estimated/axes")
                         traj_est.append(trans_est.copy())
                         t_err, r_err = compute_pose_error(
                             (trans_est, quat_est), (trans_gt, quat_gt), mode="vector"
