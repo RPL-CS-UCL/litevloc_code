@@ -16,7 +16,7 @@ query/pose_estimated/camera : estimated pose Pinhole + RGB Image (per-frame)
 query/pose_estimated/axes   : XYZ pose axes Arrows3D red/green/blue (per-frame)
 query/trajectory_gt         : accumulated GT trajectory LineStrips3D green (per-frame)
 query/trajectory_est        : accumulated estimated trajectory LineStrips3D red (per-frame)
-query/matching/{node_id}/combined : ref+query combined image with up to 20 match lines (per-frame)
+query/matching/{node_id}          : ref+query combined image with up to 20 match lines (per-frame)
 
 Colors
 ------
@@ -40,10 +40,30 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import rerun as rr
+import rerun.blueprint as rrb
 
 
 def init_rerun(app_id: str = "litevloc_offline_vloc") -> None:
     rr.init(app_id, spawn=False)
+    blueprint = rrb.Blueprint(
+        rrb.Horizontal(
+            rrb.Spatial3DView(
+                name="Map + Trajectory",
+                origin="/",
+            ),
+            rrb.Vertical(
+                rrb.Spatial2DView(
+                    name="Query Image",
+                    origin="query/pose_estimated/camera",
+                ),
+                rrb.Spatial2DView(
+                    name="Keypoint Matching",
+                    origin="query/matching",
+                ),
+            ),
+        ),
+    )
+    rr.send_blueprint(blueprint)
 
 
 def save_rrd(output_path: Path) -> None:
