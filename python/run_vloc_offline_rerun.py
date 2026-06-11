@@ -21,6 +21,7 @@ python third_party/litevloc_code/python/run_vloc_offline_rerun.py \
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import pathlib
 import sys
@@ -173,9 +174,7 @@ def main() -> None:
     ref_map_node = None
 
     for frame_id, rgb_img_name in enumerate(query_keys):
-        print(f"\n{'='*60}")
-        print(f"Frame {frame_id}: {rgb_img_name}")
-        print(f"{'='*60}")
+        print(f"Loading observation seq/{rgb_img_name}")
         pose = poses[rgb_img_name]
         intr = intrs[rgb_img_name]
         width, height = int(intr[4]), int(intr[5])
@@ -208,7 +207,6 @@ def main() -> None:
 
         set_frame_time(frame_id, float(frame_id))
         rgb_np = (np.transpose(to_numpy(rgb_img), (1, 2, 0)) * 255).astype(np.uint8)
-        print(f"  Loading {rgb_img_name}")
 
         t_start = time.time()
         query_desc = descs[rgb_img_name].reshape(1, -1)
