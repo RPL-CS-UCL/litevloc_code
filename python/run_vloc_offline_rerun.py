@@ -51,7 +51,7 @@ from utils.utils_rerun import (
     init_rerun, save_rrd,
     log_world_frame_axes,
     log_map_nodes, log_map_edges,
-    set_frame_time, log_query_image, log_query_camera,
+    set_frame_time, log_query_camera,
     log_trajectory, log_image_matching, log_pose_axes,
 )
 from benchmark_rpe.rpe_default import cfg
@@ -130,6 +130,7 @@ def main() -> None:
     
     log_world_frame_axes(length=0.5, radii=0.02)
     log_map_nodes(image_graph)
+    log_map_edges(image_graph, edge_type="covis")
 
     trav_graph = ImageGraphLoader.load_data(
         map_root=map_root,
@@ -209,8 +210,7 @@ def main() -> None:
 
         set_frame_time(frame_id, float(frame_id))
         rgb_np = (np.transpose(to_numpy(rgb_img), (1, 2, 0)) * 255).astype(np.uint8)
-        log_query_image(rgb_np)
-        log_query_camera(trans_gt, quat_gt, raw_K, (width, height), is_gt=True)
+        log_query_camera(trans_gt, quat_gt, raw_K, (width, height), rgb_image=rgb_np, is_gt=True)
 
         t_start = time.time()
         query_desc = descs[rgb_img_name].reshape(1, -1)
@@ -290,7 +290,7 @@ def main() -> None:
                         T_wo = T_wm @ T_mo
                         trans_est, quat_est = convert_matrix_to_vec(T_wo, "xyzw")
                         obs_node.set_pose(trans_est, quat_est)
-                        log_query_camera(trans_est, quat_est, raw_K, (width, height), is_gt=False)
+                        log_query_camera(trans_est, quat_est, obs_node.K, obs_node.img_size, rgb_image=rgb_np, is_gt=False)
                         log_pose_axes(trans_est, quat_est, entity_path="query/pose_estimated/axes")
                         traj_est.append(trans_est.copy())
                         t_err, r_err = compute_pose_error(
