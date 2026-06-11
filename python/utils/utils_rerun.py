@@ -162,7 +162,7 @@ def log_image_matching(
 
     assert h_ref == h_qry, f"Height mismatch: ref={h_ref} vs query={h_qry}"
 
-    combined = np.hstack([ref_image, query_image])
+    combined = np.hstack([ref_image, query_image]).copy()
 
     font = cv2.FONT_HERSHEY_SIMPLEX
     cv2.putText(combined, "Reference", (8, 24), font, 0.7, (255, 255, 255), 2, cv2.LINE_AA)

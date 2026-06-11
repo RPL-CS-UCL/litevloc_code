@@ -32,8 +32,8 @@ import numpy as np
 _HERE = pathlib.Path(__file__).resolve().parent
 _LITEVLOC_ROOT = _HERE.parent
 _VPR_EVAL = _LITEVLOC_ROOT.parent / "VPR-methods-evaluation"
-sys.path.insert(0, str(_HERE))
 sys.path.insert(0, str(_VPR_EVAL))
+sys.path.insert(0, str(_HERE))
 
 from image_graph import ImageGraphLoader
 from image_node import ImageNode
