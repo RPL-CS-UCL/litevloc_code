@@ -40,10 +40,22 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import rerun as rr
+import rerun.blueprint as rrb
 
 
 def init_rerun(app_id: str = "litevloc_offline_vloc") -> None:
     rr.init(app_id, spawn=False)
+    blueprint = rrb.Blueprint(
+        rrb.Horizontal(
+            rrb.Spatial3DView(name="3D", origin="/"),
+            rrb.Spatial2DView(
+                name="Matching",
+                origin="/query/matching",
+                contents=["/**"],
+            ),
+        ),
+    )
+    rr.send_blueprint(blueprint)
 
 
 def save_rrd(output_path: Path) -> None:
@@ -109,7 +121,7 @@ def log_map_nodes(graph) -> None:
         rot_mat = R.from_quat(node.quat).as_matrix()
 
         rr.log(entity, rr.Transform3D(translation=node.trans.tolist(), mat3x3=rot_mat.tolist()), timeless=True)
-        rr.log(entity + "/camera", rr.Pinhole(image_from_camera=node.K, width=width, height=height), timeless=True)
+        rr.log(entity + "/camera", rr.Pinhole(image_from_camera=node.K, width=width/2, height=height/2), timeless=True)
         rr.log(entity + "/body", rr.Boxes3D(half_sizes=[half_size], colors=np.array([[0, 180, 100]], dtype=np.uint8)), timeless=True)
         if node.rgb_image is not None:
             rgb_np = (np.transpose(to_numpy(node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
@@ -210,4 +222,4 @@ def log_image_matching(
         for (x0, y0), (x1, y1) in zip(mkpts_ref[idx].astype(int), mkpts_query[idx].astype(int)):
             cv2.line(combined, (x0, y0), (x1 + w_ref, y1), (0, 220, 0), 1, cv2.LINE_AA)
 
-    rr.log(f"query/matching/{node_id}/combined", rr.Image(combined))
+    rr.log(f"query/matching/{node_id}", rr.Image(combined))
