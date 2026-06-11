@@ -203,7 +203,10 @@ def log_image_matching(
     cv2.putText(combined, "Query", (w_ref + 8, 24), font, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
 
     if len(mkpts_ref) > 0:
-        idx = np.linspace(0, len(mkpts_ref) - 1, min(max_kpts, len(mkpts_ref)), dtype=int)
+        assert len(mkpts_ref) == len(mkpts_query), \
+            f"Keypoint count mismatch: ref={len(mkpts_ref)} vs query={len(mkpts_query)}"
+        n_kpts = min(max_kpts, len(mkpts_ref))
+        idx = np.linspace(0, len(mkpts_ref) - 1, n_kpts, dtype=int)
         for (x0, y0), (x1, y1) in zip(mkpts_ref[idx].astype(int), mkpts_query[idx].astype(int)):
             cv2.line(combined, (x0, y0), (x1 + w_ref, y1), (0, 220, 0), 1, cv2.LINE_AA)
 
