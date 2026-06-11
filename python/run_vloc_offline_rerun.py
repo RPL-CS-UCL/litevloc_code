@@ -289,7 +289,7 @@ def main() -> None:
                         T_wo = T_wm @ T_mo
                         trans_est, quat_est = convert_matrix_to_vec(T_wo, "xyzw")
                         obs_node.set_pose(trans_est, quat_est)
-                        log_query_camera(trans_est, quat_est, obs_node.K, obs_node.img_size, is_gt=False)
+                        log_query_camera(trans_est, quat_est, obs_node.K, obs_node.img_size, rgb_image=rgb_np, is_gt=False)
                         traj_est.append(trans_est.copy())
                         t_err, r_err = compute_pose_error(
                             (trans_est, quat_est), (trans_gt, quat_gt), mode="vector"
