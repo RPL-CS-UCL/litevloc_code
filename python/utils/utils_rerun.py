@@ -36,7 +36,7 @@ Query/matching entities: frame_id / timestamp timelines.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import numpy as np
 import rerun as rr
@@ -144,10 +144,9 @@ def log_query_camera(
     quat: np.ndarray,
     K: np.ndarray,
     img_size: Tuple[int, int],
-    rgb_image: Optional[np.ndarray] = None,
     is_gt: bool = False,
 ) -> None:
-    """Log a query camera frustum with optional RGB image.
+    """Log a query camera frustum (Transform3D + Pinhole).
     Orientation is conveyed by the Transform3D + Pinhole frustum; no separate arrow needed.
     """
     from scipy.spatial.transform import Rotation as R
@@ -158,8 +157,6 @@ def log_query_camera(
 
     rr.log(entity, rr.Transform3D(translation=trans.tolist(), mat3x3=rot_mat.tolist()))
     rr.log(entity + "/camera", rr.Pinhole(image_from_camera=K, width=width, height=height))
-    if rgb_image is not None:
-        rr.log(entity + "/camera", rr.Image(rgb_image))
 
 
 def log_trajectory(
