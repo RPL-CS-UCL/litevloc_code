@@ -207,6 +207,7 @@ def main() -> None:
 
         set_frame_time(frame_id, float(frame_id))
         rgb_np = (np.transpose(to_numpy(rgb_img), (1, 2, 0)) * 255).astype(np.uint8)
+        log_query_camera(trans_gt, quat_gt, K, img_size, is_gt=True)
 
         t_start = time.time()
         query_desc = descs[rgb_img_name].reshape(1, -1)
