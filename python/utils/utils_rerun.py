@@ -12,10 +12,7 @@ query/pose_estimated        : estimated pose frustum + arrow, per-frame
 query/pose_gt               : ground-truth pose frustum + arrow, per-frame
 query/trajectory_est        : accumulated estimated trajectory (LineStrips3D), per-frame
 query/trajectory_gt         : accumulated gt trajectory (LineStrips3D), per-frame
-query/matching/{node_id}/ref_image   : matched reference map image
-query/matching/{node_id}/query_image : query image with keypoints
-query/matching/{node_id}/keypoints_ref   : keypoint overlay on reference (Points2D)
-query/matching/{node_id}/keypoints_query : keypoint overlay on query (Points2D)
+query/matching/{node_id}/combined    : ref + query horizontally combined with match lines, per-frame
 
 Timeline
 --------
@@ -88,7 +85,7 @@ def log_query_camera(
     is_gt: bool = False,
 ) -> None:
     entity = "query/pose_gt" if is_gt else "query/pose_estimated"
-    color = (255, 80, 80, 220) if is_gt else (80, 80, 255, 220)
+    color = (80, 220, 80, 220) if is_gt else (220, 80, 80, 220)
     _log_camera_frustum(entity, trans, quat, K, img_size)
     _log_pose_arrow(entity + "/arrow", trans, quat, color)
 
@@ -100,7 +97,7 @@ def log_trajectory(
     if len(positions) < 2:
         return
     entity = "query/trajectory_gt" if is_gt else "query/trajectory_est"
-    color = (255, 80, 80, 220) if is_gt else (80, 80, 255, 220)
+    color = (80, 220, 80, 220) if is_gt else (220, 80, 80, 220)
     rr.log(
         entity,
         rr.LineStrips3D(
@@ -117,25 +114,26 @@ def log_image_matching(
     mkpts_query: np.ndarray,
     node_id: int,
 ) -> None:
-    prefix = f"query/matching/{node_id}"
-    rr.log(prefix + "/ref_image", rr.Image(ref_image))
-    rr.log(prefix + "/query_image", rr.Image(query_image))
+    import cv2
+
+    h_ref, w_ref = ref_image.shape[:2]
+    h_qry, w_qry = query_image.shape[:2]
+
+    if h_ref != h_qry:
+        query_image = cv2.resize(query_image, (w_qry, h_ref))
+        h_qry = h_ref
+
+    combined = np.hstack([ref_image, query_image])
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(combined, "Reference", (8, 24), font, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.putText(combined, "Query", (w_ref + 8, 24), font, 0.7, (255, 255, 255), 2, cv2.LINE_AA)
 
     if len(mkpts_ref) > 0:
-        rr.log(
-            prefix + "/keypoints_ref",
-            rr.Points2D(
-                positions=mkpts_ref, radii=3.0,
-                colors=np.array([[0, 220, 0]], dtype=np.uint8),
-            ),
-        )
-        rr.log(
-            prefix + "/keypoints_query",
-            rr.Points2D(
-                positions=mkpts_query, radii=3.0,
-                colors=np.array([[0, 220, 0]], dtype=np.uint8),
-            ),
-        )
+        for (x0, y0), (x1, y1) in zip(mkpts_ref.astype(int), mkpts_query.astype(int)):
+            cv2.line(combined, (x0, y0), (x1 + w_ref, y1), (0, 220, 0), 1, cv2.LINE_AA)
+
+    rr.log(f"query/matching/{node_id}/combined", rr.Image(combined))
 
 
 def _log_camera_frustum(
