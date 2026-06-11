@@ -128,8 +128,6 @@ def log_query_camera(
     entity = "query/pose_gt" if is_gt else "query/pose_estimated"
     color = (80, 220, 80, 220) if is_gt else (220, 80, 80, 220)
     _log_camera_frustum(entity, trans, quat, K, img_size)
-    _log_pose_arrow(entity + "/arrow", trans, quat, color)
-
 
 def log_trajectory(
     positions: List[np.ndarray],
@@ -187,7 +185,7 @@ def _log_camera_frustum(
 
     width, height = int(img_size[0]), int(img_size[1])
     rot_mat = R.from_quat(quat).as_matrix()
-    half_size = np.array([0.04, 0.04, 0.04], dtype=np.float32)
+    half_size = np.array([0.10, 0.10, 0.10], dtype=np.float32)
 
     rr.log(
         entity_path,
@@ -197,6 +195,11 @@ def _log_camera_frustum(
     rr.log(
         entity_path + "/camera",
         rr.Pinhole(image_from_camera=K, width=width, height=height),
+        timeless=timeless,
+    )
+    rr.log(
+        entity_path + "/body",
+        rr.Boxes3D(half_sizes=[half_size], colors=np.array([[0, 180, 100]], dtype=np.uint8)),
         timeless=timeless,
     )
 
