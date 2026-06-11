@@ -32,7 +32,7 @@ conda activate opennavmap
 bash third_party/litevloc_code/scripts/run_vloc_offline_rerun.sh s17DRP5sb8fy
 
 # View results
-rerun third_party/litevloc_code/output/vloc_s17DRP5sb8fy.rrd
+rerun third_party/litevloc_code/logs/vloc_s17DRP5sb8fy.rrd
 ```
 
 Supported envs: `s17DRP5sb8fy`, `sB6ByNegPMK`, `sEDJbREhghzL`
