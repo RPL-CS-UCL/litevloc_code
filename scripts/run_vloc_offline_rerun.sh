@@ -28,7 +28,7 @@ LITEVLOC_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 WORKSPACE_ROOT="$(cd "${LITEVLOC_ROOT}/../.." && pwd)"
 
 MAP_PATH="${MAP_ROOT}/${ENV_ID}/merge_finalmap"
-OUTPUT_RRD="${LITEVLOC_ROOT}/logs/vloc_${ENV_ID}.rrd"
+OUTPUT_RRD="${LITEVLOC_ROOT}/output/vloc_${ENV_ID}.rrd"
 CONFIG_POSE="${LITEVLOC_ROOT}/python/config/dataset/matterport3d.yaml"
 CONDA_PROFILE="/root/miniconda3/etc/profile.d/conda.sh"
 CONDA_ENV="opennavmap"
