@@ -3,8 +3,8 @@
 
 Entity path conventions
 -----------------------
-map/nodes/{id}              : per-node camera frustum (Transform3D + Pinhole + Boxes3D), timeless
-map/gallery/{id}            : per-node standalone RGB image for 2D gallery view, timeless
+map/nodes/{id}              : per-node camera frustum (Transform3D + Pinhole), timeless
+map/nodes/{id}/camera       : per-node RGB image on Pinhole frustum, timeless
 map/edges/covis             : covisibility edges (LineStrips3D), timeless
 map/edges/trav              : traversability edges (LineStrips3D), timeless
 query/image                 : current query RGB image, per-frame
@@ -169,12 +169,6 @@ def _log_image_on_frustum(entity_path: str, rgb_tensor, timeless: bool = False) 
     rgb_np = (np.transpose(to_numpy(rgb_tensor), (1, 2, 0)) * 255).astype(np.uint8)
     rr.log(entity_path, rr.Image(rgb_np), timeless=timeless)
 
-
-def _log_map_node_gallery_image(entity_path: str, rgb_tensor) -> None:
-    from utils.utils_image import to_numpy
-
-    rgb_np = (np.transpose(to_numpy(rgb_tensor), (1, 2, 0)) * 255).astype(np.uint8)
-    rr.log(entity_path, rr.Image(rgb_np), timeless=True)
 
 
 def _log_pose_arrow(
