@@ -25,14 +25,14 @@ s<ENV_ID>/merge_finalmap/
 ## Method A: Rerun (No ROS)
 
 ```bash
-cd /Titan/code/robohike_ws/src/opennavmap
-conda activate opennavmap
+cd /Titan/code/robohike_ws/src/litevloc_code
+conda activate litevloc
 
 # Run pipeline → outputs .rrd
-bash third_party/litevloc_code/scripts/run_vloc_offline_rerun.sh s17DRP5sb8fy
+bash litevloc_code/scripts/run_vloc_offline_rerun.sh s17DRP5sb8fy
 
 # View results
-rerun third_party/litevloc_code/output/vloc_s17DRP5sb8fy.rrd
+rerun litevloc_code/output/vloc_s17DRP5sb8fy.rrd
 ```
 
 Supported envs: `s17DRP5sb8fy`, `sB6ByNegPMK`, `sEDJbREhghzL`
@@ -40,7 +40,7 @@ Supported envs: `s17DRP5sb8fy`, `sB6ByNegPMK`, `sEDJbREhghzL`
 **Rerun 3D View:** green boxes = map nodes, blue lines = edges, green/red trajectories = GT/estimated, camera frustums with per-node images, matching images with keypoint lines.
 
 <div align="center">
-  <img src="media/rerun_viz_small.png" width="80%" alt="Rerun visualization">
+  <img src="media/ins_simu_matterport3d_rerun.png" width="80%" alt="Rerun visualization">
 </div>
 
 ---
@@ -48,7 +48,7 @@ Supported envs: `s17DRP5sb8fy`, `sB6ByNegPMK`, `sEDJbREhghzL`
 ## Method B: ROS + RViz
 
 ```bash
-conda activate opennavmap
+conda activate litevloc
 catkin build litevloc -DPYTHON_EXECUTABLE=$(which python)
 
 # Run with RViz
