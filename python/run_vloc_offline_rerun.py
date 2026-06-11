@@ -107,7 +107,7 @@ def main() -> None:
     )
     args = parse_args()
 
-    init_rerun("litevloc_offline")
+    init_rerun("litevloc_offline_vloc")
 
     map_root = pathlib.Path(args.map_path)
     resize = tuple(args.image_size)
@@ -126,9 +126,8 @@ def main() -> None:
         edge_type="covis",
     )
     logging.info(str(image_graph))
-
+    
     log_map_nodes(image_graph)
-    log_map_edges(image_graph, edge_type="covis")
 
     trav_graph = ImageGraphLoader.load_data(
         map_root=map_root,

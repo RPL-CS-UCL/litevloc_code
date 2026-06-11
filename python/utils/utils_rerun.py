@@ -32,7 +32,7 @@ import numpy as np
 import rerun as rr
 
 
-def init_rerun(app_id: str = "litevloc_offline") -> None:
+def init_rerun(app_id: str = "litevloc_offline_vloc") -> None:
     rr.init(app_id, spawn=False)
 
 
@@ -43,10 +43,9 @@ def save_rrd(output_path: Path) -> None:
 def log_map_nodes(graph) -> None:
     for node in graph.nodes.values():
         entity = f"map/nodes/{node.id}"
-        _log_camera_frustum(entity, node.trans, node.quat, node.raw_K, node.raw_img_size, timeless=True)
+        _log_camera_frustum(entity, node.trans, node.quat, node.K, node.img_size, timeless=True)
         if node.rgb_image is not None:
             _log_image_on_frustum(entity + "/camera", node.rgb_image, timeless=True)
-            _log_map_node_gallery_image(f"map/gallery/{node.id}", node.rgb_image)
 
 
 def log_map_edges(graph, edge_type: str = "covis") -> None:
@@ -63,7 +62,11 @@ def log_map_edges(graph, edge_type: str = "covis") -> None:
     if strips:
         rr.log(
             f"map/edges/{edge_type}",
-            rr.LineStrips3D(strips=strips),
+            rr.LineStrips3D(
+                strips=strips,
+                radii=0.005,
+                colors=np.array([[100, 149, 237]], dtype=np.uint8),
+            ),
             timeless=True,
         )
 
@@ -159,11 +162,6 @@ def _log_camera_frustum(
         rr.Pinhole(image_from_camera=K, width=width, height=height),
         timeless=timeless,
     )
-    rr.log(
-        entity_path + "/body",
-        rr.Boxes3D(half_sizes=[half_size], colors=np.array([[0, 180, 100]], dtype=np.uint8)),
-        timeless=timeless,
-    )
 
 
 def _log_image_on_frustum(entity_path: str, rgb_tensor, timeless: bool = False) -> None:
@@ -184,7 +182,7 @@ def _log_pose_arrow(
     trans: np.ndarray,
     quat: np.ndarray,
     color: Tuple[int, int, int, int],
-    length: float = 0.5,
+    length: float = 0.15,
 ) -> None:
     from scipy.spatial.transform import Rotation as R
 
@@ -195,6 +193,7 @@ def _log_pose_arrow(
         rr.Arrows3D(
             origins=[trans.tolist()],
             vectors=[forward.tolist()],
+            radii=0.015,
             colors=np.array([color], dtype=np.uint8),
         ),
     )
