@@ -32,12 +32,16 @@ conda activate opennavmap
 bash third_party/litevloc_code/scripts/run_vloc_offline_rerun.sh s17DRP5sb8fy
 
 # View results
-rerun third_party/litevloc_code/logs/vloc_s17DRP5sb8fy.rrd
+rerun third_party/litevloc_code/output/vloc_s17DRP5sb8fy.rrd
 ```
 
 Supported envs: `s17DRP5sb8fy`, `sB6ByNegPMK`, `sEDJbREhghzL`
 
 **Rerun 3D View:** green boxes = map nodes, blue lines = edges, green/red trajectories = GT/estimated, camera frustums with per-node images, matching images with keypoint lines.
+
+<div align="center">
+  <img src="media/rerun_viz_small.png" width="80%" alt="Rerun visualization">
+</div>
 
 ---
 
@@ -55,6 +59,10 @@ roslaunch litevloc run_vloc_offline_files.launch env_id:=17DRP5sb8fy use_rviz:=f
 ```
 
 **RViz View:** green squares = nodes, blue lines = traversability edges, red arrow = estimated pose.
+
+<div align="center">
+  <img src="media/ins_simu_matterport3d_vloc.png" width="80%" alt="RViz visualization">
+</div>
 
 ---
 
