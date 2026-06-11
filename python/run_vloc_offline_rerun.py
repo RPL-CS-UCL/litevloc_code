@@ -63,7 +63,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--query_data_path", required=True)
     p.add_argument(
         "--output_rrd", type=pathlib.Path,
-        default=_HERE.parent / "output" / "vloc_result.rrd",
+        default=_HERE.parent / "logs" / "vloc_result.rrd",
     )
     p.add_argument("--image_size", nargs=2, type=int, default=[512, 288])
     p.add_argument("--device", default="cuda")
@@ -128,7 +128,7 @@ def main() -> None:
     )
     logging.info(str(image_graph))
     
-    log_world_frame_axes(length=0.5, radii=0.02)
+    log_world_frame_axes()
     log_map_nodes(image_graph)
     log_map_edges(image_graph, edge_type="covis")
 
