@@ -16,7 +16,8 @@ query/pose_estimated/camera : estimated pose Pinhole + RGB Image (per-frame)
 query/pose_estimated/axes   : XYZ pose axes Arrows3D red/green/blue (per-frame)
 query/trajectory_gt         : accumulated GT trajectory LineStrips3D green (per-frame)
 query/trajectory_est        : accumulated estimated trajectory LineStrips3D red (per-frame)
-query/matching/{node_id}          : ref+query combined image with up to 20 match lines (per-frame)
+query/image                      : current query RGB image (per-frame)
+query/matching/combined           : ref+query combined image with up to 20 match lines (per-frame)
 
 Colors
 ------
@@ -47,21 +48,13 @@ def init_rerun(app_id: str = "litevloc_offline_vloc") -> None:
     rr.init(app_id, spawn=False)
     blueprint = rrb.Blueprint(
         rrb.Horizontal(
-            rrb.Spatial3DView(
-                name="Map + Trajectory",
-                origin="/",
-            ),
+            rrb.Spatial3DView(name="Map + Trajectory", origin="/"),
             rrb.Vertical(
-                rrb.Spatial2DView(
-                    name="Query Image",
-                    origin="query/pose_estimated/camera",
-                ),
-                rrb.Spatial2DView(
-                    name="Keypoint Matching",
-                    origin="query/matching",
-                ),
+                rrb.Spatial2DView(name="Query Image", origin="query/image"),
+                rrb.Spatial2DView(name="Keypoint Matching", origin="query/matching/combined"),
             ),
         ),
+        auto_space_views=False,
     )
     rr.send_blueprint(blueprint)
 
@@ -73,6 +66,10 @@ def save_rrd(output_path: Path) -> None:
 def set_frame_time(frame_id: int, timestamp: float) -> None:
     rr.set_time_sequence("frame_id", frame_id)
     rr.set_time_seconds("timestamp", timestamp)
+
+
+def log_query_image(rgb_image: np.ndarray) -> None:
+    rr.log("query/image", rr.Image(rgb_image))
 
 
 def log_world_frame_axes(length: float = 0.33, radii: float = 0.01) -> None:
@@ -230,4 +227,4 @@ def log_image_matching(
         for (x0, y0), (x1, y1) in zip(mkpts_ref[idx].astype(int), mkpts_query[idx].astype(int)):
             cv2.line(combined, (x0, y0), (x1 + w_ref, y1), (0, 220, 0), 1, cv2.LINE_AA)
 
-    rr.log(f"query/matching/{node_id}", rr.Image(combined))
+    rr.log("query/matching/combined", rr.Image(combined))
