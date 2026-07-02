@@ -112,11 +112,11 @@ def predict(loader, estimator, str_estimator, cfg, args):
 			top_k_matches = len(reference_image_names)
 			if hasattr(estimator, 'get_minimum_spanning_tree'):
 				msp_edges = estimator.get_minimum_spanning_tree()
-				weight_i, weight_j = estimator.scene.weight_i, estimator.scene.weight_j
+				conf_i, conf_j = estimator.scene.conf_i, estimator.scene.conf_j
 				for edge in msp_edges:
 					if edge[0] == top_k_matches or edge[1] == top_k_matches: # confidence of the query image
 						edge_str = f"{edge[0]}_{edge[1]}"
-						conf = weight_i[edge_str].mean() * weight_j[edge_str].mean()
+						conf = (conf_i[edge_str].mean() * conf_j[edge_str].mean()).detach().cpu().item()
 			else:
 				conf = 0.0
 
