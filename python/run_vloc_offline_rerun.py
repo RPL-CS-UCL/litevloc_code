@@ -70,7 +70,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--vpr_method", default="cosplace")
     p.add_argument("--vpr_backbone", default="ResNet18")
     p.add_argument("--vpr_descriptors_dimension", type=int, default=256)
-    p.add_argument("--vpr_match_model", default="sequence_match")
+    p.add_argument("--vpr_match_model", default="vpr_dp")
     p.add_argument("--vpr_match_seq_len", type=int, default=5)
     p.add_argument("--img_matcher", default="master")
     p.add_argument("--n_kpts", type=int, default=2048)

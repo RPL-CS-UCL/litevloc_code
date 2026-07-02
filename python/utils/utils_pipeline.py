@@ -90,8 +90,8 @@ def parse_arguments():
 											help="_")
 	parser.add_argument("--vpr_descriptors_dimension", type=int, default=256, help="Depending on the specific model")
 
-	parser.add_argument("--vpr_match_model", type=str, default="single_match", 
-						help="single_match, topo_filter, sequence_match, sequence_match_ransac, sequence_match_adaptive")
+	parser.add_argument("--vpr_match_model", type=str, default="vpr_dp",
+						help="single_match, seqslam, vpr_dp")
 	parser.add_argument("--vpr_match_seq_len", type=int, default=10, help="Sequence length for VPR")
 	
 	parser.add_argument("--num_workers", type=int, default=4,

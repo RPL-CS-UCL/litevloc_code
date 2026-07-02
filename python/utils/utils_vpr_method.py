@@ -17,18 +17,14 @@ from matplotlib import pyplot as plt
 
 # Use relative imports when part of a package, absolute imports when run directly
 if __package__:
-    from .vpr_topological_filter import PlaceRecognitionTopologicalFilter
     from .vpr_single_matching import PlaceRecognitionSingleMatching
-    from .vpr_sequence_matching import PlaceRecognitionSeqMatching
-    from .vpr_sequence_matching_adaptive import PlaceRecognitionSeqMatchingAdaptive
-    from .vpr_graph_search import PlaceRecognitionGraphSearch
+    from .vpr_seqslam import PlaceRecognitionSeqMatching
+    from .vpr_dp import PlaceRecognitionGraphSearch
     from .utils_setting_color_font import acquire_color_palette, acquire_marker, setting_font
 else:
-    from vpr_topological_filter import PlaceRecognitionTopologicalFilter
     from vpr_single_matching import PlaceRecognitionSingleMatching
-    from vpr_sequence_matching import PlaceRecognitionSeqMatching
-    from vpr_sequence_matching_adaptive import PlaceRecognitionSeqMatchingAdaptive
-    from vpr_graph_search import PlaceRecognitionGraphSearch
+    from vpr_seqslam import PlaceRecognitionSeqMatching
+    from vpr_dp import PlaceRecognitionGraphSearch
     from utils_setting_color_font import acquire_color_palette, acquire_marker, setting_font
 
 def setup_logging(log_dir, stdout_level='info'):
@@ -67,14 +63,14 @@ def initialize_vpr_model(model_name, backbone, descriptors_dimension, device):
 def initialize_match_model(model_name, seq_len):
 	if model_name == 'single_match':
 		match_model = PlaceRecognitionSingleMatching()
-	elif model_name == 'topo_filter':
-		match_model = PlaceRecognitionTopologicalFilter()
-	elif model_name == 'sequence_match':
+	elif model_name == 'seqslam':
 		match_model = PlaceRecognitionSeqMatching(seqLen=seq_len)
-	elif model_name == 'sequence_match_adaptive':
-		match_model = PlaceRecognitionSeqMatchingAdaptive(seqLen=seq_len)
-	elif model_name == 'graph_search':
+	elif model_name == 'vpr_dp':
 		match_model = PlaceRecognitionGraphSearch()
+	else:
+		raise ValueError(
+			f"Unknown match model: {model_name}. Valid: single_match, seqslam, vpr_dp"
+		)
 	return match_model
 
 def perform_knn_search(database_descriptors, queries_descriptors, descriptors_dimension, recall_values):

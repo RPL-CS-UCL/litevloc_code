@@ -32,6 +32,17 @@ Run VLoc with pose fusion
 roslaunch litevloc run_vloc_online_anymal.launch env_id:=ops_lab use_rviz:=false use_nav:=false vloc_freq:=0.5
 ```
 
+### Debug
+Record VLoc data
+```bash
+bash record_rosbag_anymal_navigation_debug.sh
+```
+
+```bash
+rosbag play rosbag_name.bag
+roslaunch litevloc run_vloc_online_anymal.launch use_rviz:=false use_nav:=true
+```
+Open rviz ```topo_graph_anymal_camera_frame.rviz``` and ```anymal_real_system_vision.rviz```
 
 <!-- ### Installation
 1. Setup your ROS workspace
