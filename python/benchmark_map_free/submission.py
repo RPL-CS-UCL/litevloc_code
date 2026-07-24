@@ -18,7 +18,7 @@ from tqdm import tqdm
 from transforms3d.quaternions import mat2quat
 
 from utils.pose_solver import available_solvers, get_solver
-from benchmark_rpe.rpe_default import cfg
+from rpe_default import cfg
 from utils.utils_image_matching_method import save_visualization
 from utils.utils_geom import correct_intrinsic_scale
 

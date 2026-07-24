@@ -45,7 +45,7 @@ from utils.utils_image_matching_method import save_visualization as save_img_mat
 from utils.utils_image import load_rgb_image, load_depth_image, to_numpy
 from utils.utils_ros import ros_msg, ros_vis
 from utils.pose_solver import get_solver
-from benchmark_rpe.rpe_default import cfg
+from rpe_default import cfg
 from image_graph import ImageGraphLoader as GraphLoader
 from image_node import ImageNode
 

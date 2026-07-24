@@ -54,7 +54,7 @@ from utils.utils_rerun import (
     set_frame_time, log_query_image, log_query_camera,
     log_trajectory, log_image_matching,
 )
-from benchmark_rpe.rpe_default import cfg
+from rpe_default import cfg
 
 
 def parse_args() -> argparse.Namespace:
