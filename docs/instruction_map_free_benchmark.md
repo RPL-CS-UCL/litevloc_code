@@ -51,7 +51,7 @@ You can choose any of the following methods (input to `get_matcher()`):
 
 
 ### Use
-Setup path for dataset and matcher for your evaluation. We support above image matchers defined in [image-matching-models](https://github.com/gmberton/image-matching-models)
+Setup path for dataset and matcher for your evaluation. We support above image matchers defined in [vismatch](https://github.com/gmberton/vismatch) (our fork: [gogojjh/vismatch](https://github.com/gogojjh/vismatch))
 ```bash
 bash scripts/run_benchmark_mf_submission.sh matterport3d
 ```

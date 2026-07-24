@@ -41,18 +41,20 @@ Create conda environment
 conda create --name litevloc python=3.8
 conda activate litevloc
 ```
-Install ```image-matching-methods```
+Install ```vismatch```
 ```bash
-git clone git@github.com:gogojjh/image-matching-models.git --recursive
-cd image-matching-models && python -m pip install -e .
+git clone https://github.com/gogojjh/vismatch.git --recursive
+cd vismatch && python -m pip install -e .
 ```
 Install  ```VPR-evaluation-methods```
 ```bash
-git clone git@github.com:gogojjh/VPR-methods-evaluation.git
+git clone https://github.com/gogojjh/VPR-methods-evaluation.git
 ```
 Create conda environment (NVIDIA GeForce RTX 4090 and CUDA 11.8)
 ```bash
 git clone https://github.com/RPL-CS-UCL/litevloc_code
+cd litevloc_code
+git remote set-url origin git@github.com:RPL-CS-UCL/litevloc_code.git
 conda install pytorch=2.0.1 torchvision=0.15.2 pytorch-cuda=11.8 numpy=1.24.3 -c pytorch -c nvidia # use the correct version of cuda for your system
 pip install -r requirements.txt
 ```
