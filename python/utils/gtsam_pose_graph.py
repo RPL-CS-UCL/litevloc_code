@@ -1,5 +1,6 @@
 import numpy as np
 import gtsam
+from typing import List, Optional, Tuple
 
 class PoseGraph:
 	def __init__(self):
@@ -11,17 +12,21 @@ class PoseGraph:
 		self.isam = gtsam.ISAM2()
 		self.params = gtsam.ISAM2Params()
 
-	def add_prior_factor(self, key: int, pose: gtsam.Pose3, sigma: np.ndarray):
+	def add_prior_factor(self, key: int, pose: gtsam.Pose3, sigma: np.ndarray) -> int:
+		"""Add a prior factor and return its index in the factor graph."""
 		noise_model = gtsam.noiseModel.Diagonal.Sigmas(sigma)
 		self.graph.add(gtsam.PriorFactorPose3(key, pose, noise_model))
+		return self.graph.size() - 1
 
-	def add_odometry_factor(self, 
-							prev_key: int, prev_pose: gtsam.Pose3, 
-							curr_key: int, curr_pose: gtsam.Pose3, 
-							sigma: np.ndarray):
-		noise_model = gtsam.noiseModel.Diagonal.Sigmas(sigma)		
+	def add_odometry_factor(self,
+							prev_key: int, prev_pose: gtsam.Pose3,
+							curr_key: int, curr_pose: gtsam.Pose3,
+							sigma: np.ndarray) -> int:
+		"""Add a relative pose factor and return its index in the factor graph."""
+		noise_model = gtsam.noiseModel.Diagonal.Sigmas(sigma)
 		delta_pose = prev_pose.between(curr_pose)
 		self.graph.add(gtsam.BetweenFactorPose3(prev_key, curr_key, delta_pose, noise_model))
+		return self.graph.size() - 1
 
 	def add_init_estimate(self, key: int, pose: gtsam.Pose3):
 		if self.initial_estimate.exists(key):
@@ -152,8 +157,63 @@ class PoseGraph:
 			optimizer = gtsam.LevenbergMarquardtOptimizer(graph, initial, params)
 		
 		result = optimizer.optimize()
-		
-		return result	
+
+		return result
+
+	@staticmethod
+	def optimize_pose_graph_with_GNC(
+		graph: gtsam.NonlinearFactorGraph,
+		initial: gtsam.Values,
+		known_inlier_indices: Optional[List[int]] = None,
+		loss: str = 'TLS',
+		barc_prob: float = 0.99,
+		verbose: bool = False,
+	) -> Tuple[gtsam.Values, np.ndarray]:
+		"""
+		Optimizes a pose graph with Graduated Non-Convexity (GNC).
+
+		Unlike a Huber kernel, the TLS loss is redescending: factors whose residual
+		exceeds the inlier cost threshold get exactly zero weight instead of a
+		saturated constant gradient that keeps pulling on the solution.
+
+		Args:
+			graph (gtsam.NonlinearFactorGraph): Factor graph built with NON-robust
+				noise models. GNC is incompatible with gtsam.noiseModel.Robust.
+			initial (gtsam.Values): Initial estimates for the variables (poses).
+			known_inlier_indices (Optional[List[int]]): Factor indices exempt from
+				outlier classification (odometry and prior factors). None means every
+				factor is subject to classification.
+			loss (str): 'TLS' (truncated least squares) or 'GM' (Geman-McClure).
+			barc_prob (float): Chi-squared probability used to derive the inlier cost
+				threshold. 0.99 corresponds to a threshold of 8.41 for Pose3.
+			verbose (bool): Whether to print per-iteration GNC progress.
+
+		Returns:
+			Tuple[gtsam.Values, np.ndarray]: The optimized values, and a per-factor
+			weight array of length graph.size(). A weight near 0 means the factor was
+			classified as an outlier.
+		"""
+		loss_name = loss.upper()
+		if loss_name == 'TLS':
+			loss_type = gtsam.GncLossType.TLS
+		elif loss_name == 'GM':
+			loss_type = gtsam.GncLossType.GM
+		else:
+			raise ValueError(f"Unsupported GNC loss '{loss}', expected 'TLS' or 'GM'")
+
+		gnc_params = gtsam.GncLMParams(gtsam.LevenbergMarquardtParams())
+		gnc_params.setLossType(loss_type)
+		if known_inlier_indices:
+			gnc_params.setKnownInliers(list(known_inlier_indices))
+		if verbose:
+			gnc_params.setVerbosityGNC(gtsam.GncLMParams.Verbosity.SUMMARY)
+
+		optimizer = gtsam.GncLMOptimizer(graph, initial, gnc_params)
+		optimizer.setInlierCostThresholdsAtProbability(barc_prob)
+		result = optimizer.optimize()
+		weights = np.asarray(optimizer.getWeights(), dtype=float)
+
+		return result, weights
 
 	@staticmethod
 	def plot_pose_graph(save_dir, graph, results, titles, mode='2d', subgraph_keys=None):
