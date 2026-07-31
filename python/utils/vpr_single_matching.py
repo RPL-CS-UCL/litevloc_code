@@ -3,8 +3,38 @@
 import faiss
 import torch
 import numpy as np
-from typing import Union
+from pathlib import Path
+from typing import List, Tuple, Union
 from matplotlib import pyplot as plt
+
+# viz_diff_matrix() figsize tuning: shorter side is fixed at _FIGSIZE_BASE_IN
+# and the longer side is scaled by D_all's row/col ratio, then both sides are
+# clamped to [_FIGSIZE_MIN_IN, _FIGSIZE_MAX_IN] to bound the dpi=300 PNG size.
+_FIGSIZE_BASE_IN = 9.0
+_FIGSIZE_MIN_IN = 6.0
+_FIGSIZE_MAX_IN = 24.0
+
+def _compute_diff_matrix_figsize(shape: Tuple[int, int]) -> Tuple[float, float]:
+	"""Compute a (width, height) figsize in inches matching D_all's aspect ratio.
+
+	D_all has shape (n_db, n_query) and is drawn with aspect='equal', so each
+	cell is square and the axes' width:height ratio equals n_query:n_db.
+	Matching the figsize to that ratio keeps the axes filling the canvas
+	(no colorbar/whitespace mismatch). For extreme shapes the clamp to
+	[_FIGSIZE_MIN_IN, _FIGSIZE_MAX_IN] breaks the exact ratio match and
+	reintroduces some whitespace under 'equal' aspect, but keeps the canvas
+	size (and the dpi=300 file size) bounded.
+	"""
+	n_db, n_query = shape
+	if n_db <= 0 or n_query <= 0:
+		return _FIGSIZE_BASE_IN, _FIGSIZE_BASE_IN
+	if n_query >= n_db:
+		width, height = _FIGSIZE_BASE_IN * (n_query / n_db), _FIGSIZE_BASE_IN
+	else:
+		width, height = _FIGSIZE_BASE_IN, _FIGSIZE_BASE_IN * (n_db / n_query)
+	width = min(max(width, _FIGSIZE_MIN_IN), _FIGSIZE_MAX_IN)
+	height = min(max(height, _FIGSIZE_MIN_IN), _FIGSIZE_MAX_IN)
+	return width, height
 
 class PlaceRecognitionSingleMatching:
 	def __init__(self):
@@ -51,20 +81,35 @@ class PlaceRecognitionSingleMatching:
 		# D = np.linalg.norm(query_descs[None, :, :] - self.db_descs[:, None, :], axis=2)
 		return D
 	
-	def viz_diff_matrix(self, save_img_path, D_all, db_query_rows=list()):
-		plt.figure(figsize=(18, 9))
-		plt.imshow(D_all, cmap='Greys', aspect='auto', clim=(0.0, 1.0))
-		if len(db_query_rows) > 0:
-			db_idx, query_idx = zip(*db_query_rows)
-			plt.plot(query_idx, db_idx, 'g.', markersize=6, markeredgewidth=1)
-		plt.colorbar()
-		plt.xlabel('Query Index')
-		plt.ylabel('Database Index')
-		plt.title("Difference Matrix")
-		plt.gca().set_aspect('equal')
+	def viz_diff_matrix(
+		self,
+		save_img_path: Union[str, Path],
+		D_all: np.ndarray,
+		db_query_rows: List[Tuple[int, int]] = list(),
+		color: str = 'g',
+	) -> None:
+		"""Plot the matched (db, query) pairs over the difference matrix."""
+		label_fontsize = 24
+		title_fontsize = 28
+		colorbar_ticksize = 20
+
+		fig, ax = plt.subplots(figsize=_compute_diff_matrix_figsize(D_all.shape))
+		im = ax.imshow(D_all, cmap='Greys', aspect='equal')
+		if db_query_rows:
+			db_indices, query_indices = zip(*db_query_rows)
+			# scatter takes area in pt^2; 12 ** 2 matches plot(markersize=12)
+			ax.scatter(query_indices, db_indices, c=[color], s=12 ** 2, alpha=1.0)
+		colorbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+		colorbar.ax.tick_params(labelsize=colorbar_ticksize)
+		im.set_clim(0.0, 1.0)
+		ax.set_xlabel('Query Index', fontsize=label_fontsize)
+		ax.set_ylabel('Reference Index', fontsize=label_fontsize)
+		ax.set_title('Difference Matrix', fontsize=title_fontsize)
+		ax.tick_params(axis='both', labelsize=colorbar_ticksize)
+
 		plt.tight_layout()
 		plt.savefig(save_img_path, dpi=300, bbox_inches='tight')
-		plt.close()
+		plt.close(fig)
 
 if __name__ == "__main__":
 	import os
