@@ -1,7 +1,7 @@
 MODEL: FeatureMatching
 DATASET:
   DATA_SOURCE: 'MapFree'
-  DATA_ROOT: '/Rocket_ssd/dataset/data_litevloc/map_free_eval/mapfree/map_free_eval'
+  DATA_ROOT: '/Titan/dataset/data_opennavmap/map_free_eval/mapfree/map_free_eval'
   # VAL_SCENES: [s00460]
   VAL_SCENES: [s00460, s00461, s00462, s00463, s00464, s00465, s00466, s00467, s00468, s00469, s00470, 
                s00471, s00472, s00473, s00474, s00475, s00476, s00477, s00478, s00479, s00480, s00481, 
