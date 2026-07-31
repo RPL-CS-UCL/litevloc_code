@@ -168,6 +168,7 @@ class PoseGraph:
 		loss: str = 'TLS',
 		barc_prob: float = 0.99,
 		verbose: bool = False,
+		relative_cost_tol: float = 0.0,
 	) -> Tuple[gtsam.Values, np.ndarray]:
 		"""
 		Optimizes a pose graph with Graduated Non-Convexity (GNC).
@@ -187,6 +188,12 @@ class PoseGraph:
 			barc_prob (float): Chi-squared probability used to derive the inlier cost
 				threshold. 0.99 corresponds to a threshold of 8.41 for Pose3.
 			verbose (bool): Whether to print per-iteration GNC progress.
+			relative_cost_tol (float): GTSAM checks cost convergence from the FIRST
+				GNC iteration. An incremental merge hands GNC an initial estimate
+				that is already an LM fixed point, so with GTSAM's default (1e-5)
+				the check fires at iteration 0 and GNC returns all-ones weights
+				without annealing mu at all. 0.0 disables the check so termination
+				is governed by mu convergence (GM) / weight convergence (TLS).
 
 		Returns:
 			Tuple[gtsam.Values, np.ndarray]: The optimized values, and a per-factor
@@ -203,6 +210,7 @@ class PoseGraph:
 
 		gnc_params = gtsam.GncLMParams(gtsam.LevenbergMarquardtParams())
 		gnc_params.setLossType(loss_type)
+		gnc_params.relativeCostTol = relative_cost_tol
 		if known_inlier_indices:
 			gnc_params.setKnownInliers(list(known_inlier_indices))
 		if verbose:
