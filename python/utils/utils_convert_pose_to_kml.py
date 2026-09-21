@@ -2,17 +2,16 @@
 
 import os
 import sys
-import math
 import argparse
 import pathlib
 import numpy as np
-import pymap3d as pm
 import simplekml
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '../../'))
 from python.point_graph import PointGraphLoader as GraphLoader
 from python.point_graph import PointGraph
 from python.utils.utils_setting_color_font import acquire_color_palette
+from python.utils.utils_gps_align import collect_gps_pairs, compute_local_to_enu, local_to_geodetic
 
 PALLETE = acquire_color_palette()  # Call function to get color palette
 
@@ -44,59 +43,11 @@ if __name__ == '__main__':
     point_graph = read_trav_graph_from_files(args.map_path)
 
     ##### Step 1: Compute the transformation matrix between ENU to local world frame
-    all_coords = []
-    valid_pairs = []  # Stores (local_pose, GPS) pairs for transformation
-    latitude_origin, longitude_origin, altitude_origin = 0.0, 0.0, 0.0
-    origin_set = False
-
-    # First pass: Collect valid GPS-pose pairs and set ENU origin
-    for node in point_graph.nodes.values():
-        gps_data = node.gps_data
-        if gps_data is not None:
-            lat, lon = gps_data[:2]
-            alt = gps_data[2] if len(gps_data) > 2 else 0.0
-            if math.isnan(alt):
-                alt = 0.0
-            if not any(math.isnan(v) for v in (lat, lon, alt)):
-                if not origin_set:
-                    latitude_origin, longitude_origin, altitude_origin = lat, lon, alt
-                    origin_set = True
-                valid_pairs.append((node.trans, (lat, lon, alt)))
-
-    if not origin_set:
+    nodes = list(point_graph.nodes.values())
+    valid_pairs, origin = collect_gps_pairs([n.trans for n in nodes], [n.gps_data for n in nodes])
+    if origin is None:
         raise ValueError("Not enough valid GPS data to compute transformation matrix")
-
-    # Compute transformation matrix from local coordinate to ENU if sufficient data
-    T_ini = np.eye(4)
-    if len(valid_pairs) >= 2:
-        enu_points, local_points = [], []
-        for pose, gps in valid_pairs:
-            e, n, u = pm.geodetic2enu(gps[0], gps[1], gps[2], 
-                                    latitude_origin, longitude_origin, altitude_origin)
-            enu_points.append([e, n, u])
-            local_points.append(pose[:3] if len(pose) >= 3 else [0,0,0])
-        
-        enu_arr = np.array(enu_points)
-        local_arr = np.array(local_points)
-        
-        # Kabsch algorithm to find optimal rotation and translation
-        centroid_enu = np.mean(enu_arr, axis=0)
-        centroid_local = np.mean(local_arr, axis=0)
-        centered_enu = enu_arr - centroid_enu
-        centered_local = local_arr - centroid_local
-        
-        H = centered_local.T @ centered_enu
-        U, S, Vt = np.linalg.svd(H)
-        R = Vt.T @ U.T
-        
-        # Ensure right-handed coordinate system
-        if np.linalg.det(R) < 0:
-            Vt[-1, :] *= -1
-            R = Vt.T @ U.T
-        
-        t = centroid_enu - R @ centroid_local
-        T_ini[:3, :3] = R
-        T_ini[:3, 3] = t
+    T_ini = compute_local_to_enu(valid_pairs, origin)
 
     print(T_ini)
 
@@ -115,13 +66,8 @@ if __name__ == '__main__':
     for graph_id, graph in enumerate(subgraphs):
         all_coords = []
         # Second pass: Apply transformation and convert to geographic
-        for id, node in enumerate(graph.nodes.values()):
-            tx, ty, tz = (T_ini[:3, :3] @ node.trans + T_ini[:3, 3])
-            lat, lon, _ = pm.enu2geodetic(
-                tx, ty, tz, 
-                latitude_origin, longitude_origin, altitude_origin
-            )
-            
+        geo = local_to_geodetic(T_ini, [n.trans for n in graph.nodes.values()], origin)
+        for id, (lat, lon, _) in enumerate(geo):
             if id % 10 == 0:
                 all_coords.append((lon, lat))
 
