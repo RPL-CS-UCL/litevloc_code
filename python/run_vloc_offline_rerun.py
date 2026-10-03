@@ -21,6 +21,7 @@ python third_party/litevloc_code/python/run_vloc_offline_rerun.py \
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import pathlib
@@ -79,8 +80,35 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--global_pos_threshold", type=float, default=10.0)
     p.add_argument("--min_master_conf_thre", type=float, default=1.5)
     p.add_argument("--min_solver_inliers_thre", type=int, default=200)
+    p.add_argument("--gv_score_threshold", type=float, default=GV_SCORE_THRESHOLD,
+                   help="image-matching inliers a VPR candidate needs to count as verified")
     p.add_argument("--depth_scale", type=float, default=0.001)
+    p.add_argument(
+        "--results_json", type=pathlib.Path, default=None,
+        help="optional: write per-query records + a summary as JSON (errors are kept even when "
+             "the solver inliers are below --min_solver_inliers_thre, so other thresholds can be studied)",
+    )
     return p.parse_args()
+
+
+def summarize(records: list) -> dict:
+    """Localized ratio and error percentiles over the accepted (localized) queries."""
+    loc = [r for r in records if r["localized"]]
+    t_err = np.array([r["t_err"] for r in loc], dtype=float)
+    r_err = np.array([r["r_err"] for r in loc], dtype=float)
+
+    def pct(a: np.ndarray, q: float) -> float:
+        return float(np.percentile(a, q)) if a.size else float("nan")
+
+    return {
+        "num_queries": len(records),
+        "num_vpr_verified": sum(r["vpr_verified"] for r in records),
+        "num_localized": len(loc),
+        "localized_ratio": len(loc) / len(records) if records else float("nan"),
+        "t_err_median_m": pct(t_err, 50), "t_err_p90_m": pct(t_err, 90),
+        "r_err_median_deg": pct(r_err, 50), "r_err_p90_deg": pct(r_err, 90),
+        "time_per_query_mean_s": float(np.mean([r["time_s"] for r in records])) if records else float("nan"),
+    }
 
 
 def get_loadable_query_keys(
@@ -169,6 +197,7 @@ def main() -> None:
     print(f"Loadable query frames: {len(query_keys)}")
 
     traj_est, traj_gt = [], []
+    records = []
     curr_query_descs = []
     has_global_pos = False
     ref_map_node = None
@@ -211,6 +240,12 @@ def main() -> None:
         log_query_camera(trans_gt, quat_gt, K, img_size, is_gt=True)
 
         t_start = time.time()
+        rec = {
+            "key": rgb_img_name, "frame_id": frame_id, "gt_trans": trans_gt.tolist(),
+            "vpr_verified": False, "vpr_max_inliers": None, "ref_node": None,
+            "match_inliers": None, "solver_inliers": None, "localized": False,
+            "est_trans": None, "t_err": None, "r_err": None,
+        }
         query_desc = descs[rgb_img_name].reshape(1, -1)
         curr_query_descs.append(query_desc)
         curr_query_descs = curr_query_descs[-args.vpr_match_seq_len:]
@@ -229,11 +264,13 @@ def main() -> None:
                 n = result["num_inliers"]
                 if n > max_inliers:
                     best_map_id, max_inliers = db_node_ids[pred], n
-                if n >= GV_SCORE_THRESHOLD:
+                if n >= args.gv_score_threshold:
                     ref_map_node = image_graph.get_node(db_node_ids[pred])
                     break
 
-            if max_inliers >= GV_SCORE_THRESHOLD:
+            rec["vpr_max_inliers"] = int(max_inliers)
+            if max_inliers >= args.gv_score_threshold:
+                rec["vpr_verified"] = True
                 has_global_pos = True
                 ref_map_node = image_graph.get_node(best_map_id)
                 obs_node.set_pose(ref_map_node.trans, ref_map_node.quat)
@@ -268,6 +305,7 @@ def main() -> None:
             mkpts1 = match_result["inlier_kpts1"]
             num_inliers = match_result["num_inliers"]
             t_match = time.time() - t_match
+            rec["ref_node"], rec["match_inliers"] = int(ref_map_node.id), int(num_inliers)
             print(f"Number of matched inliers: {num_inliers}")
             print(f"Image matching costs: {t_match:.3f}s")
 
@@ -292,12 +330,20 @@ def main() -> None:
                         raw_K, ref_map_node.raw_K,
                         depth_np, None,
                     )
-                    if n_sol >= args.min_solver_inliers_thre:
+                    rec["solver_inliers"] = int(n_sol)
+                    if n_sol > 0 and np.all(np.isfinite(R_est)):
+                        # the error is recorded even below --min_solver_inliers_thre (study of other thresholds)
                         T_wm = convert_vec_to_matrix(ref_map_node.trans, ref_map_node.quat, "xyzw")
                         T_mo = np.eye(4)
                         T_mo[:3, :3], T_mo[:3, 3] = R_est, t_est.reshape(3)
                         T_wo = T_wm @ T_mo
                         trans_est, quat_est = convert_matrix_to_vec(T_wo, "xyzw")
+                        t_err, r_err = compute_pose_error(
+                            (trans_est, quat_est), (trans_gt, quat_gt), mode="vector"
+                        )
+                        rec.update(est_trans=trans_est.tolist(), t_err=float(t_err), r_err=float(r_err))
+                    if n_sol >= args.min_solver_inliers_thre and rec["t_err"] is not None:
+                        rec["localized"] = True
                         obs_node.set_pose(trans_est, quat_est)
                         t_local = time.time() - t_local
                         print(f"[Succ] sufficient number {n_sol} solver inliers")
@@ -306,13 +352,12 @@ def main() -> None:
                         print(f"Estimated Poses: {trans_est}")
                         log_query_camera(trans_est, quat_est, obs_node.K, obs_node.img_size, rgb_image=rgb_np, is_gt=False)
                         traj_est.append(trans_est.copy())
-                        t_err, r_err = compute_pose_error(
-                            (trans_est, quat_est), (trans_gt, quat_gt), mode="vector"
-                        )
                         print(f"t_err={t_err:.3f}m r_err={r_err:.2f}deg inliers={n_sol}")
                 except Exception as exc:
                     print(f"Pose solve: {exc}")
 
+        rec["time_s"] = time.time() - t_start
+        records.append(rec)
         traj_gt.append(trans_gt.copy())
         log_trajectory(traj_gt, is_gt=True)
         if traj_est:
@@ -321,6 +366,13 @@ def main() -> None:
     args.output_rrd.parent.mkdir(parents=True, exist_ok=True)
     save_rrd(args.output_rrd)
     print(f"Saved to {args.output_rrd}")
+    if args.results_json is not None:
+        summary = summarize(records)
+        print(f"Summary: {summary}")
+        args.results_json.parent.mkdir(parents=True, exist_ok=True)
+        payload = {"args": {k: str(v) for k, v in vars(args).items()}, "summary": summary, "records": records}
+        args.results_json.write_text(json.dumps(payload, indent=1))
+        print(f"Saved results to {args.results_json}")
 
 
 if __name__ == "__main__":

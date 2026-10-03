@@ -2,11 +2,22 @@
 
 """Geometric utility functions for SLAM and 3D vision tasks."""
 
+from __future__ import annotations  # keeps the `-> gtsam.Pose3` annotations lazy when gtsam is absent
+
 import os
-import gtsam
 import numpy as np
 from scipy.spatial.transform import Rotation
 from typing import Dict, Optional, Tuple
+
+try:
+    import gtsam
+except ImportError:  # e.g. Jetson (aarch64 + Python 3.8) has no gtsam wheel; localization never needs it
+    gtsam = None
+
+
+def _require_gtsam() -> None:
+    if gtsam is None:
+        raise ImportError("gtsam is required for the gtsam.Pose3 conversions (pose-graph / fusion code)")
 
 # Constants
 DEFAULT_IMAGE_TEMPLATE = "seq/{frame_id:06d}.color.jpg"
@@ -138,6 +149,7 @@ def convert_vec_gtsam_pose3(
     if mode not in QUAT_MODES:
         raise ValueError(f"Invalid quaternion mode: {mode}")
 
+    _require_gtsam()
     if mode == 'xyzw':
         quaternion = np.roll(quaternion, 1)
 
@@ -165,6 +177,7 @@ def convert_matrix_gtsam_pose3(
     rotation = transform[:3, :3]
     translation = transform[:3, 3]
     
+    _require_gtsam()
     # Create gtsam.Pose3 object
     pose3 = gtsam.Pose3(gtsam.Rot3(rotation), translation.reshape(3, 1))
     return pose3
