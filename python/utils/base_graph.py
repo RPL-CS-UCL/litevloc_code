@@ -43,7 +43,7 @@ class BaseGraph:
 	def read_edge_list(self, edge_list_path: Path):
 		if edge_list_path.exists():
 			# list of edges [node_a.id, node_b.id, weight]
-			edges_A_B_weight = np.loadtxt(str(edge_list_path), dtype=float)
+			edges_A_B_weight = np.loadtxt(str(edge_list_path), dtype=float, ndmin=2)  # 只有一条边时也是二维
 			for edge in edges_A_B_weight:
 				node_id0, node_id1 = int(edge[0]), int(edge[1])
 				weight = edge[2]
