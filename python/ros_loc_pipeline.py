@@ -223,13 +223,26 @@ def perform_localization(
 			except Exception:
 				rospy.logerr(f"Error while processing frame:\n{traceback.format_exc()}")
 		# Always sleep, even when the queue is empty, so an idle loop does not spin a CPU core.
-		r.sleep()
+		try:
+			r.sleep()
+		except rospy.exceptions.ROSTimeMovedBackwardsException:
+			# Sim time jumped back (bag restart / simulator reset): keep localizing.
+			continue
+		except rospy.exceptions.ROSInterruptException:
+			# Node is shutting down: leave the loop quietly instead of dumping a traceback.
+			break
 
 def main(
 	make_desc_fn: Optional[Callable[[argparse.Namespace], Callable[[np.ndarray], np.ndarray]]] = None,
 ) -> None:
 	args = parse_arguments()
-	out_dir = pathlib.Path(os.path.join(args.map_path, 'tmp/output_ros_loc_pipeline'))
+	# Write logs under ROS_LOG_DIR when it is set, so the map directory stays untouched;
+	# otherwise keep the upstream default inside the map directory.
+	log_root = os.environ.get('ROS_LOG_DIR')
+	if log_root:
+		out_dir = pathlib.Path(log_root) / 'litevloc_online'
+	else:
+		out_dir = pathlib.Path(os.path.join(args.map_path, 'tmp/output_ros_loc_pipeline'))
 	config = dict(
 		resize=args.image_size, depth_scale=args.depth_scale,
 		load_rgb=True, load_depth=False, normalized=False,

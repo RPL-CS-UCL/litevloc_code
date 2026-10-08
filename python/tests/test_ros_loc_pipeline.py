@@ -184,6 +184,30 @@ def test_perform_localization_survives_frame_exception(mod):
 	assert rate_mock.sleep.call_count == 3
 
 
+def test_perform_localization_exits_quietly_on_shutdown_and_survives_time_jump(mod):
+	args = _make_args()
+	loc = _make_loc(args)
+	loc.main_freq = 50
+
+	class ROSInterruptException(Exception):
+		pass
+
+	class ROSTimeMovedBackwardsException(ROSInterruptException):
+		pass
+
+	mod.rospy.exceptions.ROSInterruptException = ROSInterruptException
+	mod.rospy.exceptions.ROSTimeMovedBackwardsException = ROSTimeMovedBackwardsException
+	rate_mock = MagicMock()
+	# Sim time jumps back once (keep going), then ROS shuts down (leave the loop, no traceback).
+	rate_mock.sleep.side_effect = [ROSTimeMovedBackwardsException(), None, ROSInterruptException()]
+	mod.rospy.Rate.return_value = rate_mock
+	mod.rospy.is_shutdown = MagicMock(return_value=False)
+
+	mod.perform_localization(loc, args, desc_fn=None)
+
+	assert rate_mock.sleep.call_count == 3
+
+
 # --- 3. local localization failing 3x in a row resets to global; a success in between resets the counter ---
 
 def test_local_loc_fail_three_times_resets_to_global(mod):

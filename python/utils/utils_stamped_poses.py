@@ -5,7 +5,10 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '../'))
 from typing import Union
 import numpy as np
 import bisect
-import gtsam
+try:
+    import gtsam
+except ImportError:  # e.g. Jetson (aarch64 + Python 3.8) has no gtsam wheel; only used in type hints here
+    gtsam = None
 
 class StampedPoses:
     def __init__(self):
@@ -25,7 +28,7 @@ class StampedPoses:
             return True
         return False
 
-    def add(self, time, pose: Union[gtsam.Pose3, gtsam.Pose2, np.ndarray]):
+    def add(self, time, pose: 'Union[gtsam.Pose3, gtsam.Pose2, np.ndarray]'):
         """
         :param time: timestamp
         :param pose: gtsam.Pose3, gtsam.Pose2, numpy array (np.ndarray)
