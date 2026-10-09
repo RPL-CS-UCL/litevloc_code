@@ -78,8 +78,8 @@ def _make_camera_info_msg(width, height):
 	return types.SimpleNamespace(K=K, width=width, height=height)
 
 
-def _make_args():
-	return SimpleNamespace(image_size=None, device="cpu", global_pos_threshold=10.0)
+def _make_args(map_path="/maps/old"):
+	return SimpleNamespace(image_size=None, device="cpu", global_pos_threshold=10.0, map_path=map_path)
 
 
 def _make_loc(args):
@@ -99,6 +99,8 @@ def _make_loc(args):
 	loc.local_fail_count = 0
 	loc.force_global_event = threading.Event()
 	loc.paused_event = threading.Event()
+	loc.pending_map_path = None
+	loc.map_path_event = threading.Event()
 	loc.curr_query_descs = []
 	loc.main_freq = 50
 	loc.curr_obs_node = None
@@ -464,3 +466,133 @@ def test_run_one_cycle_resumes_and_processes_next_frame_normally(mod):
 
 	assert calls["n"] == 1
 	assert mod.rgb_depth_queue.empty()
+
+
+# --- 11. /vloc/map_path: same path as currently loaded -> ignored, no reload ---
+
+def _make_map_switch_loc(args):
+	"""_make_loc() plus the pieces _reload_map() touches (read_covis_graph_from_files,
+	init_vpr_match_model, DB_Node_IDS)."""
+	loc = _make_loc(args)
+	loc.DB_Node_IDS = ["kf_000", "kf_001", "kf_002"]
+	loc.read_covis_graph_from_files = MagicMock()
+	loc.init_vpr_match_model = MagicMock()
+	return loc
+
+
+def test_map_path_callback_only_records_pending_path(mod):
+	args = _make_args()
+	loc = _make_map_switch_loc(args)
+	callback = mod._build_map_path_callback(loc)
+
+	callback(SimpleNamespace(data="/maps/new"))
+
+	# Recorded for the localization thread to pick up; nothing reloaded yet.
+	assert loc.pending_map_path == "/maps/new"
+	assert loc.map_path_event.is_set()
+	loc.read_covis_graph_from_files.assert_not_called()
+	loc.init_vpr_match_model.assert_not_called()
+
+
+def test_run_one_cycle_ignores_map_path_update_for_already_loaded_map(mod):
+	args = _make_args(map_path="/maps/old")
+	loc = _make_map_switch_loc(args)
+	config = {"resize": None, "depth_scale": 1.0, "load_rgb": True, "load_depth": False, "normalized": False}
+	map_loaded_pub = MagicMock()
+
+	callback = mod._build_map_path_callback(loc)
+	callback(SimpleNamespace(data="/maps/old"))  # same path as already loaded
+
+	mod._run_one_cycle(loc, args, config, map_loaded_pub, desc_fn=None)
+
+	loc.read_covis_graph_from_files.assert_not_called()
+	loc.init_vpr_match_model.assert_not_called()
+	map_loaded_pub.publish.assert_not_called()
+	assert loc.args.map_path == "/maps/old"
+
+
+# --- 12. /vloc/map_path: different path -> reloaded on the next cycle, state cleared ---
+
+def test_run_one_cycle_reloads_map_on_path_change_and_resets_state(mod):
+	args = _make_args(map_path="/maps/old")
+	loc = _make_map_switch_loc(args)
+	loc.has_global_pos = True
+	loc.ref_map_node = SimpleNamespace(trans=np.zeros(3), quat=np.array([0.0, 0.0, 0.0, 1.0]))
+	loc.local_fail_count = 2
+	loc.curr_query_descs = [np.zeros(4, dtype=np.float32)]
+	config = {"resize": None, "depth_scale": 1.0, "load_rgb": True, "load_depth": False, "normalized": False}
+	map_loaded_pub = MagicMock()
+	# Queued frame against the old map must be dropped by the reload, not processed.
+	mod.rgb_depth_queue.put((object(), object(), object()))
+
+	callback = mod._build_map_path_callback(loc)
+	callback(SimpleNamespace(data="/maps/new"))
+
+	calls = {"n": 0}
+
+	def fake_process_frame(*_args, **_kwargs):
+		calls["n"] += 1
+
+	with _monkeypatch_attr(mod, "process_frame", fake_process_frame):
+		mod._run_one_cycle(loc, args, config, map_loaded_pub, desc_fn=None)
+
+	loc.read_covis_graph_from_files.assert_called_once_with(config)
+	loc.init_vpr_match_model.assert_called_once()
+	assert loc.args.map_path == "/maps/new"
+	assert loc.has_global_pos is False
+	assert loc.ref_map_node is None
+	assert loc.local_fail_count == 0
+	assert loc.curr_query_descs == []
+	assert mod.rgb_depth_queue.empty()
+	map_loaded_pub.publish.assert_called_once_with(mod.String(data="/maps/new"))
+	# The queued frame was dropped by the reload itself, not processed as a new frame.
+	assert calls["n"] == 0
+	assert not loc.map_path_event.is_set()
+
+
+# --- 13. /vloc/map_path: reload failure keeps the old map and does not crash ---
+
+def test_run_one_cycle_reload_failure_keeps_old_map(mod):
+	args = _make_args(map_path="/maps/old")
+	loc = _make_map_switch_loc(args)
+	loc.read_covis_graph_from_files.side_effect = RuntimeError("corrupt map files")
+	loc.has_global_pos = True
+	loc.ref_map_node = SimpleNamespace(trans=np.zeros(3), quat=np.array([0.0, 0.0, 0.0, 1.0]))
+	config = {"resize": None, "depth_scale": 1.0, "load_rgb": True, "load_depth": False, "normalized": False}
+	map_loaded_pub = MagicMock()
+
+	callback = mod._build_map_path_callback(loc)
+	callback(SimpleNamespace(data="/maps/broken"))
+
+	mod.rospy.logerr = MagicMock()
+	mod._run_one_cycle(loc, args, config, map_loaded_pub, desc_fn=None)
+
+	# Old map kept in use; localization state untouched by the failed reload.
+	assert loc.args.map_path == "/maps/old"
+	assert loc.has_global_pos is True
+	assert loc.ref_map_node is not None
+	loc.init_vpr_match_model.assert_not_called()
+	map_loaded_pub.publish.assert_not_called()
+	mod.rospy.logerr.assert_called_once()
+
+
+def test_reload_failure_halfway_restores_whole_old_map(mod):
+	"""Graph already replaced when the match model fails: every map-derived attribute goes back."""
+	args = _make_args(map_path="/maps/old")
+	loc = _make_map_switch_loc(args)
+	loc.image_graph, loc.DB_Node_IDS, loc.vpr_match_model = "old_graph", [1, 2], "old_matcher"
+
+	def half_load(_config):
+		loc.image_graph, loc.DB_Node_IDS = "new_graph", [7]
+
+	loc.read_covis_graph_from_files.side_effect = half_load
+	loc.init_vpr_match_model.side_effect = RuntimeError("bad descriptors")
+	config = {"resize": None, "depth_scale": 1.0, "load_rgb": True, "load_depth": False, "normalized": False}
+	map_loaded_pub = MagicMock()
+	mod._build_map_path_callback(loc)(SimpleNamespace(data="/maps/new"))
+	mod.rospy.logerr = MagicMock()
+	mod._run_one_cycle(loc, args, config, map_loaded_pub, desc_fn=None)
+
+	assert loc.args.map_path == "/maps/old"
+	assert (loc.image_graph, loc.DB_Node_IDS, loc.vpr_match_model) == ("old_graph", [1, 2], "old_matcher")
+	map_loaded_pub.publish.assert_not_called()

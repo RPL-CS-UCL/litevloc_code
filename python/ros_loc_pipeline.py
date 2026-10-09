@@ -31,7 +31,7 @@ from typing import Callable, Optional
 import rospy
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
 import message_filters
 
@@ -51,6 +51,9 @@ lock = threading.Lock()
 # Serializes the two service callbacks that flip paused_event and publish /vloc/paused
 # (rospy may run them on different threads), so the latched topic never ends up stale.
 pause_lock = threading.Lock()
+# Guards loc.pending_map_path between the /vloc/map_path subscriber callback (any thread)
+# and the localization thread, which reads/clears it at the start of its next cycle.
+map_path_lock = threading.Lock()
 
 # After this many consecutive local-localization failures, drop back to global
 # localization instead of waiting forever for a fused-odometry-based reset.
@@ -67,6 +70,18 @@ MAX_LOCAL_LOC_FAILS = 3
 # While paused the localization thread drops queued frames instead of running
 # process_frame. Resuming always re-arms force_global_event, since the robot may
 # have moved far while paused and the old local-localization state is stale.
+#
+# Map switch, used by another node (map_align_node.py) to swap in a newly-current map
+# without restarting this process (T7, "map switch takes effect within 3 minutes"):
+#   /vloc/map_path   (std_msgs/String, latched) - new map directory (absolute path) to
+#     load. Published once per map change; a repeated value for the already-loaded map
+#     is ignored.
+#   /vloc/map_loaded (std_msgs/String, latched) - the map directory currently in use.
+#     Published once at startup and again after each successful reload.
+# The reload itself runs on the localization thread, at the start of the next cycle
+# (same pattern as paused_event / force_global_event): the subscriber callback only
+# records the requested path, it never touches localization state directly. A failed
+# reload logs an error and keeps the previous map in use instead of crashing.
 
 def rgb_depth_image_callback(rgb_img_msg, depth_img_msg, camera_info_msg):
 	lock.acquire()
@@ -122,6 +137,74 @@ def _build_set_paused_callback(loc: LocPipeline, paused_pub) -> Callable[[object
 			paused_pub.publish(Bool(data=want_paused))
 		return SetBoolResponse(success=True, message=f"now {state}")
 	return _callback
+
+def _build_map_path_callback(loc: LocPipeline) -> Callable[[object], None]:
+	"""Build the /vloc/map_path subscriber callback for this loc pipeline.
+
+	The callback only records which path to switch to; localization state is
+	owned by the localization thread, so the actual reload runs at the start
+	of its next cycle (same pattern as paused_event / force_global_event).
+	"""
+	def _callback(msg) -> None:
+		with map_path_lock:
+			loc.pending_map_path = msg.data
+		loc.map_path_event.set()
+	return _callback
+
+# Attributes rebuilt by a map reload (read_covis_graph_from_files + init_vpr_match_model).
+_MAP_STATE_ATTRS = (
+	'image_graph', 'DB_Node_IDS', 'DB_DESCRIPTORS', 'DB_POSES', 'vpr_match_model', 'curr_query_descs',
+)
+
+def _reload_map(
+	loc: LocPipeline,
+	config: dict,
+	new_map_path: str,
+	map_loaded_pub,
+) -> None:
+	"""Reload the covisibility graph and VPR match model for `new_map_path`.
+
+	Runs on the localization thread only. On success, resets the
+	global/local-localization state (same reset as force_global_loc) so the
+	next frame re-does global localization against the new map, and reports
+	the new map over /vloc/map_loaded. On failure, logs an error and leaves
+	the previous map (loc.args.map_path and everything derived from it)
+	untouched -- the pipeline keeps running on the old map instead of
+	crashing.
+
+	Note: the VPR descriptor hook (desc_fn / make_desc_fn in main()) does not
+	depend on the map -- it only turns an RGB frame into a descriptor using
+	the args-configured model -- so it is not rebuilt here.
+	"""
+	old_map_path = loc.args.map_path
+	# read_covis_graph_from_files assigns image_graph before computing the descriptor arrays, and
+	# init_vpr_match_model runs after it, so a failure halfway would leave a mixed old/new map.
+	# Snapshot everything the reload touches and put it all back on failure.
+	saved = {name: getattr(loc, name, None) for name in _MAP_STATE_ATTRS}
+	rospy.loginfo(f"Reloading map from {new_map_path}")
+	try:
+		loc.args.map_path = new_map_path
+		loc.read_covis_graph_from_files(config)
+		loc.init_vpr_match_model()
+	except Exception:
+		loc.args.map_path = old_map_path
+		for name, value in saved.items():
+			setattr(loc, name, value)
+		rospy.logerr(
+			f"Failed to reload map from {new_map_path}, keeping old map "
+			f"{old_map_path}:\n{traceback.format_exc()}"
+		)
+		return
+
+	loc.has_global_pos = False
+	loc.ref_map_node = None
+	loc.local_fail_count = 0
+	loc.curr_query_descs = []
+	_clear_queue()
+
+	num_keyframes = len(loc.DB_Node_IDS)
+	rospy.loginfo(f"Loaded new map from {new_map_path} with {num_keyframes} keyframes")
+	map_loaded_pub.publish(String(data=new_map_path))
 
 def process_frame(
 	loc: LocPipeline,
@@ -260,13 +343,33 @@ def _pop_queued_frame():
 	lock.release()
 	return frame
 
+def _clear_queue() -> None:
+	"""Drop every queued (rgb, depth, camera_info) frame, e.g. after a map reload
+	(frames queued against the old map must not be processed against the new one)."""
+	lock.acquire()
+	while not rgb_depth_queue.empty():
+		rgb_depth_queue.get()
+	lock.release()
+
 def _run_one_cycle(
 	loc: LocPipeline,
 	args: argparse.Namespace,
+	config: Optional[dict] = None,
+	map_loaded_pub=None,
 	desc_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None,
 ) -> None:
 	"""Pop at most one queued frame and act on it: process it when running, or
-	drop it when paused so resuming does not act on a stale frame."""
+	drop it when paused so resuming does not act on a stale frame.
+
+	Before that, applies a pending /vloc/map_path switch if one is waiting
+	(config/map_loaded_pub are only needed to do that reload; callers that
+	never wire up /vloc/map_path can leave them None)."""
+	if getattr(loc, "map_path_event", None) is not None and loc.map_path_event.is_set():
+		loc.map_path_event.clear()
+		with map_path_lock:
+			new_map_path = loc.pending_map_path
+		if new_map_path is not None and new_map_path != loc.args.map_path:
+			_reload_map(loc, config, new_map_path, map_loaded_pub)
 	if loc.paused_event.is_set():
 		# Dropped, not processed: process_frame is not called while paused.
 		_pop_queued_frame()
@@ -283,11 +386,13 @@ def _run_one_cycle(
 def perform_localization(
 	loc: LocPipeline,
 	args: argparse.Namespace,
+	config: Optional[dict] = None,
+	map_loaded_pub=None,
 	desc_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None,
 ) -> None:
 	r = rospy.Rate(loc.main_freq)
 	while not rospy.is_shutdown():
-		_run_one_cycle(loc, args, desc_fn)
+		_run_one_cycle(loc, args, config, map_loaded_pub, desc_fn)
 		# Always sleep, even when the queue is empty, so an idle loop does not spin a CPU core.
 		try:
 			r.sleep()
@@ -333,6 +438,10 @@ def main(
 	loc_pipeline.local_fail_count = 0
 	loc_pipeline.force_global_event = threading.Event()
 	loc_pipeline.paused_event = threading.Event()
+	# Map-switch state (T7): the subscriber callback below only records the
+	# requested path here; _run_one_cycle applies it on the localization thread.
+	loc_pipeline.pending_map_path = None
+	loc_pipeline.map_path_event = threading.Event()
 
 	rospy.init_node('ros_loc_pipeline_simu', anonymous=False)
 	loc_pipeline.initalize_ros()
@@ -342,6 +451,13 @@ def main(
 	# matches the pre-pause-switch default behavior.
 	paused_pub = rospy.Publisher('/vloc/paused', Bool, queue_size=1, latch=True)
 	paused_pub.publish(Bool(data=False))
+
+	# Latched "currently loaded map" status topic (T7). Published once right away
+	# with the map this process started on, and again after each successful
+	# /vloc/map_path reload.
+	map_loaded_pub = rospy.Publisher('/vloc/map_loaded', String, queue_size=1, latch=True)
+	map_loaded_pub.publish(String(data=args.map_path))
+
 	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'map')
 	loc_pipeline.main_freq = rospy.get_param('~main_freq', 1)
 	min_depth = rospy.get_param('~min_depth', 0.1)
@@ -361,6 +477,12 @@ def main(
 	# Subscribe to fusion odometry
 	fusion_odom_sub = rospy.Subscriber('/pose_fusion/odometry', Odometry, odom_callback)
 
+	# Subscribe to map-switch requests (T7): map_align_node.py publishes the new map
+	# directory here whenever the current-map pointer changes.
+	map_path_sub = rospy.Subscriber(
+		'/vloc/map_path', String, _build_map_path_callback(loc_pipeline)
+	)
+
 	# Service to force a global relocalization on the next processed frame.
 	force_global_loc_srv = rospy.Service(
 		'/vloc/force_global_loc', Trigger, _build_force_global_loc_callback(loc_pipeline, paused_pub)
@@ -374,7 +496,9 @@ def main(
 	)
 
 	# Start the localization thread
-	localization_thread = threading.Thread(target=perform_localization, args=(loc_pipeline, args, desc_fn))
+	localization_thread = threading.Thread(
+		target=perform_localization, args=(loc_pipeline, args, config, map_loaded_pub, desc_fn)
+	)
 	localization_thread.start()
 
 	rospy.spin()
