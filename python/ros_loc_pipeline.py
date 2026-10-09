@@ -31,7 +31,8 @@ from typing import Callable, Optional
 import rospy
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
-from std_srvs.srv import Trigger, TriggerResponse
+from std_msgs.msg import Bool
+from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
 import message_filters
 
 # Others
@@ -47,10 +48,25 @@ from loc_pipeline import LocPipeline
 fused_poses = StampedPoses()
 rgb_depth_queue = queue.Queue()
 lock = threading.Lock()
+# Serializes the two service callbacks that flip paused_event and publish /vloc/paused
+# (rospy may run them on different threads), so the latched topic never ends up stale.
+pause_lock = threading.Lock()
 
 # After this many consecutive local-localization failures, drop back to global
 # localization instead of waiting forever for a fused-odometry-based reset.
 MAX_LOCAL_LOC_FAILS = 3
+
+# Pause/resume control, used by another node to stop this GPU-heavy loop once a
+# position is locked in (or once "no map here" is decided), and wake it up again
+# when a new task starts:
+#   /vloc/set_paused  (std_srvs/SetBool) - data=True pauses, data=False resumes.
+#   /vloc/force_global_loc (std_srvs/Trigger) - also resumes if currently paused.
+#   /vloc/paused (std_msgs/Bool, latched) - published once at startup (False, i.e.
+#     running: the default behavior is unchanged) and again only when the state
+#     actually flips.
+# While paused the localization thread drops queued frames instead of running
+# process_frame. Resuming always re-arms force_global_event, since the robot may
+# have moved far while paused and the old local-localization state is stale.
 
 def rgb_depth_image_callback(rgb_img_msg, depth_img_msg, camera_info_msg):
 	lock.acquire()
@@ -64,16 +80,47 @@ def odom_callback(odom_msg):
 	T = convert_vec_to_matrix(trans, quat)
 	fused_poses.add(time, T)
 
-def _build_force_global_loc_callback(loc: LocPipeline) -> Callable[[object], object]:
+def _build_force_global_loc_callback(loc: LocPipeline, paused_pub) -> Callable[[object], object]:
 	"""Build the /vloc/force_global_loc Trigger service callback for this loc pipeline.
 
 	The callback only flips an Event; localization state is owned by the
 	localization thread, so process_frame applies the actual reset at the
-	start of the next frame it processes.
+	start of the next frame it processes. A caller forcing a global
+	relocalization wants the pipeline running, so this also clears paused_event
+	(and publishes the state change) if it was paused.
 	"""
 	def _callback(_req):
 		loc.force_global_event.set()
+		with pause_lock:
+			if loc.paused_event.is_set():
+				loc.paused_event.clear()
+				rospy.loginfo("LiteVLoc resumed by force_global_loc")
+				paused_pub.publish(Bool(data=False))
 		return TriggerResponse(success=True, message="global localization will rerun on the next frame")
+	return _callback
+
+def _build_set_paused_callback(loc: LocPipeline, paused_pub) -> Callable[[object], object]:
+	"""Build the /vloc/set_paused SetBool service callback for this loc pipeline.
+
+	The callback only flips loc.paused_event; localization state stays owned by
+	the localization thread. Resuming (paused -> running) also re-arms
+	force_global_event, since the robot may have moved far while paused and the
+	old local-localization state is stale.
+	"""
+	def _callback(req):
+		want_paused = bool(req.data)
+		state = "paused" if want_paused else "running"
+		with pause_lock:
+			if loc.paused_event.is_set() == want_paused:
+				return SetBoolResponse(success=True, message=f"already {state}")
+			if want_paused:
+				loc.paused_event.set()
+			else:
+				loc.paused_event.clear()
+				loc.force_global_event.set()
+			rospy.loginfo(f"LiteVLoc {state} by set_paused")
+			paused_pub.publish(Bool(data=want_paused))
+		return SetBoolResponse(success=True, message=f"now {state}")
 	return _callback
 
 def process_frame(
@@ -206,6 +253,33 @@ def process_frame(
 
 	loc.publish_message()
 
+def _pop_queued_frame():
+	"""Pop the oldest queued (rgb, depth, camera_info) frame, or None if the queue is empty."""
+	lock.acquire()
+	frame = rgb_depth_queue.get() if not rgb_depth_queue.empty() else None
+	lock.release()
+	return frame
+
+def _run_one_cycle(
+	loc: LocPipeline,
+	args: argparse.Namespace,
+	desc_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+) -> None:
+	"""Pop at most one queued frame and act on it: process it when running, or
+	drop it when paused so resuming does not act on a stale frame."""
+	if loc.paused_event.is_set():
+		# Dropped, not processed: process_frame is not called while paused.
+		_pop_queued_frame()
+		return
+	frame = _pop_queued_frame()
+	if frame is None:
+		return
+	rgb_img_msg, depth_img_msg, camera_info_msg = frame
+	try:
+		process_frame(loc, args, rgb_img_msg, depth_img_msg, camera_info_msg, desc_fn)
+	except Exception:
+		rospy.logerr(f"Error while processing frame:\n{traceback.format_exc()}")
+
 def perform_localization(
 	loc: LocPipeline,
 	args: argparse.Namespace,
@@ -213,15 +287,7 @@ def perform_localization(
 ) -> None:
 	r = rospy.Rate(loc.main_freq)
 	while not rospy.is_shutdown():
-		if not rgb_depth_queue.empty():
-			"""Get the latest RGB, depth images, and camera info"""
-			lock.acquire()
-			rgb_img_msg, depth_img_msg, camera_info_msg = rgb_depth_queue.get()
-			lock.release()
-			try:
-				process_frame(loc, args, rgb_img_msg, depth_img_msg, camera_info_msg, desc_fn)
-			except Exception:
-				rospy.logerr(f"Error while processing frame:\n{traceback.format_exc()}")
+		_run_one_cycle(loc, args, desc_fn)
 		# Always sleep, even when the queue is empty, so an idle loop does not spin a CPU core.
 		try:
 			r.sleep()
@@ -266,9 +332,16 @@ def main(
 	loc_pipeline.obs_id = 0
 	loc_pipeline.local_fail_count = 0
 	loc_pipeline.force_global_event = threading.Event()
+	loc_pipeline.paused_event = threading.Event()
 
 	rospy.init_node('ros_loc_pipeline_simu', anonymous=False)
 	loc_pipeline.initalize_ros()
+
+	# Latched pause/resume status topic. Published once right away so late
+	# subscribers always get the current state; starts False (running), which
+	# matches the pre-pause-switch default behavior.
+	paused_pub = rospy.Publisher('/vloc/paused', Bool, queue_size=1, latch=True)
+	paused_pub.publish(Bool(data=False))
 	loc_pipeline.frame_id_map = rospy.get_param('~frame_id_map', 'map')
 	loc_pipeline.main_freq = rospy.get_param('~main_freq', 1)
 	min_depth = rospy.get_param('~min_depth', 0.1)
@@ -290,7 +363,14 @@ def main(
 
 	# Service to force a global relocalization on the next processed frame.
 	force_global_loc_srv = rospy.Service(
-		'/vloc/force_global_loc', Trigger, _build_force_global_loc_callback(loc_pipeline)
+		'/vloc/force_global_loc', Trigger, _build_force_global_loc_callback(loc_pipeline, paused_pub)
+	)
+
+	# Service to pause/resume the localization loop (GPU-heavy; another node
+	# pauses it once a position is locked in or "no map here" is decided, and
+	# resumes it when a new task starts).
+	set_paused_srv = rospy.Service(
+		'/vloc/set_paused', SetBool, _build_set_paused_callback(loc_pipeline, paused_pub)
 	)
 
 	# Start the localization thread

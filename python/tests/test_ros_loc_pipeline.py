@@ -28,6 +28,8 @@ _ROS_STUB_MODULES = [
 	"nav_msgs.msg",
 	"sensor_msgs",
 	"sensor_msgs.msg",
+	"std_msgs",
+	"std_msgs.msg",
 	"std_srvs",
 	"std_srvs.srv",
 	"loc_pipeline",
@@ -96,6 +98,7 @@ def _make_loc(args):
 	loc.obs_id = 0
 	loc.local_fail_count = 0
 	loc.force_global_event = threading.Event()
+	loc.paused_event = threading.Event()
 	loc.curr_query_descs = []
 	loc.main_freq = 50
 	loc.curr_obs_node = None
@@ -261,8 +264,9 @@ def test_local_loc_fail_twice_then_succeed_resets_counter_without_global_reset(m
 def test_force_global_loc_callback_sets_event_and_triggers_global_relocalization(mod):
 	args = _make_args()
 	loc = _make_loc(args)
+	paused_pub = MagicMock()
 
-	callback = mod._build_force_global_loc_callback(loc)
+	callback = mod._build_force_global_loc_callback(loc, paused_pub)
 	response = callback(None)
 
 	assert loc.force_global_event.is_set()
@@ -270,6 +274,9 @@ def test_force_global_loc_callback_sets_event_and_triggers_global_relocalization
 		success=True, message="global localization will rerun on the next frame"
 	)
 	assert response is mod.TriggerResponse.return_value
+	# Was not paused, so the pause status must not be touched or republished.
+	assert not loc.paused_event.is_set()
+	paused_pub.publish.assert_not_called()
 
 	# Simulate a frame already globally+locally localized, which should be
 	# discarded and re-run through global localization on the next frame.
@@ -344,3 +351,116 @@ def test_no_desc_fn_falls_back_to_vpr_model(mod):
 	mod.process_frame(loc, args, rgb_msg, depth_msg, cam_msg, desc_fn=None)
 
 	loc.vpr_model.assert_called_once()
+
+
+# --- 7. /vloc/set_paused: pause ---
+
+def test_set_paused_true_sets_event_and_publishes_once(mod):
+	args = _make_args()
+	loc = _make_loc(args)
+	paused_pub = MagicMock()
+	callback = mod._build_set_paused_callback(loc, paused_pub)
+
+	response = callback(SimpleNamespace(data=True))
+
+	assert loc.paused_event.is_set()
+	paused_pub.publish.assert_called_once_with(mod.Bool(data=True))
+	mod.SetBoolResponse.assert_called_with(success=True, message="now paused")
+	assert response is mod.SetBoolResponse.return_value
+
+	# Repeating the same request (already paused) must not republish, but must
+	# still report success.
+	paused_pub.publish.reset_mock()
+	mod.SetBoolResponse.reset_mock()
+	response2 = callback(SimpleNamespace(data=True))
+
+	assert loc.paused_event.is_set()
+	paused_pub.publish.assert_not_called()
+	mod.SetBoolResponse.assert_called_once_with(success=True, message="already paused")
+	assert response2 is mod.SetBoolResponse.return_value
+
+
+# --- 8. /vloc/set_paused: resume ---
+
+def test_set_paused_false_clears_event_forces_global_and_publishes_once(mod):
+	args = _make_args()
+	loc = _make_loc(args)
+	loc.paused_event.set()
+	paused_pub = MagicMock()
+	callback = mod._build_set_paused_callback(loc, paused_pub)
+
+	response = callback(SimpleNamespace(data=False))
+
+	assert not loc.paused_event.is_set()
+	assert loc.force_global_event.is_set()
+	paused_pub.publish.assert_called_once_with(mod.Bool(data=False))
+	mod.SetBoolResponse.assert_called_with(success=True, message="now running")
+	assert response is mod.SetBoolResponse.return_value
+
+	# Resuming again (already running) must not republish or re-set
+	# force_global_event, and must still report success.
+	loc.force_global_event.clear()
+	paused_pub.publish.reset_mock()
+	mod.SetBoolResponse.reset_mock()
+	response2 = callback(SimpleNamespace(data=False))
+
+	assert not loc.force_global_event.is_set()
+	paused_pub.publish.assert_not_called()
+	mod.SetBoolResponse.assert_called_once_with(success=True, message="already running")
+	assert response2 is mod.SetBoolResponse.return_value
+
+
+# --- 9. /vloc/force_global_loc while paused also resumes ---
+
+def test_force_global_loc_while_paused_resumes_and_publishes(mod):
+	args = _make_args()
+	loc = _make_loc(args)
+	loc.paused_event.set()
+	paused_pub = MagicMock()
+	callback = mod._build_force_global_loc_callback(loc, paused_pub)
+
+	response = callback(None)
+
+	assert loc.force_global_event.is_set()
+	assert not loc.paused_event.is_set()
+	paused_pub.publish.assert_called_once_with(mod.Bool(data=False))
+	assert response is mod.TriggerResponse.return_value
+
+
+# --- 10. Localization loop while paused: queue drained, process_frame not called; resumes cleanly ---
+
+def test_run_one_cycle_paused_drops_frame_without_processing(mod):
+	args = _make_args()
+	loc = _make_loc(args)
+	loc.paused_event.set()
+	mod.rgb_depth_queue.put((object(), object(), object()))
+
+	calls = {"n": 0}
+
+	def fake_process_frame(*_args, **_kwargs):
+		calls["n"] += 1
+
+	with _monkeypatch_attr(mod, "process_frame", fake_process_frame):
+		mod._run_one_cycle(loc, args, desc_fn=None)
+
+	assert calls["n"] == 0
+	assert mod.rgb_depth_queue.empty()
+
+
+def test_run_one_cycle_resumes_and_processes_next_frame_normally(mod):
+	args = _make_args()
+	loc = _make_loc(args)
+	# Was paused, now resumed (e.g. via set_paused): the queue has a fresh frame.
+	loc.paused_event.clear()
+	mod.rgb_depth_queue.put((object(), object(), object()))
+
+	calls = {"n": 0}
+
+	def fake_process_frame(*_args, **_kwargs):
+		calls["n"] += 1
+
+	with _monkeypatch_attr(mod, "process_frame", fake_process_frame):
+		mod._run_one_cycle(loc, args, desc_fn=None)
+
+	assert calls["n"] == 1
+	assert mod.rgb_depth_queue.empty()
