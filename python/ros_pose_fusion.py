@@ -139,6 +139,15 @@ def odom_local_callback(odom_msg):
 				rospy.logwarn(f"Drop global odometry at {pose_time:.05f}: closest local pose is at {stamped_closest[0]:.05f}")
 				continue
 			rospy.loginfo(f"Closest pose to global odometry at time {pose_time:.05f} is {idx_closest}")
+			if not init_system and num_priors == 0:
+				# Before the first global pose every variable is initialized at the identity. When the local
+				# and the map frame differ by a large rotation, the first iSAM2 step from there is far off
+				# (2.4 m in a kitchen replay, until the next global pose 5 s later). Seed the pending initial
+				# values with "global pose x local odometry" instead; the graph and its optimum are unchanged.
+				_, (_, anchor_local) = poses_local.get_item(idx_closest)
+				for key in range(len(poses_local)):
+					_, (key_time, key_local) = poses_local.get_item(key)
+					pose_fusion.add_init_estimate(key, key_time, pose3 * anchor_local.between(key_local))
 			# Add prior factor
 			sigma = SIGMA_PRIOR
 			pose_fusion.add_prior_factor(idx_closest, pose3, sigma)

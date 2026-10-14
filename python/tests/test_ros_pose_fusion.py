@@ -123,8 +123,11 @@ def _trans_err(msg, T_gt):
 	return float(np.linalg.norm(_pose_of(msg)[:3, 3] - T_gt[:3, 3]))
 
 
-def test_fusion_follows_map_and_beats_drifting_odometry(fusion):
-	origin = _matrix(3.0, -2.0, 40.0)
+@pytest.mark.parametrize("yaw_deg", [40.0, 170.0])
+def test_fusion_follows_map_and_beats_drifting_odometry(fusion, yaw_deg):
+	# 170 deg between the local and the map frame: identity initial values would put the first output
+	# metres off; the seeded initial values keep it at the centimetre level
+	origin = _matrix(3.0, -2.0, yaw_deg)
 	stamps, gt, local = _trajectory(int(60 * RATE_HZ), 1000.0, origin)
 	msgs = _run(fusion, stamps, gt, local)
 
@@ -137,6 +140,7 @@ def test_fusion_follows_map_and_beats_drifting_odometry(fusion):
 	# dead reckoning from the first global pose with 5 % scale drift: ~1.2 m off after 24 m
 	dead_reckoning = gt[0] @ np.linalg.inv(local[0]) @ local[-1]
 	assert np.linalg.norm(dead_reckoning[:3, 3] - gt[-1][:3, 3]) > 1.0
+	assert errs[0] < 0.05
 	assert max(errs) < 0.15
 
 
