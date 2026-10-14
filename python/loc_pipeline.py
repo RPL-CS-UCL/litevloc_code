@@ -319,7 +319,8 @@ class LocPipeline:
 				self.path_gt_msg.poses.append(pose_msg)
 				self.pub_path_gt.publish(self.path_gt_msg)
 
-			if self.ref_map_node is not None and self.args.viz:
+			# Only draw and publish the match image when --viz is on and someone subscribes
+			if self.ref_map_node is not None and self.args.viz and self.pub_map_obs.get_num_connections() > 0:
 				n_viz = 10 # visualize n_viz matched keypoints
 				rgb_img_ref = (np.transpose(to_numpy(self.ref_map_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
 				rgb_img_obs = (np.transpose(to_numpy(self.curr_obs_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
