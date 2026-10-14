@@ -384,7 +384,7 @@ def test_set_paused_true_sets_event_and_publishes_once(mod):
 
 # --- 8. /vloc/set_paused: resume ---
 
-def test_set_paused_false_clears_event_forces_global_and_publishes_once(mod):
+def test_set_paused_false_clears_event_keeps_local_state_and_publishes_once(mod):
 	args = _make_args()
 	loc = _make_loc(args)
 	loc.paused_event.set()
@@ -394,14 +394,13 @@ def test_set_paused_false_clears_event_forces_global_and_publishes_once(mod):
 	response = callback(SimpleNamespace(data=False))
 
 	assert not loc.paused_event.is_set()
-	assert loc.force_global_event.is_set()
+	# resuming continues with local localization; no full global relocalization
+	assert not loc.force_global_event.is_set()
 	paused_pub.publish.assert_called_once_with(mod.Bool(data=False))
 	mod.SetBoolResponse.assert_called_with(success=True, message="now running")
 	assert response is mod.SetBoolResponse.return_value
 
-	# Resuming again (already running) must not republish or re-set
-	# force_global_event, and must still report success.
-	loc.force_global_event.clear()
+	# Resuming again (already running) must not republish, and must still report success.
 	paused_pub.publish.reset_mock()
 	mod.SetBoolResponse.reset_mock()
 	response2 = callback(SimpleNamespace(data=False))

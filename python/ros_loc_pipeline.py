@@ -68,8 +68,13 @@ MAX_LOCAL_LOC_FAILS = 3
 #     running: the default behavior is unchanged) and again only when the state
 #     actually flips.
 # While paused the localization thread drops queued frames instead of running
-# process_frame. Resuming always re-arms force_global_event, since the robot may
-# have moved far while paused and the old local-localization state is stale.
+# process_frame. Resuming keeps the localization state: the full global localization
+# (place retrieval + verification) is only done at the start, after a map switch, after
+# MAX_LOCAL_LOC_FAILS failed local localizations, when the initial guess is too far from
+# the reference keyframe, or on /vloc/force_global_loc. Otherwise a resumed cycle runs
+# local localization only (keyframe search around the /pose_fusion/odometry pose +
+# feature matching + PnP): ~0.85 s instead of ~4.5 s, and a re-run global localization
+# while walking gave 0.3 m / 6 deg off results in the kitchen (locfusion F4, 2026-10-14).
 #
 # Map switch, used by another node (map_align_node.py) to swap in a newly-current map
 # without restarting this process (T7, "map switch takes effect within 3 minutes"):
@@ -118,9 +123,8 @@ def _build_set_paused_callback(loc: LocPipeline, paused_pub) -> Callable[[object
 	"""Build the /vloc/set_paused SetBool service callback for this loc pipeline.
 
 	The callback only flips loc.paused_event; localization state stays owned by
-	the localization thread. Resuming (paused -> running) also re-arms
-	force_global_event, since the robot may have moved far while paused and the
-	old local-localization state is stale.
+	the localization thread and is kept across a pause, so resuming continues with
+	local localization (see the comment block above MAX_LOCAL_LOC_FAILS).
 	"""
 	def _callback(req):
 		want_paused = bool(req.data)
@@ -132,7 +136,6 @@ def _build_set_paused_callback(loc: LocPipeline, paused_pub) -> Callable[[object
 				loc.paused_event.set()
 			else:
 				loc.paused_event.clear()
-				loc.force_global_event.set()
 			rospy.loginfo(f"LiteVLoc {state} by set_paused")
 			paused_pub.publish(Bool(data=want_paused))
 		return SetBoolResponse(success=True, message=f"now {state}")
