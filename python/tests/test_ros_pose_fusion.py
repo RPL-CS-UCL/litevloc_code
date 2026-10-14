@@ -27,8 +27,12 @@ CAMERA = "camera"
 
 
 class _Recorder:
-	def __init__(self):
+	def __init__(self, connections=1):
 		self.msgs = []
+		self.connections = connections
+
+	def get_num_connections(self):
+		return self.connections
 
 	def publish(self, msg):
 		self.msgs.append(msg)

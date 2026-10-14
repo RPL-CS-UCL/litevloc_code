@@ -171,22 +171,26 @@ def odom_local_callback(odom_msg):
 		pose_fusion.path_msg.header = header
 		pose_msg = ros_msg.convert_vec_to_rospose(trans, quat, header)
 		pose_fusion.path_msg.poses.append(pose_msg)
+		# The two paths are only for visualization and cost O(graph size) per publish (path_opt walks every
+		# variable): over a 15 min run they took the node from 1 % to 38 % of a core, so publish only
+		# while someone subscribes.
 		if rospy.Time.now().to_sec() - last_timestamp > 1.0 / path_publish_freq:
-			pose_fusion.pub_path.publish(pose_fusion.path_msg)
+			if pose_fusion.pub_path.get_num_connections() > 0:
+				pose_fusion.pub_path.publish(pose_fusion.path_msg)
 
-		# Publish the path with batch optimization
-		if rospy.Time.now().to_sec() - last_timestamp > 1.0 / path_publish_freq:
-			header = Header(stamp=rospy.Time.from_sec(curr_time), frame_id=frame_id_map)
-			pose_fusion.path_msg_opt.header = header
-			pose_fusion.path_msg_opt.poses.clear()
-			for key in pose_fusion.current_estimate.keys():
-				pose3 = pose_fusion.current_estimate.atPose3(key)
-				trans, quat = pose3.translation(), pose3.rotation().toQuaternion().coeffs() # xyzw
-				header = Header(stamp=rospy.Time.from_sec(pose_fusion.timestamp[key]), frame_id=frame_id_map)
-				pose_msg = ros_msg.convert_vec_to_rospose(trans, quat, header)
-				pose_fusion.path_msg_opt.poses.append(pose_msg)
-				
-			pose_fusion.pub_path_opt.publish(pose_fusion.path_msg_opt)
+			# Publish the path with batch optimization
+			if pose_fusion.pub_path_opt.get_num_connections() > 0:
+				header = Header(stamp=rospy.Time.from_sec(curr_time), frame_id=frame_id_map)
+				pose_fusion.path_msg_opt.header = header
+				pose_fusion.path_msg_opt.poses.clear()
+				for key in pose_fusion.current_estimate.keys():
+					pose3 = pose_fusion.current_estimate.atPose3(key)
+					trans, quat = pose3.translation(), pose3.rotation().toQuaternion().coeffs() # xyzw
+					header = Header(stamp=rospy.Time.from_sec(pose_fusion.timestamp[key]), frame_id=frame_id_map)
+					pose_msg = ros_msg.convert_vec_to_rospose(trans, quat, header)
+					pose_fusion.path_msg_opt.poses.append(pose_msg)
+
+				pose_fusion.pub_path_opt.publish(pose_fusion.path_msg_opt)
 			last_timestamp = rospy.Time.now().to_sec()
 
 def odom_local_callback_locked(odom_msg):
