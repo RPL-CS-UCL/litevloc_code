@@ -27,13 +27,22 @@ class PoseFusion(PoseGraph):
 	def __init__(self, args):
 		super().__init__()
 		self.timestamp = dict()
+		self.isam_params = None
 		if args.isam_params:
 			params = gtsam.ISAM2Params()
 			params.setRelinearizeThreshold(0.1)
 			params.relinearizeSkip = 3
-			self.isam = gtsam.ISAM2(params)
-		else:
-			self.isam = gtsam.ISAM2()
+			self.isam_params = params
+		self.isam = gtsam.ISAM2(self.isam_params) if self.isam_params is not None else gtsam.ISAM2()
+
+	def reset(self):
+		"""Drop the whole graph and start over with the same iSAM2 settings (publishers are kept)."""
+		PoseGraph.__init__(self)
+		self.timestamp = dict()
+		self.isam = gtsam.ISAM2(self.isam_params) if self.isam_params is not None else gtsam.ISAM2()
+		if hasattr(self, 'path_msg'):
+			self.path_msg = Path()
+			self.path_msg_opt = Path()
 
 	def add_init_estimate(self, key: int, timestamp: float, pose: gtsam.Pose3):
 		if self.initial_estimate.exists(key):

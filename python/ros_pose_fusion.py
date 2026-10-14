@@ -4,6 +4,7 @@
 import rospy
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
+from std_srvs.srv import Trigger, TriggerResponse
 import tf2_ros
 
 import queue
@@ -21,6 +22,19 @@ args = parse_arguments()
 # Threading
 lock_odom_global = threading.Lock()
 odom_global_queue = queue.Queue()
+# Serializes graph updates (local odometry callback) against /pose_fusion/reset
+lock_state = threading.Lock()
+
+# /pose_fusion/reset (std_srvs/Trigger) clears the graph. Callers reset it when the local odometry
+# origin jumps (e.g. a new task re-zeroes the robot odometry), otherwise that jump would enter the
+# graph as one huge fake odometry step. Global poses stamped before the reset come from images
+# taken in the old frame and are dropped.
+reset_stamp = 0.0
+# A global pose is attached as a prior to the local pose closest in time. If none is within this gap the
+# prior would sit on the wrong variable (e.g. the first global pose: local poses are only buffered once
+# the global frame id is known, so it predates them all), so it is dropped. Our local odometry is the
+# camera pose stamped like the images LiteVLoc uses, so the normal gap is 0; 0.05 s = half a 10 Hz frame.
+MAX_PRIOR_STAMP_GAP_S = 0.05
 
 # Pose buffer
 poses_local = StampedPoses()
@@ -100,6 +114,7 @@ def odom_local_callback(odom_msg):
 
 	"""Process global odometry"""
 	if not odom_global_queue.empty():
+		num_priors = 0
 		while not odom_global_queue.empty():
 			# Skip the localization odometry that is newer than the current odometry
 			# cannot determine the id of variable
@@ -114,15 +129,24 @@ def odom_local_callback(odom_msg):
 			odom_global_msg = odom_global_queue.get()
 			lock_odom_global.release()
 			pose_time = odom_global_msg.header.stamp.to_sec()
+			if pose_time < reset_stamp:
+				rospy.logwarn(f"Drop global odometry at {pose_time:.05f}: older than the last reset {reset_stamp:.05f}")
+				continue
 			trans, quat = ros_msg.convert_rosodom_to_vec(odom_global_msg)
 			pose3 = convert_vec_gtsam_pose3(trans, quat)
-			idx_closest, _ = poses_local.find_closest(pose_time) # find the closest variable in the graph
+			idx_closest, stamped_closest = poses_local.find_closest(pose_time) # find the closest variable in the graph
+			if abs(stamped_closest[0] - pose_time) > MAX_PRIOR_STAMP_GAP_S:
+				rospy.logwarn(f"Drop global odometry at {pose_time:.05f}: closest local pose is at {stamped_closest[0]:.05f}")
+				continue
 			rospy.loginfo(f"Closest pose to global odometry at time {pose_time:.05f} is {idx_closest}")
 			# Add prior factor
 			sigma = SIGMA_PRIOR
 			pose_fusion.add_prior_factor(idx_closest, pose3, sigma)
-		
-		# Perform the isam2 optimization 
+			num_priors += 1
+		if num_priors == 0 and not init_system:
+			return
+
+		# Perform the isam2 optimization
 		pose_fusion.perform_optimization()
 		# Update the current pose after optimization
 		curr_stamped_pose = (curr_time, pose_fusion.current_estimate.atPose3(curr_idx))
@@ -165,6 +189,24 @@ def odom_local_callback(odom_msg):
 			pose_fusion.pub_path_opt.publish(pose_fusion.path_msg_opt)
 			last_timestamp = rospy.Time.now().to_sec()
 
+def odom_local_callback_locked(odom_msg):
+	with lock_state:
+		odom_local_callback(odom_msg)
+
+def reset_callback(_req):
+	global poses_local, curr_stamped_pose, marginal_cov, init_system, reset_stamp
+	with lock_state:
+		pose_fusion.reset()
+		poses_local = StampedPoses()
+		curr_stamped_pose = (0, gtsam.Pose3())
+		marginal_cov = np.eye(6, 6)
+		init_system = False
+		reset_stamp = rospy.Time.now().to_sec()
+		with lock_odom_global:
+			odom_global_queue.queue.clear()
+	rospy.logwarn(f"Pose fusion reset at {reset_stamp:.05f}")
+	return TriggerResponse(success=True, message=f"reset at {reset_stamp:.05f}")
+
 def odom_global_callback(odom_msg):
 	global frame_id_gsensor
 	frame_id_gsensor = odom_msg.child_frame_id
@@ -185,8 +227,9 @@ if __name__ == '__main__':
 	# Subscribe different sources of odometry
 	# 1. local odometry
 	# 2, global odometry
-	odom_local = rospy.Subscriber('/local/odometry', Odometry, odom_local_callback)
+	odom_local = rospy.Subscriber('/local/odometry', Odometry, odom_local_callback_locked)
 	odom_global = rospy.Subscriber('/global/odometry', Odometry, odom_global_callback)
+	reset_srv = rospy.Service('/pose_fusion/reset', Trigger, reset_callback)
 
 	frame_id_map = rospy.get_param('~frame_id_map', 'vloc_map')
 	rospy.loginfo(f"Frame id map: {frame_id_map}")
