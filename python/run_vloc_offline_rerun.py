@@ -65,11 +65,10 @@ from utils.utils_geom import (
     correct_intrinsic_scale, compute_pose_error,
 )
 from utils.utils_image import load_rgb_image, load_depth_image, to_numpy
-from utils.utils_vpr_method import initialize_vpr_model, initialize_match_model, perform_knn_search, compute_euclidean_dis
+from utils.utils_vpr_method import initialize_vpr_model, initialize_match_model
 from utils.utils_image_matching_method import initialize_img_matcher
 from utils.utils_pipeline import GV_SCORE_THRESHOLD, load_matcher_profile
 from utils.pose_solver import get_solver
-from utils import geom_verify
 from utils.utils_rerun import (
     init_rerun, save_rrd,
     log_world_frame_axes,
@@ -78,6 +77,10 @@ from utils.utils_rerun import (
     log_trajectory, log_image_matching,
 )
 from rpe_default import cfg
+# M5-B4b:候选核验(候选按排名逐个核验、早停、取最高分)和局部定位的关键帧挑选不再在这个脚本里
+# 单独抄一份，转发到 LocPipeline.localize_obs(跟在线节点 ros_loc_pipeline.py 共用同一个实现，
+# 见 utils/geom_verify.py 的 verify_match_result 文档字符串)。
+from loc_pipeline import LocPipeline
 
 
 def parse_args() -> argparse.Namespace:
@@ -154,62 +157,38 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def verify_candidates(
-    img_matcher,
-    pose_solver,
-    candidate_ids: list,
-    image_graph,
-    obs_node: "ImageNode",
-    depth_query,
-    gv_min_inliers: float,
-    early_exit: bool,
-) -> dict:
-    """对一串候选关键帧挨个做图像匹配 + 统一核验，返回核验分数最高（或早停时第一个过门槛）的那个。
+class _ProfilingImgMatcher:
+    """包一层在 ``img_matcher`` 外面，只用来接住匹配器每次调用自己写的 ``last_profile``
+    (逐段计时，比如 EDM/MASt3R 的编码耗时)。
 
-    M5-B4：核验分数不再是匹配器自己的单应内点数（跟 loc_pipeline.py 的在线/本地定位以前各算
-    各的一样，室内场景不是一个平面，这个数也会随匹配器疏密变），改成跟 LocPipeline.localize_obs
-    同一份实现（``utils.geom_verify.verify_match_result``：查询图网格去重 + 查询深度 PnP-RANSAC
-    内点数 / 没深度时退化成基础矩阵内点数）。这个脚本的运行环境没有 ROS（见
-    ``utils/geom_verify.py`` 里 ``verify_match_result`` 的文档字符串），不能 import
-    ``loc_pipeline.LocPipeline``，所以转发到同一个函数，而不是重新实现一遍。
-
-    early_exit=True（M5-B4 起在线/离线默认都是这个行为）：遇到第一个核验分数 >= 门槛的候选就停。
-    early_exit=False：候选全部跑完，取分数最高的那个（在线节点改早停之前的行为，用来对照）。
-
-    Returns:
-        dict，比旧版多了 "T_world_obs"（核验时顺带解出的位姿；没深度/没解出来时是 None）；
-        其余字段名不变（matcher_pair_bench.py 不用这个函数，不受影响）。
+    M5-B4b：候选核验(含早停/取最高分)和局部定位的关键帧挑选都挪进了 ``LocPipeline.localize_obs``
+    (跟在线节点共用实现)，这个脚本不再自己跑那个候选循环，也就摸不到循环内部每次匹配的
+    ``last_profile`` 了——``LocResult`` 没有带上这个字段(在线节点不需要它，不该为了离线重跑的
+    诊断信息改在线节点的返回值)。这层包装照旧把 ``img_matcher`` 转发给 ``localize_obs`` 内部
+    真正调用匹配器的地方，顺手把每次调用后的 ``last_profile`` 收集起来，供 ``results_json`` 的
+    每帧 ``profile`` 字段用；除此之外行为和原始 ``img_matcher`` 完全一样。
     """
-    best_map_id, best_inliers, best_T = None, 0, None
-    n_matches = 0
-    profiles: list = []
-    t_start = time.time()
-    for cand_id in candidate_ids:
-        map_node = image_graph.get_node(cand_id)
-        result = img_matcher(map_node.rgb_image, obs_node.rgb_image)
-        n_matches += 1
-        last_profile = getattr(img_matcher, "last_profile", None)
+
+    def __init__(self, matcher):
+        self._matcher = matcher
+        self.collected: list = []
+
+    def __call__(self, *args, **kwargs):
+        result = self._matcher(*args, **kwargs)
+        last_profile = getattr(self._matcher, "last_profile", None)
         if last_profile:
-            profiles.append(dict(last_profile))
-        T_w_map = convert_vec_to_matrix(map_node.trans, map_node.quat, "xyzw")
-        verify = geom_verify.verify_match_result(
-            result,
-            map_node.raw_K, map_node.raw_img_size, map_node.img_size,
-            obs_node.raw_K, obs_node.raw_img_size, obs_node.img_size,
-            T_w_map, depth_query, pose_solver,
-        )
-        if verify.inliers > best_inliers:
-            best_map_id, best_inliers, best_T = cand_id, verify.inliers, verify.T_world_query
-        if early_exit and verify.inliers >= gv_min_inliers:
-            break
-    return {
-        "best_map_id": best_map_id,
-        "max_inliers": best_inliers,
-        "T_world_obs": best_T,
-        "n_matches": n_matches,
-        "t_gv_s": time.time() - t_start,
-        "profiles": profiles,
-    }
+            self.collected.append(dict(last_profile))
+        return result
+
+    def drain_profiles(self) -> list:
+        """取走并清空目前收集到的 profile(每帧用一次,跟旧版 verify_candidates 每帧重新
+        计一份 profiles 列表的语义一致)。"""
+        profiles, self.collected = self.collected, []
+        return profiles
+
+    def __getattr__(self, name):
+        # 除了 __call__/last_profile(上面已经处理),其余属性原样转发给真正的匹配器。
+        return getattr(self._matcher, name)
 
 
 def estimate_local_pose(
@@ -379,6 +358,21 @@ def main() -> None:
     cfg.merge_from_file(args.config_pose_solver)
     pose_solver = get_solver(args.pose_solver, cfg)
 
+    # M5-B4b:候选核验(早停/取最高分)和局部定位的关键帧挑选都转发到 LocPipeline.localize_obs,
+    # 跟在线节点(ros_loc_pipeline.py)共用同一份实现,这个脚本不再自己抄一份。用 __new__ 绕开
+    # LocPipeline.__init__(那是给在线节点用的:建 out_dir/log_dir、ROS 发布器,离线重跑不需要),
+    # 只手动装上 localize_obs / search_keyframe_from_graph 真正用到的几个属性——这是离线用法的
+    # "干净构造方式",不加新的命令行开关。
+    args.save_img_matcher = False  # loc_pipeline.perform_image_matching 的可视化开关,离线重跑不用
+    loc = LocPipeline.__new__(LocPipeline)
+    loc.args = args
+    loc.image_graph = image_graph
+    loc.DB_Node_IDS = db_node_ids
+    loc.DB_POSES = db_poses
+    loc.pose_solver = pose_solver
+    loc.img_matcher = _ProfilingImgMatcher(img_matcher)
+    loc.ref_map_node = None
+
     query_root = pathlib.Path(args.query_data_path)
     poses = read_poses(str(query_root / "poses.txt"))
     intrs = read_intrinsics(str(query_root / "intrinsics.txt"))
@@ -447,11 +441,9 @@ def main() -> None:
         }
         query_desc = descs[rgb_img_name].reshape(1, -1)
 
-        # M5-B4:统一核验门槛,查询有没有深度决定用哪把尺子(PnP / 基础矩阵);不管这帧走不走
-        # 全局定位(global/local 两段都要用),所以在这两段分支之前就算好。
-        has_depth = depth_img is not None
-        depth_query_np = to_numpy(depth_img.squeeze(0)) if has_depth else None
-        gv_threshold = args.gv_min_inliers if has_depth else args.gv_min_inliers_nodepth
+        # M5-B4b:统一核验门槛(查询有没有深度决定用哪把尺子:PnP / 基础矩阵)现在由
+        # LocPipeline.localize_obs 自己从 obs_node.depth_image 推(跟这里 depth_img 是否为 None
+        # 完全一致),这个脚本不用再自己算一遍 has_depth/gv_threshold。
 
         # track 模式：上一帧定位成功就跳过这帧的全局定位(VPR)，直接用上一帧估计位姿当先验。
         track_continue = args.mode == "track" and has_global_pos and prev_trans is not None
@@ -478,114 +470,94 @@ def main() -> None:
             rec["t_vpr_s"] = time.time() - t_vpr0
             print(recall_preds)
 
+            # M5-B4b:候选核验(早停/取最高分)转发到 LocPipeline.localize_obs(mode="global"),
+            # 跟在线节点共用同一份实现,这个脚本不再自己跑这段候选循环。
             candidate_ids = [db_node_ids[pred] for pred in recall_preds]
-            verify = verify_candidates(
-                img_matcher, pose_solver, candidate_ids, image_graph, obs_node,
-                depth_query_np, gv_threshold, bool(args.gv_early_exit),
+            result = loc.localize_obs(
+                obs_node, mode="global",
+                prior={"candidate_ids": candidate_ids, "early_exit": bool(args.gv_early_exit)},
             )
-            rec["vpr_max_inliers"] = int(verify["max_inliers"])
-            rec["verify_inliers"] = int(verify["max_inliers"])
-            rec["t_gv_s"] = verify["t_gv_s"]
-            rec["n_gv_matches"] = verify["n_matches"]
-            rec["profile"].extend(verify["profiles"])
+            rec["vpr_max_inliers"] = int(result.verify_inliers)
+            rec["verify_inliers"] = int(result.verify_inliers)
+            rec["t_gv_s"] = result.t_verify_s
+            rec["n_gv_matches"] = result.n_matches_run
+            rec["profile"].extend(loc.img_matcher.drain_profiles())
 
-            if verify["max_inliers"] >= gv_threshold and verify["best_map_id"] is not None:
+            if result.succ:
                 rec["vpr_verified"] = True
                 has_global_pos = True
-                ref_map_node = image_graph.get_node(verify["best_map_id"])
-                if verify["T_world_obs"] is not None:
+                ref_map_node = image_graph.get_node(result.map_id)
+                if result.T_world_obs is not None:
                     # M5-B4:核验时已经用 PnP 解出了位姿,直接当这一帧的结果用,不用再跑一次
                     # 局部匹配(跟在线节点 ros_loc_pipeline.process_frame 的新行为一致)。
-                    trans_est, quat_est = convert_matrix_to_vec(verify["T_world_obs"], "xyzw")
+                    trans_est, quat_est = convert_matrix_to_vec(result.T_world_obs, "xyzw")
                     t_err, r_err = compute_pose_error((trans_est, quat_est), (trans_gt, quat_gt), mode="vector")
                     rec.update(
                         est_trans=trans_est.tolist(), t_err=float(t_err), r_err=float(r_err),
-                        solver_inliers=int(verify["max_inliers"]), ref_node=int(verify["best_map_id"]),
+                        solver_inliers=int(result.verify_inliers), ref_node=int(result.map_id),
                         localized=True,
                     )
                     obs_node.set_pose(trans_est, quat_est)
-                    print(f"[Succ] global verify solved pose directly, verify_inliers={verify['max_inliers']}")
+                    print(f"[Succ] global verify solved pose directly, verify_inliers={result.verify_inliers}")
                     print(f"Groundtruth Poses: {trans_gt}")
                     print(f"Estimated Poses: {trans_est}")
                     log_query_camera(trans_est, quat_est, obs_node.K, obs_node.img_size, rgb_image=rgb_np, is_gt=False)
                     traj_est.append(trans_est.copy())
-                    print(f"t_err={t_err:.3f}m r_err={r_err:.2f}deg verify_inliers={verify['max_inliers']}")
+                    print(f"t_err={t_err:.3f}m r_err={r_err:.2f}deg verify_inliers={result.verify_inliers}")
                 else:
                     # 查询没有深度:核验只认出了关键帧,没法解位姿;位姿先用关键帧的位姿当粗先验,
                     # 交给下面的局部定位精化。
                     obs_node.set_pose(ref_map_node.trans, ref_map_node.quat)
-                    print(f"Found VPR Node in global position: {verify['best_map_id']}")
+                    print(f"Found VPR Node in global position: {result.map_id}")
             else:
                 has_global_pos = False
                 ref_map_node = None
-                print(f"VPR fail, inliers={verify['max_inliers']}")
+                print(f"VPR fail, inliers={result.verify_inliers}")
 
         # M5-B4:全局核验已经直接解出位姿(rec["localized"] 已是 True)时,跳过局部定位——
         # 跟在线节点一样,"第一个统一核验分数达标的候选就停,不再做第二次局部匹配"。
         if has_global_pos and ref_map_node is not None and not rec["localized"]:
             rec["stage"] = "local"
-            dis, pred = perform_knn_search(db_poses[:, :3], obs_node.trans.reshape(1, 3), 3, [1])
-            if len(pred[0]) > 0:
-                closest = image_graph.get_node(db_node_ids[pred[0][0]])
-                candidates = [
-                    n for n, _ in closest.edges.values()
-                    if n.compute_distance(obs_node)[0] < args.global_pos_threshold
-                ] + [closest]
-
-                if candidates:
-                    dists = [compute_euclidean_dis(obs_node.get_descriptor(), n.get_descriptor()) for n in candidates]
-                    candidate_str = " ".join(f"{n.id}({d:.2f})" for n, d in zip(candidates, dists))
-                    closest_id = candidates[np.argmin(dists)].id
-                    print(f"Keyframe candidate: {candidate_str} Closest node: {closest_id}")
-                    ref_map_node = candidates[np.argmin(dists)]
-
+            # M5-B4b:局部定位的关键帧挑选(最近关键帧 + 邻居里挑描述子最近的)和核验/解位姿都转发
+            # 到 LocPipeline.localize_obs(mode="local")——跟在线节点共用同一份 search_keyframe_
+            # from_graph 实现(这份比这个脚本原来自己写的那份多一个 90° 角度过滤,见 M5-B4b 等价性
+            # 核对),不再是这个脚本自己抄一份"按位姿 KNN 找最近关键帧"。不传 prior["ref_map_node"],
+            # 让它自己挑(跟 ros_loc_pipeline.process_frame 没给先验时的行为一致)。
             t_local0 = time.time()
-            match_result = img_matcher(ref_map_node.rgb_image, obs_node.rgb_image)
-            last_profile = getattr(img_matcher, "last_profile", None)
-            if last_profile:
-                rec["profile"].append(dict(last_profile))
-            mkpts0 = match_result["inlier_kpts0"]
-            mkpts1 = match_result["inlier_kpts1"]
-            num_inliers = match_result["num_inliers"]
-            rec["ref_node"], rec["match_inliers"] = int(ref_map_node.id), int(num_inliers)
-            print(f"Number of matched inliers: {num_inliers}")
+            local_result = loc.localize_obs(obs_node, mode="local")
+            rec["t_local_s"] = time.time() - t_local0
+            rec["profile"].extend(loc.img_matcher.drain_profiles())
 
-            ref_map_node.set_matched_kpts(mkpts0, num_inliers)
-            obs_node.set_matched_kpts(mkpts1, num_inliers)
+            # n_matches_run == 0 表示 search_keyframe_from_graph 一个候选都没挑到(极少见:连最近
+            # 关键帧本身都不满足距离/角度门槛),这时没有匹配结果可记录,ref_map_node 保持上一帧的值。
+            if local_result.n_matches_run > 0:
+                ref_map_node = loc.ref_map_node
+                mkpts0, _ = ref_map_node.get_matched_kpts()
+                mkpts1, num_inliers = obs_node.get_matched_kpts()
+                rec["ref_node"], rec["match_inliers"] = int(ref_map_node.id), int(num_inliers)
+                print(f"Number of matched inliers: {num_inliers}")
 
-            ref_rgb = (np.transpose(to_numpy(ref_map_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
-            log_image_matching(ref_rgb, rgb_np, mkpts0, mkpts1, node_id=ref_map_node.id)
+                ref_rgb = (np.transpose(to_numpy(ref_map_node.rgb_image), (1, 2, 0)) * 255).astype(np.uint8)
+                log_image_matching(ref_rgb, rgb_np, mkpts0, mkpts1, node_id=ref_map_node.id)
 
-            # M5-B4:局部定位的核验/解位姿跟全局定位走同一个 utils.geom_verify 实现(网格去重 +
-            # PnP-RANSAC,没深度退化成基础矩阵),不再是这里单独抄一份"estimate_local_pose + 比
-            # 一个单独的局部定位门槛"——那份实现还在(estimate_local_pose 函数本身没删,
-            # tools/vloc_eval/matcher_pair_bench.py 还在用),只是这条离线重跑的主循环不再调用它。
-            T_w_ref = convert_vec_to_matrix(ref_map_node.trans, ref_map_node.quat, "xyzw")
-            local_verify = geom_verify.verify_match_result(
-                match_result,
-                ref_map_node.raw_K, ref_map_node.raw_img_size, ref_map_node.img_size,
-                obs_node.raw_K, obs_node.raw_img_size, obs_node.img_size,
-                T_w_ref, depth_query_np, pose_solver,
-            )
-            rec["solver_inliers"] = local_verify.inliers
-            rec["verify_inliers"] = local_verify.inliers
-            if local_verify.T_world_query is not None:
-                trans_est, quat_est = convert_matrix_to_vec(local_verify.T_world_query, "xyzw")
+            rec["solver_inliers"] = local_result.verify_inliers
+            rec["verify_inliers"] = local_result.verify_inliers
+            if local_result.T_world_obs is not None:
+                trans_est, quat_est = convert_matrix_to_vec(local_result.T_world_obs, "xyzw")
                 # the error is recorded even below gv_threshold (study of other thresholds)
                 t_err, r_err = compute_pose_error(
                     (trans_est, quat_est), (trans_gt, quat_gt), mode="vector"
                 )
                 rec.update(est_trans=trans_est.tolist(), t_err=float(t_err), r_err=float(r_err))
-                if local_verify.inliers >= gv_threshold:
+                if local_result.succ:
                     rec["localized"] = True
                     obs_node.set_pose(trans_est, quat_est)
-                    print(f"[Succ] sufficient number {local_verify.inliers} verify_inliers")
+                    print(f"[Succ] sufficient number {local_result.verify_inliers} verify_inliers")
                     print(f"Groundtruth Poses: {trans_gt}")
                     print(f"Estimated Poses: {trans_est}")
                     log_query_camera(trans_est, quat_est, obs_node.K, obs_node.img_size, rgb_image=rgb_np, is_gt=False)
                     traj_est.append(trans_est.copy())
-                    print(f"t_err={t_err:.3f}m r_err={r_err:.2f}deg verify_inliers={local_verify.inliers}")
-            rec["t_local_s"] = time.time() - t_local0
+                    print(f"t_err={t_err:.3f}m r_err={r_err:.2f}deg verify_inliers={local_result.verify_inliers}")
 
         if args.mode == "track":
             if rec["localized"]:

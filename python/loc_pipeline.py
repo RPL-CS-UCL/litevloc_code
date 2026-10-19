@@ -30,14 +30,12 @@ import cv2
 import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
-import rospy
-from std_msgs.msg import Header
-from nav_msgs.msg import Odometry, Path
-from sensor_msgs.msg import Image
-from geometry_msgs.msg import PoseArray
-from visualization_msgs.msg import MarkerArray
-import tf2_ros
 import matplotlib
+# M5-B4b:ROS 相关 import(rospy / tf2_ros / std_msgs 等消息类型 / utils.utils_ros)从模块顶部挪进
+# 真正用到它们的方法里(用到时才 import)——这样 `import loc_pipeline` 在没有 ROS 的 PYTHONPATH 下
+# (run_vloc_offline_rerun.py 的运行环境,见 utils/geom_verify.py 里 verify_match_result 的文档
+# 字符串)也能成功;在线节点(ros_loc_pipeline.py)该导的还是照样导,只是导入时机从"模块加载时"
+# 改成"方法被调用时"(Python 的 import 本身有缓存,重复 import 不是重新加载)。
 
 from utils.utils_pipeline import parse_arguments, setup_log_environment
 from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error, convert_pose_inv
@@ -46,7 +44,6 @@ from utils.utils_vpr_method import save_visualization as save_vpr_visualization
 from utils.utils_image_matching_method import initialize_img_matcher
 from utils.utils_image_matching_method import save_visualization as save_img_matcher_visualization
 from utils.utils_image import load_rgb_image, load_depth_image, to_numpy
-from utils.utils_ros import ros_msg, ros_vis
 from utils.pose_solver import get_solver
 from utils import geom_verify
 from rpe_default import cfg
@@ -110,12 +107,14 @@ class LocPipeline:
 		self.publish_graph = False
 
 	def init_vpr_model(self):
+		import rospy
 		self.vpr_model = initialize_vpr_model(self.args.vpr_method, self.args.vpr_backbone, self.args.vpr_descriptors_dimension, self.args.device)
 		rospy.loginfo(f"Initialize VPR model: {self.args.vpr_method}")
 
 	def init_vpr_match_model(self):
+		import rospy
 		self.vpr_match_model = initialize_match_model(
-			self.args.vpr_match_model, 
+			self.args.vpr_match_model,
 			self.args.vpr_match_seq_len
 		)
 		self.vpr_match_model.initialize_model(self.DB_DESCRIPTORS)
@@ -123,6 +122,7 @@ class LocPipeline:
 		rospy.loginfo(f"Initialize VPR Match Model: {self.args.vpr_match_model}")
 
 	def init_img_matcher(self):
+		import rospy
 		# M5-B4:按 --img_matcher 从 config/matcher_profiles.yaml 查到的额外构造参数(比如 master
 		# 系列的 min_conf_thr、edm 的 ransac_model)在构造时就传给 get_matcher,不再构造完事后
 		# 按 hasattr(img_matcher, "min_conf_thr") 判断、事后赋值。
@@ -131,16 +131,24 @@ class LocPipeline:
 			matcher_kwargs=getattr(self.args, "matcher_kwargs", None),
 		)
 		rospy.loginfo(f"Initialize Image matcher: {self.args.img_matcher}")
-		
+
 	def init_pose_solver(self):
+		import rospy
 		cfg.merge_from_file(self.args.config_pose_solver)
 		self.pose_solver = get_solver(self.args.pose_solver, cfg)
 		rospy.loginfo(f"Initialize Pose solver: {self.args.pose_solver}")
 
 	def initalize_ros(self):
+		import rospy
+		import tf2_ros
+		from geometry_msgs.msg import PoseArray
+		from nav_msgs.msg import Odometry, Path
+		from sensor_msgs.msg import Image
+		from visualization_msgs.msg import MarkerArray
+
 		self.pub_graph = rospy.Publisher('/graph', MarkerArray, queue_size=10)
 		self.pub_graph_poses = rospy.Publisher('/graph/poses', PoseArray, queue_size=10)
-		
+
 		self.pub_odom = rospy.Publisher('/vloc/odometry', Odometry, queue_size=10)
 		self.pub_path = rospy.Publisher('/vloc/path', Path, queue_size=10)
 		self.pub_path_gt = rospy.Publisher('/vloc/path_gt', Path, queue_size=10)
@@ -151,6 +159,7 @@ class LocPipeline:
 		self.path_gt_msg = Path()
 
 	def read_covis_graph_from_files(self, config):
+		import rospy
 		map_root = pathlib.Path(self.args.map_path)
 		self.image_graph = GraphLoader.load_data(
 			map_root=map_root,
@@ -200,14 +209,14 @@ class LocPipeline:
 		Parameters:
 			obs_node (Node): The observation node for which to find the closest keyframe. 
 		Returns:
-			Node: The closest keyframe node in the graph. 
+			Node: The closest keyframe node in the graph.
 				If no keyframe is found within the global position threshold, it returns None.
 		"""
 		# Search for the physical closest keyframe in the graph
 		query_pose = obs_node.trans.reshape(1, 3)
 		dis, pred = perform_knn_search(self.DB_POSES[:, :3], query_pose, 3, [1])
 		if len(pred[0]) == 0: return None
-		
+
 		# Search for the visual closest keyframe in the graph
 		node_id = self.DB_Node_IDS[pred[0][0]]
 		closest_map_node = self.image_graph.get_node(node_id)
@@ -217,14 +226,22 @@ class LocPipeline:
 			dis_t, dis_angle = node.compute_distance(obs_node)
 			if dis_t < self.args.global_pos_threshold and dis_angle < 90.0:
 				all_nei_nodes.append(node)
-		
+
 		if len(all_nei_nodes) == 0: return None
 
 		list_dis = [compute_euclidean_dis(obs_node.get_descriptor(), node.get_descriptor()) for node in all_nei_nodes]
 		node_min_dis = all_nei_nodes[np.argmin(list_dis)]
 		out_str = 'Keyframe candidate: '
 		out_str += ' '.join([f'{node.id}({dis:.2f})' for node, dis in zip(all_nei_nodes, list_dis)]) + f' Visual Similar node: {node_min_dis.id}'
-		rospy.loginfo(out_str)
+		# M5-B4b:这个方法是 localize_obs(mode="local") 没给 ref_map_node 时的回退路径,离线重跑
+		# (run_vloc_offline_rerun.py)也会走到这里,但它的运行环境没有 rospy。在线节点有 rospy 时
+		# 照旧走 rospy.loginfo;没有时退到标准库 logging(跟 localize_obs 自己一贯的做法一致),
+		# 不是换成静默吞掉。
+		try:
+			import rospy
+			rospy.loginfo(out_str)
+		except ImportError:
+			logging.info(out_str)
 		
 		return node_min_dis
 
@@ -239,6 +256,7 @@ class LocPipeline:
 				the regular full-map flow if nothing in the subset passes geometric verification.
 				Default None: behaves exactly like before this parameter was added.
 		"""
+		import rospy
 		query_desc = self.curr_obs_node.get_descriptor()
 		assert query_desc.shape[1] == self.DB_DESCRIPTORS.shape[1]
 		assert query_desc.shape[1] == self.args.vpr_descriptors_dimension
@@ -432,6 +450,9 @@ class LocPipeline:
 		return {'succ': result.succ, 'T_w_obs': result.T_world_obs, 'solver_inliers': result.verify_inliers}
 
 	def publish_message(self):
+		import rospy
+		from std_msgs.msg import Header
+		from utils.utils_ros import ros_msg
 		# Publish Sensor Data
 		if self.curr_obs_node is not None:
 			header = Header(stamp=rospy.Time.from_sec(self.curr_obs_node.time), frame_id=self.frame_id_map)
@@ -479,6 +500,7 @@ class LocPipeline:
 
 # Test loc_pipeline without using ROS
 def perform_localization(loc: LocPipeline, args):
+	import rospy
 	from utils.utils_geom import read_intrinsics, read_poses, read_descriptors, correct_intrinsic_scale
 
 	"""Main loop for processing observations"""
@@ -600,6 +622,7 @@ def perform_localization(loc: LocPipeline, args):
 		#input()
 
 if __name__ == '__main__':
+	import rospy
 	args = parse_arguments()
 	out_dir = pathlib.Path(os.path.join(args.map_path, 'tmp/output_loc_pipeline'))
 	config = dict(
