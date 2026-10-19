@@ -42,7 +42,7 @@ def route_to_markers(
     """路线 + 图 → ``visualization_msgs/MarkerArray``。
 
     内容:路线连线 + 途经路点(SPHERE_LIST)+ 起点(蓝色方块)+ 终点(红色带朝向箭头)+ 当前所在
-    关键帧(黄色大球,``current_kf`` 给了才画)+ 每个关键帧编号(TEXT_VIEW_FACING)。
+    关键帧(黄色大球,``current_kf`` 给了才画)+ 路线经过的每个关键帧编号(TEXT_VIEW_FACING)。
 
     路线连线默认整条一个绿色(旧行为,``next_index`` 不给);``next_index`` 给了(M5-B7,
     ``route_walker.RouteViz`` 要分"走过的"和"没走的")就拆成两条首尾相接的线——
@@ -142,7 +142,10 @@ def route_to_markers(
         current_marker.color = _color(1.0, 1.0, 0.0)
         array.markers.append(current_marker)
 
-    for kf, pose in graph.poses.items():
+    for kf in dict.fromkeys(route.kf_path):  # 只标路线经过的关键帧(去重保序),不标全图
+        pose = graph.poses.get(kf)
+        if pose is None:
+            continue
         text_marker = Marker()
         _header(text_marker)
         text_marker.ns, text_marker.id = "litevloc_topo/labels", _next_id()
