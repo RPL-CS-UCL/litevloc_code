@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "litevloc_topo"
+version = "0.1.0"
+description = "关键帧拓扑图上找最短路 / 算路点 / 管理目标点的纯 numpy 小包,nav_mapping 与 LiteVLoc 共用"
+requires-python = ">=3.8"
+# 只依赖 numpy 和标准库,不 import rospy / scipy / torch / cv2(ros_viz.py 例外,rospy 等在函数内部延迟 import)。
+dependencies = ["numpy"]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[tool.setuptools]
+packages = ["litevloc_topo"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+# UP006/UP007/UP035/UP045:目标机 Orin 是 Python 3.8,全库统一 typing.List / Optional 写法
+ignore = ["UP006", "UP007", "UP035", "UP045"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

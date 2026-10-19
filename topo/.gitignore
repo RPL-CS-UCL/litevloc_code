@@ -1,0 +1,3 @@
+# pip install -e 生成的元数据与缓存
+*.egg-info/
+__pycache__/

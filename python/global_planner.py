@@ -25,6 +25,7 @@ from visualization_msgs.msg import MarkerArray
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PointStamped
 from std_msgs.msg import Int16
+from std_msgs.msg import String
 from sensor_msgs.msg import Image
 
 from point_graph import PointGraphLoader as GraphLoader
@@ -33,8 +34,13 @@ from point_node import PointNode
 from loc_pipeline import LocPipeline
 from utils.utils_image import rgb_image_to_tensor, to_numpy
 from utils.utils_pipeline import parse_arguments
-from utils.utils_shortest_path import dijk_shortest_path
 from utils.utils_ros import ros_msg, ros_vis
+from litevloc_topo.goals import KeyframeGoal, ObjectGoal
+from litevloc_topo.graph import Pose2D, TopoGraphError, load_topo_graph
+from litevloc_topo.planner import TopoPlanner
+
+# Go2 相机在机身中心前方的距离(米),与 nav_mapping.map_route 一致
+CAMERA_FORWARD_M = 0.1582
 
 class GlobalPlanner:
 	def __init__(self, args):
@@ -42,6 +48,7 @@ class GlobalPlanner:
 
 		self.loc_pipeline = None
 		self.img_lock = threading.Lock()
+		self.object_lock = threading.Lock()
 
 		# Initialize variables
 		self.plan_start_node = None
@@ -53,6 +60,7 @@ class GlobalPlanner:
 		# Sensor data
 		self.robot_node = None
 		self.manual_goal_img = None
+		self.manual_goal_object = None  # /goal_object 收到的 objects.json 实例 id
 		self.is_goal_init = False
 		self.frame_id_map = 'map'
 
@@ -63,6 +71,7 @@ class GlobalPlanner:
 	def initalize_ros(self):
 		# ROS subscriber
 		rospy.Subscriber('/goal_image', Image, self.goal_img_callback, queue_size=1)
+		rospy.Subscriber('/goal_object', String, self.goal_object_callback, queue_size=1)
 		rospy.Subscriber('/pose_fusion/odometry', Odometry, self.odom_callback, queue_size=1)
 
 		# ROS publisher
@@ -75,6 +84,11 @@ class GlobalPlanner:
 		self.point_graph = GraphLoader.load_data(map_root, edge_type='trav')
 		self.map_node_position = np.array([node.trans for _, node in self.point_graph.nodes.items()])
 		logging.info(f"Loading Traversiblity Graph: {str(self.point_graph)}")
+
+		# litevloc_topo 规划专用图:只要平面(x, y, yaw),Dijkstra / 子目标推进都在这张图上做,
+		# 和上面的 point_graph(给可视化、VPR 最近邻用)是两张独立的图,关键帧编号(行号)一致。
+		self.topo_graph = load_topo_graph(map_root, camera_forward_m=CAMERA_FORWARD_M, edge_type='trav')
+		self.planner = TopoPlanner(self.topo_graph, map_dir=map_root)
 
 	def publish_path(self, subgoals, timestamp):
 		header = Header(stamp=timestamp, frame_id=f'{self.frame_id_map}_graph')
@@ -92,6 +106,15 @@ class GlobalPlanner:
 			self.manual_goal_img = ros_msg.convert_rosimg_to_cvimg(img_msg)
 			self.img_lock.release()
 
+	def goal_object_callback(self, string_msg):
+		# string_msg.data 是地图 objects.json 里某个物体的实例 id(比如 obj_3),直接当目标用,
+		# 不用再走 VPR 图像匹配那一套。
+		if self.manual_goal_object is None:
+			self.object_lock.acquire()
+			rospy.loginfo(f'Receive goal object: {string_msg.data}')
+			self.manual_goal_object = string_msg.data
+			self.object_lock.release()
+
 	def odom_callback(self, odom_msg):
 		time = odom_msg.header.stamp.to_sec()
 		trans, quat = ros_msg.convert_rosodom_to_vec(odom_msg)
@@ -103,10 +126,20 @@ class GlobalPlanner:
 
 	def perform_planning(self, robot_node):
 		resize = self.args.image_size
-		# Finding the goal node via. visual place recognition"""
+		# Finding the goal node via. visual place recognition, or straight from /goal_object"""
 		if not self.is_goal_init:
 			self.planner_status.data = 0
-			if self.manual_goal_img is not None:
+			goal = None
+
+			if self.manual_goal_object is not None:
+				# 物体目标不用 VPR,直接按实例 id 去 objects.json 查关键帧(litevloc_topo.goals.ObjectGoal)
+				self.object_lock.acquire()
+				instance_id = self.manual_goal_object
+				self.manual_goal_object = None
+				self.object_lock.release()
+				goal = ObjectGoal(instance_id)
+
+			elif self.manual_goal_img is not None:
 				# process goal image
 				self.img_lock.acquire()
 				img_tensor = rgb_image_to_tensor(self.manual_goal_img, resize, normalized=False)
@@ -116,9 +149,9 @@ class GlobalPlanner:
 					desc = to_numpy(self.loc_pipeline.vpr_model(img_tensor.unsqueeze(0).to(self.args.device)))
 
 				obs_node = ImageNode(
-					0, img_tensor, None, desc, 
-					rospy.Time.now().to_sec(), 
-					np.zeros(3), np.array([0, 0, 0, 1]), 
+					0, img_tensor, None, desc,
+					rospy.Time.now().to_sec(),
+					np.zeros(3), np.array([0, 0, 0, 1]),
 					None, resize, None, None
 				)
 				self.loc_pipeline.curr_obs_node = obs_node
@@ -131,55 +164,56 @@ class GlobalPlanner:
 					print('No goal node found, need to wait other goal image')
 					return
 
-				goal_node = self.point_graph.get_node(result['map_id'])
-				print(f'Found goal node: {goal_node.id}')
-				map_id = np.argmin(np.linalg.norm(self.map_node_position - robot_node.trans, axis=1))
-				start_node = self.point_graph.get_node(map_id)
+				# result['map_id'] 就是 poses.txt 的行号,和 litevloc_topo 的关键帧编号同一套编号
+				goal = KeyframeGoal(result['map_id'])
 
-				# shortest path planning
-				tra_distance, tra_path = \
-					dijk_shortest_path(self.point_graph, start_node, goal_node)
-				if tra_distance != float('inf'):
+			if goal is not None:
+				# shortest path planning:起点 = 离机身当前位置最近的关键帧,规划都在 litevloc_topo 里做
+				start_pose = Pose2D(float(robot_node.trans[0]), float(robot_node.trans[1]), 0.0)
+				try:
+					route = self.planner.plan(start_pose, goal)
+				except TopoGraphError as exc:
+					print(f'Fail to plan a path: {exc}')
+					self.planner_status.data = 3
+				else:
+					print(f'Found goal node: {route.kf_path[-1]}')
+					# 复用现成的 RViz 可视化(ros_vis.publish_shortest_path/publish_waypoint 认 Node 对象),
+					# 按关键帧编号(与 point_graph 的节点 id 同一套编号)从 point_graph 取回 Node、串好 next_node 链。
+					tra_path = [self.point_graph.get_node(kf) for kf in route.kf_path]
 					for i in range(len(tra_path) - 1):
-						node = tra_path[i]
-						node_next = tra_path[i + 1]
-						node.add_next_node(node_next)
-					self.subgoals = []
-					for node in tra_path:
-						self.subgoals.append(node)
-					out_str = 'Success to plan a path'
-					out_str += f'Travel distance of the shortest path: {tra_distance:.3f}m\n'
-					out_str += f'Shortest path: ' + ' -> '.join([str(node.id) for node in self.subgoals])
+						tra_path[i].add_next_node(tra_path[i + 1])
+					self.subgoals = tra_path
+					out_str = 'Success to plan a path\n'
+					out_str += f'Travel distance of the shortest path: {route.length_m:.3f}m\n'
+					out_str += 'Shortest path: ' + ' -> '.join([str(node.id) for node in self.subgoals])
 					print(out_str)
 					self.is_goal_init = True
 					self.planner_status.data = 1
 					##### DEBUG(gogojjh): User specify the goal image, only True during Debug
 					if self.args.goal_image and self.args.viz:
 						print('Visualize graph')
-						self.visualize_graph(tra_path, self.args.goal_image)
+						self.visualize_graph(route.kf_path, self.args.goal_image)
 					#####
-				else:
-					print('Fail to plan a path')
-					self.planner_status.data = 3
 
 		# Iteratively publish subgoals
 		if self.is_goal_init:
 			viz_subgoals = self.subgoals.copy()
 
-			subgoal = self.subgoals[0]
-			# Check whetherthe subgoal less than converage range
-			dis_goal, _ = robot_node.compute_distance(subgoal)
-			if dis_goal < self.conv_dist:
-				self.subgoals.pop(0) # Remove the first subgoal
-				print(f'[Global Planning] SubGoal {subgoal.id} arrived')
-			
+			# TopoPlanner.advance 按 conv_dist 推进子目标,内部状态和 self.subgoals 按关键帧编号对齐
+			robot_pose = Pose2D(float(robot_node.trans[0]), float(robot_node.trans[1]), 0.0)
+			subgoal_kf = self.planner.advance(robot_pose, self.conv_dist)
+			while self.subgoals and self.subgoals[0].id != subgoal_kf:
+				arrived = self.subgoals.pop(0) # Remove the first subgoal
+				print(f'[Global Planning] SubGoal {arrived.id} arrived')
+
 			# Reach the goal
-			if len(self.subgoals) == 0:
+			if subgoal_kf is None:
+				self.subgoals = []
 				self.is_goal_init = False
 				# planner status -> Success
 				self.planner_status.data = 2
 				return
-			
+
 			# Publish the closest subgoal as waypoint
 			timestamp = rospy.Time.now()
 			self.publish_path(viz_subgoals, timestamp)
@@ -214,23 +248,21 @@ class GlobalPlanner:
 
 		# Plot all nodes in black
 		ax2 = plt.subplot(2, 1, 2)
-		# all_nodes = [node.trans for node in self.point_graph.nodes.values()]
-		# all_x = [n[0] for n in all_nodes[::2]]
-		# all_y = [n[1] for n in all_nodes[::2]]
+		# all_x = [pose.x for pose in self.topo_graph.poses.values()]
+		# all_y = [pose.y for pose in self.topo_graph.poses.values()]
 		# ax2.scatter(all_x, all_y, c='black', s=15)
 		plt.subplots_adjust(hspace=0.04)
 
-		# Plot all edges in black
-		for node in self.point_graph.nodes.values():
-			for neighbor, weight in node.edges.values():
-				start = node.trans[:2]
-				end = neighbor.trans[:2]
-				ax2.plot([start[0], end[0]], [start[1], end[1]], color='k', linewidth=3.0)
-		
-		# Highlight shortest path in red
+		# Plot all edges in black(节点坐标从 litevloc_topo 的 TopoGraph 取,不再读 point_graph)
+		for kf, pose in self.topo_graph.poses.items():
+			for neighbor_kf, _weight in self.topo_graph.neighbors(kf):
+				neighbor_pose = self.topo_graph.poses[neighbor_kf]
+				ax2.plot([pose.x, neighbor_pose.x], [pose.y, neighbor_pose.y], color='k', linewidth=3.0)
+
+		# Highlight shortest path in red(shortest_path 是关键帧编号序列,如 Route.kf_path)
 		if shortest_path:
-			path_x = [node.trans[0] for node in shortest_path[::2]]
-			path_y = [node.trans[1] for node in shortest_path[::2]]
+			path_x = [self.topo_graph.poses[kf].x for kf in shortest_path[::2]]
+			path_y = [self.topo_graph.poses[kf].y for kf in shortest_path[::2]]
 			ax2.plot(
 				path_x, path_y, color=PALLETE[0], linewidth=8, label='Shortest Path'
 			)
