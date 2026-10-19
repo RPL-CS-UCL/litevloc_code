@@ -4,14 +4,13 @@
 Usage:
 python python/ros_loc_pipeline.py \
 	--map_path /Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
-	--image_size 512 288 \
 	--device cuda --vpr_method cosplace --vpr_backbone ResNet18 --vpr_descriptors_dimension 256  \
-	--img_matcher master --pose_solver pnp  \
+	--img_matcher edm --pose_solver pnp  \
 	--config_pose_solver config/dataset/matterport3d.yaml \
 	--ros_rgb_img_type raw \
-	--global_pos_threshold 10.0 \
-	--min_master_conf_thre 1.5 \
-	--min_solver_inliers_thre 300
+	--global_pos_threshold 10.0
+# image_size / n_kpts / 核验门槛(gv_min_inliers(_nodepth))按 --img_matcher 从
+# config/matcher_profiles.yaml 读(M5-B4);不给就用那份配置,给了就以命令行为准。
 """
 
 # General
@@ -311,6 +310,10 @@ def process_frame(
 	loc.obs_id += 1
 
 	"""Perform global localization via. visual place recognition"""
+	# M5-B4: perform_global_loc's unified verification already runs PnP on the winning
+	# candidate (see LocPipeline.localize_obs); when it produced a usable pose, this frame is
+	# already fully localized and the local-matching step below is skipped for it.
+	just_localized_from_global = False
 	if not loc.has_global_pos:
 		loc_start_time = time.time()
 		result = loc.perform_global_loc(save_viz=False, candidate_subset=current_candidate_subset())
@@ -319,8 +322,18 @@ def process_frame(
 			matched_map_id = result['map_id']
 			loc.has_global_pos = True
 			loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
-			loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
-			rospy.logwarn(f'Found VPR Node in global position: {matched_map_id}')
+			if result.get('T_w_obs') is not None:
+				trans, quat = convert_matrix_to_vec(result['T_w_obs'], 'xyzw')
+				loc.curr_obs_node.set_pose(trans, quat)
+				loc.has_local_pos = True
+				loc.local_fail_count = 0
+				just_localized_from_global = True
+				rospy.logwarn(f'Found VPR Node in global position: {matched_map_id} (位姿已在核验时解出)')
+			else:
+				# 查询没有深度,核验只认出了关键帧、没法解位姿:先用关键帧的位姿当粗先验,
+				# 交给下面的局部定位精化。
+				loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
+				rospy.logwarn(f'Found VPR Node in global position: {matched_map_id}')
 		else:
 			rospy.logwarn('Failed to determine the global position since no VPR results.')
 	else:
@@ -346,7 +359,7 @@ def process_frame(
 			loc.ref_map_node = None
 
 	"""Perform local localization via. image matching"""
-	if loc.has_global_pos:
+	if loc.has_global_pos and not just_localized_from_global:
 		loc_start_time = time.time()
 		result = loc.perform_local_loc()
 		rospy.loginfo(f"Local localization cost: {time.time() - loc_start_time:.3f}s")

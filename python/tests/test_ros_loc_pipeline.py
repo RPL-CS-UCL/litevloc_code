@@ -314,6 +314,57 @@ def test_has_local_pos_cleared_when_global_reset_and_global_loc_fails(mod):
 	assert loc.has_local_pos is False
 
 
+# --- 5b. M5-B4: global verify already solved a pose -> local-matching step is skipped this frame ---
+
+def test_global_loc_with_solved_pose_skips_local_matching(mod):
+	"""perform_global_loc's unified verification (LocPipeline.localize_obs) may already have run
+	PnP on the winning candidate and returned a usable pose in 'T_w_obs'; process_frame must use
+	it directly as this frame's result instead of calling perform_local_loc a second time."""
+	args = _make_args()
+	loc = _make_loc(args)
+	T_w_obs = np.eye(4)
+	T_w_obs[:3, 3] = [1.0, 2.0, 3.0]
+	loc.perform_global_loc = MagicMock(return_value={"succ": True, "map_id": 7, "T_w_obs": T_w_obs})
+	loc.image_graph.get_node = MagicMock(
+		return_value=SimpleNamespace(trans=np.array([9.0, 9.0, 9.0]), quat=np.array([0.0, 0.0, 0.0, 1.0]))
+	)
+
+	rgb_msg = _make_rgb_msg(1, 1)
+	depth_msg = _make_depth_msg(1, 1, mm_value=1000)
+	cam_msg = _make_camera_info_msg(1, 1)
+	mod.process_frame(loc, args, rgb_msg, depth_msg, cam_msg, desc_fn=lambda img: np.zeros(4, dtype=np.float32))
+
+	loc.perform_local_loc.assert_not_called()
+	assert loc.has_global_pos is True
+	assert loc.has_local_pos is True
+	assert loc.local_fail_count == 0
+	set_pose_trans = loc.curr_obs_node.set_pose.call_args[0][0]
+	np.testing.assert_allclose(set_pose_trans, [1.0, 2.0, 3.0])
+
+
+def test_global_loc_without_depth_falls_through_to_local_matching(mod):
+	"""When perform_global_loc only recognized the keyframe but could not solve a pose
+	('T_w_obs' is None, e.g. the query had no depth), the frame must still fall through to
+	perform_local_loc, same as before M5-B4."""
+	args = _make_args()
+	loc = _make_loc(args)
+	loc.perform_global_loc = MagicMock(return_value={"succ": True, "map_id": 7, "T_w_obs": None})
+	loc.image_graph.get_node = MagicMock(
+		return_value=SimpleNamespace(trans=np.array([9.0, 9.0, 9.0]), quat=np.array([0.0, 0.0, 0.0, 1.0]))
+	)
+	loc.perform_local_loc = MagicMock(return_value={"succ": False, "T_w_obs": None})
+
+	rgb_msg = _make_rgb_msg(1, 1)
+	depth_msg = _make_depth_msg(1, 1, mm_value=1000)
+	cam_msg = _make_camera_info_msg(1, 1)
+	mod.process_frame(loc, args, rgb_msg, depth_msg, cam_msg, desc_fn=lambda img: np.zeros(4, dtype=np.float32))
+
+	loc.perform_local_loc.assert_called_once()
+	# 粗先验:关键帧位姿(set_pose 在 perform_local_loc 之前,会被它的结果覆盖,所以看第一次调用)
+	set_pose_trans = loc.curr_obs_node.set_pose.call_args_list[0][0][0]
+	np.testing.assert_allclose(set_pose_trans, [9.0, 9.0, 9.0])
+
+
 # --- 6. desc_fn hook: called with original-size RGB uint8, loc.vpr_model untouched; shape (1, D) ---
 
 def test_desc_fn_hook_used_instead_of_vpr_model(mod):
@@ -695,16 +746,26 @@ class _FakeMatchModel:
 
 class _FakeImgMatcher:
 	"""``num_inliers`` per DB node id, given up front; records which node ids it was asked
-	to verify (so a test can assert "only the subset was checked")."""
+	to verify (so a test can assert "only the subset was checked").
+
+	M5-B4: ``perform_global_loc`` -> ``_verify_geometric`` -> ``localize_obs`` now calls
+	``LocPipeline._verify_one_candidate`` (grid-dedup + PnP/fundamental via
+	``utils.geom_verify``), which needs real K/pose/depth fields these bare fake nodes don't
+	have. These tests are about ``perform_global_loc``'s candidate-subset / early-exit
+	*routing*, not the geometric verification itself (that's ``tests/test_geom_verify.py``), so
+	``_verify_one_candidate`` is replaced wholesale with ``verify()`` below via
+	``pipeline._verify_one_candidate = pipeline.img_matcher.verify``.
+	"""
 
 	def __init__(self, inliers_by_node_id):
 		self._inliers = inliers_by_node_id
 		self.checked_node_ids = []
 
-	def __call__(self, map_rgb_image, _obs_rgb_image):
-		node_id = map_rgb_image.node_id
+	def verify(self, map_node, _obs_node, _has_depth):
+		node_id = map_node.rgb_image.node_id
 		self.checked_node_ids.append(node_id)
-		return {"num_inliers": self._inliers.get(node_id, 0)}
+		inliers = self._inliers.get(node_id, 0)
+		return inliers, None, {"num_inliers": inliers}
 
 
 def _make_real_loc_pipeline(loc_pipeline_mod, *, ranking, inliers_by_node_id, num_db=5):
@@ -713,7 +774,9 @@ def _make_real_loc_pipeline(loc_pipeline_mod, *, ranking, inliers_by_node_id, nu
 	pipeline = loc_pipeline_mod.LocPipeline.__new__(loc_pipeline_mod.LocPipeline)
 	pipeline.DB_Node_IDS = list(range(num_db))
 	pipeline.DB_DESCRIPTORS = np.zeros((num_db, 4), dtype=np.float32)
-	pipeline.args = SimpleNamespace(vpr_descriptors_dimension=4)
+	# gv_min_inliers(_nodepth): M5-B4 统一核验门槛,这里设成跟旧的 GV_SCORE_THRESHOLD(100)一样,
+	# 让 inliers_by_node_id 里原来按 100 设计的数值不用改。
+	pipeline.args = SimpleNamespace(vpr_descriptors_dimension=4, gv_min_inliers=100, gv_min_inliers_nodepth=100)
 	pipeline.curr_obs_node = SimpleNamespace(
 		get_descriptor=lambda: np.zeros((1, 4), dtype=np.float32),
 		rgb_img_name="obs.jpg", id="obs", rgb_image="obs_rgb",
@@ -726,37 +789,229 @@ def _make_real_loc_pipeline(loc_pipeline_mod, *, ranking, inliers_by_node_id, nu
 	}
 	pipeline.image_graph = SimpleNamespace(get_node=lambda node_id: nodes[node_id])
 	pipeline.img_matcher = _FakeImgMatcher(inliers_by_node_id)
+	pipeline._verify_one_candidate = pipeline.img_matcher.verify
 	return pipeline
 
 
 def test_perform_global_loc_candidate_subset_verifies_only_the_subset(loc_pipeline_mod):
-	"""有先验且子集里能过:只核验子集里的候选,不碰子集外的(即便它们排名更靠前)。"""
+	"""有先验且子集里能过:只核验子集里的候选,不碰子集外的(即便它们排名更靠前)。
+
+	M5-B4:核验改成"排名靠前的候选先核验,第一个核验分数过门槛就停"(early_exit=True,新默认
+	行为),所以子集里排第一的 kf3 核验一过(150>=100)就直接停了,kf4 不会再被核验。
+	"""
 	# 全量重排后最像的是 kf2 / kf0 / kf1,但先验说大概率在 kf3 / kf4 附近,且 kf3 核验能过。
 	pipeline = _make_real_loc_pipeline(
 		loc_pipeline_mod, ranking=[2, 0, 1, 3, 4], inliers_by_node_id={2: 200, 3: 150}
 	)
 	result = pipeline.perform_global_loc(candidate_subset={3, 4})
-	assert result == {"succ": True, "map_id": 3}
-	assert sorted(pipeline.img_matcher.checked_node_ids) == [3, 4]  # kf0/kf1/kf2 没被核验过
+	assert result == {"succ": True, "map_id": 3, "T_w_obs": None}
+	assert pipeline.img_matcher.checked_node_ids == [3]  # kf0/kf1/kf2/kf4 没被核验过(早停)
 
 
 def test_perform_global_loc_candidate_subset_falls_back_to_full_map_when_it_fails(loc_pipeline_mod):
-	"""子集里一个都核验不过:退回全图做一次原流程,照样能找到正确的那个。"""
+	"""子集里一个都核验不过:退回全图做一次,找到正确的那个(early_exit=True:子集两个都核验
+	不过没有提前停——早停只在核验*通过*时触发;退回全图后排第一的 kf2 一核验就过,立刻停)。"""
 	pipeline = _make_real_loc_pipeline(
 		loc_pipeline_mod, ranking=[2, 0, 1, 3, 4], inliers_by_node_id={2: 200}
 	)
 	result = pipeline.perform_global_loc(candidate_subset={0, 1})  # 子集里两个都核验不过(0 分)
-	assert result == {"succ": True, "map_id": 2}
-	# 子集先核验过(0、1),退回全图后把原本 Top-5(2、0、1、3、4)按原流程又核验一遍。
-	assert pipeline.img_matcher.checked_node_ids.count(2) == 1
-	assert set(pipeline.img_matcher.checked_node_ids) >= {0, 1, 2}
+	assert result == {"succ": True, "map_id": 2, "T_w_obs": None}
+	# 子集(0、1)两个都核验过(都没过),退回全图后排第一的 kf2 一核验过就停,3/4 不会再被核验。
+	assert pipeline.img_matcher.checked_node_ids == [0, 1, 2]
 
 
 def test_perform_global_loc_candidate_subset_none_keeps_original_flow(loc_pipeline_mod):
-	"""candidate_subset 不给(默认 None):行为跟加这个参数之前完全一样,只核验 Top-5。"""
+	"""candidate_subset 不给(默认 None):跟加这个参数之前比,少了子集先核验这一段,但
+	"排名靠前的先核验、过了就停"(early_exit=True)还是会让 kf2(排第一)一核验过就停。"""
 	pipeline = _make_real_loc_pipeline(
 		loc_pipeline_mod, ranking=[2, 0, 1, 3, 4], inliers_by_node_id={2: 200}
 	)
 	result = pipeline.perform_global_loc()
-	assert result == {"succ": True, "map_id": 2}
-	assert sorted(pipeline.img_matcher.checked_node_ids) == [0, 1, 2, 3, 4]
+	assert result == {"succ": True, "map_id": 2, "T_w_obs": None}
+	assert pipeline.img_matcher.checked_node_ids == [2]
+
+
+# ---------- M5-B4: LocPipeline.localize_obs (统一核验:网格去重 + PnP / 基础矩阵) ----------
+#
+# These use the *real* _verify_one_candidate/localize_obs/geom_verify code path (not a stand-in
+# like _FakeImgMatcher above), with a tiny synthetic pinhole-camera scene -- same idea as
+# tests/test_geom_verify.py's _synthetic_pure_translation, just set up here so the fake
+# ``img_matcher`` can return per-candidate match results through LocPipeline.perform_image_matching.
+
+def _pinhole_K() -> np.ndarray:
+	return np.array([[300.0, 0.0, 320.0], [0.0, 300.0, 240.0], [0.0, 0.0, 1.0]])
+
+
+def _project_points(K: np.ndarray, T_world_cam: np.ndarray, pts_world: np.ndarray):
+	T_cam_world = np.linalg.inv(T_world_cam)
+	pts_h = np.hstack([pts_world, np.ones((pts_world.shape[0], 1))])
+	pts_cam = (T_cam_world @ pts_h.T).T[:, :3]
+	uv_h = (K @ pts_cam.T).T
+	return uv_h[:, :2] / uv_h[:, 2:3], pts_cam[:, 2]
+
+
+def _make_node(trans, quat=(0.0, 0.0, 0.0, 1.0), img_size=(640, 480), node_id=0, depth_image=None):
+	return SimpleNamespace(
+		id=node_id, trans=np.asarray(trans, dtype=np.float64), quat=np.asarray(quat, dtype=np.float64),
+		raw_K=_pinhole_K(), raw_img_size=img_size, img_size=img_size,
+		rgb_image=f"rgb_{node_id}", rgb_img_name=f"kf_{node_id}.jpg", depth_image=depth_image,
+	)
+
+
+def _make_bare_pipeline(loc_pipeline_mod, img_matcher, gv_min_inliers=50, gv_min_inliers_nodepth=50):
+	"""Bare ``LocPipeline`` with a real PnP solver and a fake ``img_matcher``, enough to exercise
+	the real ``_verify_one_candidate``/``localize_obs`` code path end to end."""
+	from utils.pose_solver import get_solver
+	from rpe_default import cfg as _cfg
+
+	pipeline = loc_pipeline_mod.LocPipeline.__new__(loc_pipeline_mod.LocPipeline)
+	pipeline.args = SimpleNamespace(
+		gv_min_inliers=gv_min_inliers, gv_min_inliers_nodepth=gv_min_inliers_nodepth,
+		save_img_matcher=False,
+	)
+	pipeline.img_matcher = img_matcher
+	cfg_copy = _cfg.clone()
+	cfg_copy.PNP.RANSAC_ITER = 1000
+	cfg_copy.PNP.REPROJECTION_INLIER_THRESHOLD = 3
+	cfg_copy.PNP.CONFIDENCE = 0.9999
+	pipeline.pose_solver = get_solver("pnp", cfg_copy)
+	pipeline.log_dir = "/tmp"
+	return pipeline
+
+
+def _inside_frame(kpts: np.ndarray, w=640, h=480) -> np.ndarray:
+	return (kpts[:, 0] >= 0) & (kpts[:, 0] < w) & (kpts[:, 1] >= 0) & (kpts[:, 1] < h)
+
+
+def test_localize_obs_global_early_exit_stops_after_second_candidate(loc_pipeline_mod):
+	"""候选第 2 个核验分数就过门槛:早停,只跑 2 次匹配(第 3 个候选不会被核验到)。"""
+	K = _pinhole_K()
+	T_world_map1 = np.eye(4)
+	T_world_map1[:3, 3] = [0.5, 0.0, 0.0]
+	T_world_query = np.eye(4)  # 查询相机跟候选 11 对得上
+
+	rng = np.random.default_rng(0)
+	pts_world = np.column_stack([
+		rng.uniform(-1.0, 1.0, 150), rng.uniform(-0.8, 0.8, 150), rng.uniform(2.0, 5.0, 150),
+	])
+	kpts_map1, _ = _project_points(K, T_world_map1, pts_world)
+	kpts_query, depth_vals = _project_points(K, T_world_query, pts_world)
+	keep = _inside_frame(kpts_map1) & _inside_frame(kpts_query)
+	kpts_map1, kpts_query, depth_vals = kpts_map1[keep], kpts_query[keep], depth_vals[keep]
+	assert len(kpts_map1) >= 60
+
+	depth_img = np.zeros((480, 640), dtype=np.float64)
+	px = np.clip(kpts_query[:, 0].astype(np.int32), 0, 639)
+	py = np.clip(kpts_query[:, 1].astype(np.int32), 0, 479)
+	depth_img[py, px] = depth_vals
+
+	candidates = {
+		10: _make_node(trans=[0, 0, 0], node_id=10),  # 对不上:匹配点故意太少
+		11: _make_node(trans=T_world_map1[:3, 3], node_id=11),  # 对得上
+		99: _make_node(trans=[100, 100, 100], node_id=99),  # 不该被核验到
+	}
+	call_log = []
+
+	def fake_matcher(map_rgb, _obs_rgb):
+		call_log.append(map_rgb)
+		if map_rgb == "rgb_10":
+			return {"num_inliers": 2, "inlier_kpts0": np.zeros((2, 2)), "inlier_kpts1": np.zeros((2, 2))}
+		if map_rgb == "rgb_11":
+			return {"num_inliers": len(kpts_map1), "inlier_kpts0": kpts_map1, "inlier_kpts1": kpts_query}
+		raise AssertionError(f"候选 {map_rgb} 不该被核验(早停应该已经停了)")
+
+	pipeline = _make_bare_pipeline(loc_pipeline_mod, fake_matcher, gv_min_inliers=50)
+	pipeline.image_graph = SimpleNamespace(get_node=lambda nid: candidates[nid])
+	depth_tensor = torch.from_numpy(depth_img).unsqueeze(0)
+	obs_node = _make_node(trans=T_world_query[:3, 3], node_id="obs", depth_image=depth_tensor)
+	obs_node.rgb_img_name = "query.jpg"
+
+	result = pipeline.localize_obs(obs_node, mode="global", prior={"candidate_ids": [10, 11, 99]})
+
+	assert call_log == ["rgb_10", "rgb_11"]  # 第 3 个候选没被核验到
+	assert result.succ is True
+	assert result.stage == "global"
+	assert result.map_id == 11
+	assert result.n_matches_run == 2
+	assert result.T_world_obs is not None
+	t_err = np.linalg.norm(result.T_world_obs[:3, 3] - T_world_query[:3, 3])
+	assert t_err < 0.05
+
+
+def test_localize_obs_global_without_depth_uses_fundamental_and_no_pose(loc_pipeline_mod):
+	"""查询没有深度(照片目标):退化成基础矩阵核验,只认出关键帧,不解位姿。"""
+	K = _pinhole_K()
+	T_world_map = np.eye(4)
+	T_world_query = np.eye(4)
+	T_world_query[:3, 3] = [0.3, 0.05, 0.0]
+
+	rng = np.random.default_rng(1)
+	pts_world = np.column_stack([
+		rng.uniform(-1.0, 1.0, 150), rng.uniform(-0.8, 0.8, 150), rng.uniform(2.0, 5.0, 150),
+	])
+	kpts_map, _ = _project_points(K, T_world_map, pts_world)
+	kpts_query, _ = _project_points(K, T_world_query, pts_world)
+	keep = _inside_frame(kpts_map) & _inside_frame(kpts_query)
+	kpts_map, kpts_query = kpts_map[keep], kpts_query[keep]
+	assert len(kpts_map) >= 60
+
+	def fake_matcher(_map_rgb, _obs_rgb):
+		return {"num_inliers": len(kpts_map), "inlier_kpts0": kpts_map, "inlier_kpts1": kpts_query}
+
+	pipeline = _make_bare_pipeline(loc_pipeline_mod, fake_matcher, gv_min_inliers_nodepth=50)
+	pipeline.image_graph = SimpleNamespace(get_node=lambda nid: _make_node(trans=[0, 0, 0], node_id=nid))
+	obs_node = _make_node(trans=T_world_query[:3, 3], node_id="obs", depth_image=None)
+	obs_node.rgb_img_name = "query.jpg"
+
+	result = pipeline.localize_obs(obs_node, mode="global", prior={"candidate_ids": [5]})
+
+	assert result.succ is True
+	assert result.map_id == 5
+	assert result.T_world_obs is None  # 没深度,只认出关键帧,不解位姿
+	assert result.verify_inliers >= 50
+
+
+def test_localize_obs_local_mode_uses_given_ref_node_and_sets_matched_kpts(loc_pipeline_mod):
+	"""mode="local":给定 ref_map_node 就不调 search_keyframe_from_graph;核验通过时把匹配点记到
+	两个节点上(给 publish_message() 的可视化用),solver 门槛统一用 gv_min_inliers。"""
+	K = _pinhole_K()
+	T_world_map = np.eye(4)
+	T_world_query = np.eye(4)
+	T_world_query[:3, 3] = [0.2, 0.0, 0.0]
+
+	rng = np.random.default_rng(2)
+	pts_world = np.column_stack([
+		rng.uniform(-1.0, 1.0, 150), rng.uniform(-0.8, 0.8, 150), rng.uniform(2.0, 5.0, 150),
+	])
+	kpts_map, _ = _project_points(K, T_world_map, pts_world)
+	kpts_query, depth_vals = _project_points(K, T_world_query, pts_world)
+	keep = _inside_frame(kpts_map) & _inside_frame(kpts_query)
+	kpts_map, kpts_query, depth_vals = kpts_map[keep], kpts_query[keep], depth_vals[keep]
+	assert len(kpts_map) >= 60
+
+	depth_img = np.zeros((480, 640), dtype=np.float64)
+	px = np.clip(kpts_query[:, 0].astype(np.int32), 0, 639)
+	py = np.clip(kpts_query[:, 1].astype(np.int32), 0, 479)
+	depth_img[py, px] = depth_vals
+
+	def fake_matcher(_map_rgb, _obs_rgb):
+		return {"num_inliers": len(kpts_map), "inlier_kpts0": kpts_map, "inlier_kpts1": kpts_query}
+
+	pipeline = _make_bare_pipeline(loc_pipeline_mod, fake_matcher, gv_min_inliers=50)
+	ref_node = _make_node(trans=[0, 0, 0], node_id=42)
+	ref_node.set_matched_kpts = MagicMock()
+	depth_tensor = torch.from_numpy(depth_img).unsqueeze(0)
+	obs_node = _make_node(trans=T_world_query[:3, 3], node_id="obs", depth_image=depth_tensor)
+	obs_node.rgb_img_name = "query.jpg"
+	obs_node.set_matched_kpts = MagicMock()
+	pipeline.search_keyframe_from_graph = MagicMock(side_effect=AssertionError("ref_map_node 已给定,不该再去搜"))
+
+	result = pipeline.localize_obs(obs_node, mode="local", prior={"ref_map_node": ref_node})
+
+	pipeline.search_keyframe_from_graph.assert_not_called()
+	assert result.succ is True
+	assert result.stage == "local"
+	assert result.map_id == 42
+	assert pipeline.ref_map_node is ref_node
+	ref_node.set_matched_kpts.assert_called_once()
+	obs_node.set_matched_kpts.assert_called_once()

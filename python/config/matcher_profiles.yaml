@@ -1,0 +1,64 @@
+# 按图像匹配器(--img_matcher)分组的参数(M5-B4)。
+#
+# 换匹配器只改 --img_matcher 这一个名字,其余参数(图像缩放尺寸、关键点上限、核验门槛、给
+# vismatch.get_matcher() 的额外构造参数)从这里读。命令行上显式传的同名参数优先于这里的值
+# (见 utils/utils_pipeline.py 的 fill_args_from_matcher_profile)。
+#
+# 字段说明:
+#   image_size: [宽, 高],喂给匹配器之前图像缩放到的尺寸。
+#   n_kpts: 稀疏匹配器(xfeat 等)关键点上限;稠密匹配器(master/edm/eloftr)忽略这个值。
+#   gv_min_inliers: 统一核验门槛(查询图按 16px 网格去重后,用查询深度做 PnP-RANSAC 的内点数,
+#     见 utils/geom_verify.py)。每个匹配器一个数——不同匹配器出来的匹配密度不一样,数字不能共用。
+#     这里是占位值,待主会话按 env0 前一半实测数据,按"核验通过里错 > 0.5 m / 5° 的 <= 2%"定出来再回填。
+#   gv_min_inliers_nodepth: 查询没有深度时(比如照片目标)的核验门槛,用基础矩阵内点数
+#     (verify_fundamental)打分,跟 gv_min_inliers 不是同一把尺子,不能共用同一个数。同样是占位值。
+#   matcher_kwargs: 原样透传给 vismatch.get_matcher(matcher_name, ..., **matcher_kwargs)。
+
+edm:
+  image_size: [512, 384]  # EDM 要求输入边长能被 32 整除(vismatch/im_models/edm.py: divisible_size=32);
+                          # 512 384 两边都满足,确认过
+  n_kpts: 2048
+  gv_min_inliers: 49  # 10-20 在 env0 前一半(397 对)定:核验通过里错 > 0.5 m / 5° 的 ≤ 2%(实为 0%);后一半实测误接受 3.2%(93 对错 3 对)
+  gv_min_inliers_nodepth: 30  # 占位:没有无深度(照片目标)的标定数据,沿用旧门槛量级,待照片目标实测再定
+  matcher_kwargs:
+    # EDM 不假设场景是一个平面,自己也没有内部 RANSAC 筛选的意图;跳过单应 RANSAC 省时间,
+    # 核验全部交给统一的 PnP / 基础矩阵核验(utils/geom_verify.py)。
+    ransac_model: none
+
+master:
+  image_size: [512, 384]
+  n_kpts: 2048
+  gv_min_inliers: 170  # 10-20 在 env0 前一半定(前一半误接受 1.2%,后一半 7.6%)
+  gv_min_inliers_nodepth: 100  # 占位:没有无深度(照片目标)的标定数据,沿用旧门槛量级,待照片目标实测再定
+  matcher_kwargs:
+    min_conf_thr: 1.5  # MASt3R 系列的置信度过滤门槛(原 --min_master_conf_thre 默认值)
+
+master-fp16:
+  image_size: [512, 384]
+  n_kpts: 2048
+  gv_min_inliers: 100  # 占位(未标定;这个匹配器 B3 后不在默认链路上)
+  gv_min_inliers_nodepth: 100  # 占位:没有无深度(照片目标)的标定数据,沿用旧门槛量级,待照片目标实测再定
+  matcher_kwargs:
+    min_conf_thr: 1.5
+
+master-fast:
+  image_size: [512, 384]
+  n_kpts: 2048
+  gv_min_inliers: 241  # 10-20 在 env0 前一半定(前一半误接受 1.9%,后一半 2.6%)
+  gv_min_inliers_nodepth: 100  # 占位:没有无深度(照片目标)的标定数据,沿用旧门槛量级,待照片目标实测再定
+  matcher_kwargs:
+    min_conf_thr: 1.5
+
+eloftr:
+  image_size: [512, 384]  # 同样要求能被 32 整除(efficient_loftr.py: divisible_size=32)
+  n_kpts: 2048
+  gv_min_inliers: 100  # 占位(未标定;这个匹配器 B3 后不在默认链路上)
+  gv_min_inliers_nodepth: 100  # 占位:没有无深度(照片目标)的标定数据,沿用旧门槛量级,待照片目标实测再定
+  matcher_kwargs: {}
+
+xfeat:
+  image_size: [512, 384]
+  n_kpts: 2048
+  gv_min_inliers: 100  # 占位(未标定;这个匹配器 B3 后不在默认链路上)
+  gv_min_inliers_nodepth: 100  # 占位:没有无深度(照片目标)的标定数据,沿用旧门槛量级,待照片目标实测再定
+  matcher_kwargs: {}

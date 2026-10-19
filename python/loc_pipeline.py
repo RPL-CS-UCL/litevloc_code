@@ -1,16 +1,18 @@
 #! /usr/bin/env python
 
 """
-Usage: 
+Usage:
 python python/loc_pipeline.py \
 	--map_path /Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
 	--query_data_path /Rocket_ssd/dataset/data_litevloc/vnav_eval/matterport3d/s17DRP5sb8fy/merge_finalmap \
-	--image_size 512 288 --device=cuda \
+	--device=cuda \
 	--vpr_method cosplace --vpr_backbone=ResNet18 --vpr_descriptors_dimension=256 \
-	--img_matcher master \
+	--img_matcher edm \
 	--pose_solver pnp --config_pose_solver python/config/dataset/matterport3d.yaml \
-	--global_pos_threshold 10.0 --min_solver_inliers_thre 100 \
+	--global_pos_threshold 10.0 \
 	--save_img_matcher --viz --num_preds_to_save 3
+# image_size / n_kpts / 核验门槛(gv_min_inliers(_nodepth))按 --img_matcher 从
+# config/matcher_profiles.yaml 读(M5-B4);不给就用那份配置,给了就以命令行为准。
 
 Usage: 
 rosbag record -O /Titan/dataset/data_litevloc/anymal_lab_upstair_20240722_0/vloc.bag \
@@ -26,6 +28,8 @@ import numpy as np
 import time
 import cv2
 import logging
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set
 import rospy
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry, Path
@@ -36,7 +40,6 @@ import tf2_ros
 import matplotlib
 
 from utils.utils_pipeline import parse_arguments, setup_log_environment
-from utils.utils_pipeline import GV_SCORE_THRESHOLD
 from utils.utils_geom import convert_vec_to_matrix, convert_matrix_to_vec, compute_pose_error, convert_pose_inv
 from utils.utils_vpr_method import initialize_vpr_model, initialize_match_model, perform_knn_search, compute_euclidean_dis
 from utils.utils_vpr_method import save_visualization as save_vpr_visualization
@@ -45,9 +48,39 @@ from utils.utils_image_matching_method import save_visualization as save_img_mat
 from utils.utils_image import load_rgb_image, load_depth_image, to_numpy
 from utils.utils_ros import ros_msg, ros_vis
 from utils.pose_solver import get_solver
+from utils import geom_verify
 from rpe_default import cfg
 from image_graph import ImageGraphLoader as GraphLoader
 from image_node import ImageNode
+
+
+@dataclass
+class LocResult:
+	"""`LocPipeline.localize_obs()` 的返回值(M5-B4:在线节点 `process_frame`、`loc_pipeline.py`
+	自带的无 ROS 测试循环 `perform_localization`、离线重跑 `run_vloc_offline_rerun.py` 原来各自抄
+	一份"核验候选 + 解位姿"的逻辑,现在只有这一份——`run_vloc_offline_rerun.py` 不能 import 这个
+	模块(见 utils/geom_verify.py 的 verify_match_result 文档字符串),改成直接调 geom_verify 里
+	同一份核验函数,跟这里用的是同一个实现,不是又抄了一份)。
+
+	succ: 这一轮定位成功与否(succ=True 时 map_id/T_world_obs 才有意义;mode="global" 且查询没
+		深度时,succ=True 只表示"认出了是哪个关键帧",T_world_obs 仍是 None)。
+	stage: "global" / "local" / "none"(没找到/没解出来)。
+	map_id: 命中的地图关键帧 id(DB_Node_IDS 里的值),没命中是 None。
+	T_world_obs: 解出的查询相机在世界(地图)系下的位姿(4x4),没深度或解不出来时是 None。
+	verify_inliers: 统一核验分数(网格去重后的 PnP-RANSAC 内点数,没深度时是基础矩阵内点数)。
+	n_matches_run: 实际跑了几次图像匹配(global 模式下早停时 < 候选数)。
+	t_vpr_s / t_verify_s / t_local_s: 各段耗时(秒);不适用的段落留 0.0。
+	"""
+
+	succ: bool
+	stage: str
+	map_id: Optional[int]
+	T_world_obs: Optional[np.ndarray]
+	verify_inliers: int
+	n_matches_run: int
+	t_vpr_s: float
+	t_verify_s: float
+	t_local_s: float
 
 # This is to be able to use matplotlib also without a GUI
 if not hasattr(sys, "ps1"):	matplotlib.use("Agg")
@@ -90,9 +123,13 @@ class LocPipeline:
 		rospy.loginfo(f"Initialize VPR Match Model: {self.args.vpr_match_model}")
 
 	def init_img_matcher(self):
-		self.img_matcher = initialize_img_matcher(self.args.img_matcher, self.args.device, self.args.n_kpts)
-		if hasattr(self.img_matcher, "min_conf_thr"):  # MASt3R 系列(含各提速变体)都有这个置信度过滤,按属性判、不列名字
-			self.img_matcher.min_conf_thr = self.args.min_master_conf_thre
+		# M5-B4:按 --img_matcher 从 config/matcher_profiles.yaml 查到的额外构造参数(比如 master
+		# 系列的 min_conf_thr、edm 的 ransac_model)在构造时就传给 get_matcher,不再构造完事后
+		# 按 hasattr(img_matcher, "min_conf_thr") 判断、事后赋值。
+		self.img_matcher = initialize_img_matcher(
+			self.args.img_matcher, self.args.device, self.args.n_kpts,
+			matcher_kwargs=getattr(self.args, "matcher_kwargs", None),
+		)
 		rospy.loginfo(f"Initialize Image matcher: {self.args.img_matcher}")
 		
 	def init_pose_solver(self):
@@ -191,7 +228,7 @@ class LocPipeline:
 		
 		return node_min_dis
 
-	def perform_global_loc(self, save_viz=False, candidate_subset=None):
+	def perform_global_loc(self, save_viz: bool = False, candidate_subset: Optional[Set[int]] = None) -> Dict[str, Any]:
 		"""
 		Args:
 			save_viz: save VPR top-K visualization (unchanged).
@@ -259,78 +296,140 @@ class LocPipeline:
 
 		return {'succ': False, 'map_id': None}
 
-	def _verify_geometric(self, recall_preds):
-		"""Geometric verification over a ranked list of DB indices; returns the best match if it
-		clears GV_SCORE_THRESHOLD (or the single candidate when there's no image matcher)."""
-		best_map_node_id, max_num_inliers = self.DB_Node_IDS[recall_preds[0]], 0
-		if self.img_matcher is not None:
-			for pred in recall_preds:
-				map_node_id = self.DB_Node_IDS[pred]
-				map_node = self.image_graph.get_node(map_node_id)
-				result = self.img_matcher(map_node.rgb_image, self.curr_obs_node.rgb_image)
-				num_inliers = result['num_inliers']
-				if num_inliers > max_num_inliers:
-					best_map_node_id, max_num_inliers = map_node_id, num_inliers
+	def _verify_one_candidate(self, map_node, obs_node, has_depth: bool):
+		"""跟一个候选关键帧做一次图像匹配 + 统一核验(M5-B4:utils.geom_verify.verify_match_result)。
 
-				out_str  = f"[GV] Query {self.curr_obs_node.rgb_img_name} - DB {map_node.rgb_img_name}\n"
-				out_str += f"Number of matched kpts: {num_inliers}"
-				rospy.loginfo(out_str)
+		Returns:
+			(verify_inliers, T_world_obs, match_result):统一核验分数;解出的位姿(没深度或
+			PnP/基础矩阵没解出来时为 None);匹配器的原始输出(调用方用来设 matched_kpts 做可视化、
+			或者取 'num_inliers' 记日志)。
+		"""
+		match_result = self.perform_image_matching(self.img_matcher, map_node, obs_node)
+		depth_np = to_numpy(obs_node.depth_image.squeeze(0)) if has_depth else None
+		T_w_map = convert_vec_to_matrix(map_node.trans, map_node.quat, 'xyzw')
+		result = geom_verify.verify_match_result(
+			match_result,
+			map_node.raw_K, map_node.raw_img_size, map_node.img_size,
+			obs_node.raw_K, obs_node.raw_img_size, obs_node.img_size,
+			T_w_map, depth_np, self.pose_solver,
+		)
+		return result.inliers, result.T_world_query, match_result
 
-			rospy.loginfo(f"[Global Loc] Map node: {best_map_node_id}")
-			if max_num_inliers >= GV_SCORE_THRESHOLD:
-				return {'succ': True, 'map_id': best_map_node_id}
-		else:
-			return {'succ': True, 'map_id': best_map_node_id}
+	def localize_obs(self, obs_node, mode: str, prior: Optional[Dict[str, Any]] = None) -> LocResult:
+		"""M5-B4 统一的单帧定位引擎:候选核验(mode="global")或局部精化(mode="local"),核验口径
+		统一走 utils.geom_verify(查询图网格去重 + PnP-RANSAC 内点数;查询没深度时退化成基础矩阵
+		内点数,只认出关键帧、不解位姿)。不 import rospy,日志走标准库 logging——这样
+		run_vloc_offline_rerun.py(运行环境剔除了 ROS,不能 import 这个模块)能通过
+		utils.geom_verify.verify_match_result 跑同一份核验逻辑,不需要再抄一份。
 
-		return {'succ': False, 'map_id': None}
+		Args:
+			obs_node: 当前观测(ImageNode);obs_node.depth_image is None 时走无深度分支。
+			mode: "global" 或 "local"。
+				"global":prior 必须给 "candidate_ids"(VPR 按相似度排好序的 DB node id 列表,
+					不是 DB_DESCRIPTORS 的行号)。可选 "early_exit"(默认 True:遇到第一个核验分数
+					达标的候选就停,直接用它核验时解出的位姿当结果,不用再跑一次局部匹配;False:
+					全部候选跑完,取分数最高的那个——这是在线节点改这个默认值之前的行为,
+					离线重跑 --gv_early_exit 0 用来跟新默认值对照)、"t_vpr_s"(只填进返回结果,
+					不参与计算)。
+				"local":prior 可选 "ref_map_node"(已经选好的参考关键帧);不给就调
+					self.search_keyframe_from_graph(obs_node) 自己选(跟原 perform_local_loc 一样:
+					"最近关键帧 + 邻居里挑描述子最近的")。
 
-	def perform_local_loc(self):
-		result_fail = {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
+		Returns:
+			LocResult。stage="none" 表示没找到候选、或核验分数没过 gv_min_inliers 门槛。
+		"""
+		prior = prior or {}
+		has_depth = getattr(obs_node, "depth_image", None) is not None
+		gv_threshold = self.args.gv_min_inliers if has_depth else self.args.gv_min_inliers_nodepth
 
-		matching_start_time = time.time()
-		ref_node = self.search_keyframe_from_graph(self.curr_obs_node)
-		if ref_node is None: return result_fail
-		
-		self.ref_map_node = ref_node
-		match_result = self.perform_image_matching(self.img_matcher, self.ref_map_node, self.curr_obs_node)
-		mkpts0, mkpts1 = (match_result["inlier_kpts0"], match_result["inlier_kpts1"])
-		# Recover raw position of ref_map_node (camera1)
-		w_ratio = self.ref_map_node.raw_img_size[0] / self.ref_map_node.img_size[0] 
-		h_ratio = self.ref_map_node.raw_img_size[1] / self.ref_map_node.img_size[1]
-		mkpts0_raw = mkpts0 * [w_ratio, h_ratio]
-		# Recover raw position of curr_obs_node (camera2)
-		w_ratio = self.curr_obs_node.raw_img_size[0] / self.curr_obs_node.img_size[0] 
-		h_ratio = self.curr_obs_node.raw_img_size[1] / self.curr_obs_node.img_size[1]
-		mkpts1_raw = mkpts1 * [w_ratio, h_ratio]
-		
-		num_inliers = match_result["num_inliers"]
-		self.ref_map_node.set_matched_kpts(mkpts0, num_inliers)
-		self.curr_obs_node.set_matched_kpts(mkpts1, num_inliers)
-		rospy.loginfo(f'Number of matched kpts inliers: {num_inliers}')
-		rospy.loginfo(f"Image matching costs: {time.time() - matching_start_time: .3f}s")
-
-		try:
-			depth_img1 = to_numpy(self.curr_obs_node.depth_image.squeeze(0))
-			R, t, num_solver_inliers = self.pose_solver.estimate_pose(
-				mkpts1_raw, mkpts0_raw,
-				self.curr_obs_node.raw_K, 
-				self.ref_map_node.raw_K,
-				depth_img1, None
+		if mode == "global":
+			candidate_ids: List[int] = list(prior.get("candidate_ids") or [])
+			early_exit: bool = prior.get("early_exit", True)
+			t_start = time.time()
+			best_inliers, best_map_id, best_T = 0, None, None
+			n_matches = 0
+			for cand_id in candidate_ids:
+				map_node = self.image_graph.get_node(cand_id)
+				inliers, T_world_obs, _match_result = self._verify_one_candidate(map_node, obs_node, has_depth)
+				n_matches += 1
+				logging.info(
+					f"[GV] Query {obs_node.rgb_img_name} - DB {map_node.rgb_img_name} verify_inliers={inliers}"
+				)
+				if inliers > best_inliers:
+					best_inliers, best_map_id, best_T = inliers, cand_id, T_world_obs
+				if early_exit and inliers >= gv_threshold:
+					break
+			t_verify_s = time.time() - t_start
+			succ = best_map_id is not None and best_inliers >= gv_threshold
+			logging.info(f"[Global Loc] best map node: {best_map_id} verify_inliers={best_inliers}")
+			return LocResult(
+				succ=succ, stage=("global" if succ else "none"),
+				map_id=(best_map_id if succ else None),
+				T_world_obs=(best_T if succ else None),
+				verify_inliers=best_inliers, n_matches_run=n_matches,
+				t_vpr_s=float(prior.get("t_vpr_s", 0.0)), t_verify_s=t_verify_s, t_local_s=0.0,
 			)
-			if num_solver_inliers < self.args.min_solver_inliers_thre:
-				rospy.logwarn(f'[Fail] No sufficient number {num_solver_inliers} solver inliers')
-				return result_fail
-			else:
-				T_mapnode_obs = np.eye(4)
-				T_mapnode_obs[:3, :3], T_mapnode_obs[:3, 3] = R, t.reshape(3)
-				T_w_mapnode = convert_vec_to_matrix(self.ref_map_node.trans, self.ref_map_node.quat, 'xyzw')
-				T_w_obs = T_w_mapnode @ T_mapnode_obs
-				rospy.logwarn(f'[Succ] sufficient number {num_solver_inliers} solver inliers')
-				return {'succ': True, 'T_w_obs': T_w_obs, 'solver_inliers': num_solver_inliers}
-		
-		except Exception as e:
-			rospy.logwarn(f'[Fail] to estimate pose with error:', e)
-			return result_fail
+
+		if mode == "local":
+			t_start = time.time()
+			ref_map_node = prior.get("ref_map_node")
+			if ref_map_node is None:
+				ref_map_node = self.search_keyframe_from_graph(obs_node)
+			if ref_map_node is None:
+				return LocResult(False, "none", None, None, 0, 0, 0.0, 0.0, time.time() - t_start)
+
+			self.ref_map_node = ref_map_node
+			inliers, T_world_obs, match_result = self._verify_one_candidate(ref_map_node, obs_node, has_depth)
+			# 跟原 perform_local_loc 行为一致:不管核验过没过,都把这次匹配到的点记到两个节点上,
+			# 给 publish_message() 的可视化用(匹配器自己的原始内点,未经网格去重)。
+			num_inliers_raw = match_result["num_inliers"]
+			ref_map_node.set_matched_kpts(match_result["inlier_kpts0"], num_inliers_raw)
+			obs_node.set_matched_kpts(match_result["inlier_kpts1"], num_inliers_raw)
+			logging.info(f"Number of matched kpts inliers: {num_inliers_raw} (统一核验: {inliers})")
+
+			succ = T_world_obs is not None and inliers >= gv_threshold
+			return LocResult(
+				succ=succ, stage=("local" if succ else "none"),
+				map_id=(ref_map_node.id if succ else None),
+				T_world_obs=(T_world_obs if succ else None),
+				verify_inliers=inliers, n_matches_run=1,
+				t_vpr_s=0.0, t_verify_s=0.0, t_local_s=time.time() - t_start,
+			)
+
+		raise ValueError(f"localize_obs: unknown mode {mode!r}")
+
+	def _verify_geometric(self, recall_preds: List[int], early_exit: bool = True) -> Dict[str, Any]:
+		"""对一串 VPR 候选(DB_DESCRIPTORS 行号列表,不是 node id)做统一核验,返回
+		{'succ', 'map_id', 'T_w_obs'}。
+
+		M5-B4:核验逻辑整个转发到 localize_obs(mode="global")——核验分数不再是匹配器自己的单应
+		内点数(GV_SCORE_THRESHOLD),而是网格去重后的 PnP-RANSAC 内点数,门槛是
+		self.args.gv_min_inliers。early_exit=True(默认,新行为,之前在线节点是全部候选跑完取
+		最大值,离线重跑原来默认是遇到第一个就停,现在两边统一成后者):第一个核验分数达标的候选
+		就停,返回值里的 'T_w_obs' 就是那次核验时核验用的查询深度解出来的位姿——不是 None 时,
+		调用方(perform_global_loc 的调用方,即 ros_loc_pipeline.process_frame /
+		loc_pipeline.perform_localization)可以跳过这一帧的局部定位,直接用这个位姿。
+		"""
+		if self.img_matcher is None:
+			# 没配图像匹配器:退化成"VPR 说是哪个就是哪个",不解位姿。
+			return {'succ': True, 'map_id': self.DB_Node_IDS[recall_preds[0]], 'T_w_obs': None}
+
+		candidate_ids = [self.DB_Node_IDS[pred] for pred in recall_preds]
+		result = self.localize_obs(
+			self.curr_obs_node, mode="global",
+			prior={"candidate_ids": candidate_ids, "early_exit": early_exit},
+		)
+		return {'succ': result.succ, 'map_id': result.map_id, 'T_w_obs': result.T_world_obs}
+
+	def perform_local_loc(self) -> Dict[str, Any]:
+		"""M5-B4:整个转发到 localize_obs(mode="local")。返回值的 key 不变(仍是
+		'succ'/'T_w_obs'/'solver_inliers'),调用方(ros_loc_pipeline.process_frame、本文件的
+		perform_localization)不用改;'solver_inliers' 现在是统一核验分数(网格去重后的
+		PnP-RANSAC 内点数),门槛也从 self.args.min_solver_inliers_thre 换成了
+		self.args.gv_min_inliers(跟全局定位核验用同一个门槛,见简报"同一个门槛"的要求)。
+		"""
+		result = self.localize_obs(self.curr_obs_node, mode="local")
+		return {'succ': result.succ, 'T_w_obs': result.T_world_obs, 'solver_inliers': result.verify_inliers}
 
 	def publish_message(self):
 		# Publish Sensor Data
@@ -432,6 +531,10 @@ def perform_localization(loc: LocPipeline, args):
 		loc.curr_obs_node = obs_node
 
 		"""Perform global localization via. visual place recognition"""
+		# M5-B4: perform_global_loc's unified verification already ran PnP on the winning
+		# candidate; when it produced a usable pose, this frame is already fully localized
+		# and the local-matching step below is skipped for it (same as ros_loc_pipeline.process_frame).
+		just_localized_from_global = False
 		if not loc.has_global_pos:
 			loc_start_time = time.time()
 			result = loc.perform_global_loc(save_viz=(args.num_preds_to_save!=0))
@@ -440,8 +543,15 @@ def perform_localization(loc: LocPipeline, args):
 				matched_map_id = result['map_id']
 				loc.has_global_pos = True
 				loc.ref_map_node = loc.image_graph.get_node(matched_map_id)
-				loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
-				rospy.logwarn(f'[Succed] Found VPR Node in global position: {matched_map_id}')
+				if result.get('T_w_obs') is not None:
+					trans, quat = convert_matrix_to_vec(result['T_w_obs'], 'xyzw')
+					loc.curr_obs_node.set_pose(trans, quat)
+					loc.has_local_pos = True
+					just_localized_from_global = True
+					rospy.logwarn(f'[Succed] Found VPR Node in global position: {matched_map_id} (位姿已在核验时解出)')
+				else:
+					loc.curr_obs_node.set_pose(loc.ref_map_node.trans, loc.ref_map_node.quat)
+					rospy.logwarn(f'[Succed] Found VPR Node in global position: {matched_map_id}')
 			else:
 				loc.ref_map_node = None
 				rospy.logwarn('[Fail] to determine the global position since no VPR results.')
@@ -464,7 +574,7 @@ def perform_localization(loc: LocPipeline, args):
 				continue				
 
 		"""Perform local localization via. image matching"""
-		if loc.has_global_pos:
+		if loc.has_global_pos and not just_localized_from_global:
 			loc_start_time = time.time()
 			result = loc.perform_local_loc()
 			rospy.loginfo(f"Local localization costs: {time.time() - loc_start_time:.3f}s")

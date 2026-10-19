@@ -4,6 +4,7 @@ import argparse
 from datetime import datetime
 import logging
 from pathlib import Path
+from typing import Any, Dict, Optional
 import numpy as np
 
 import torch
@@ -46,12 +47,25 @@ def setup_log_environment(out_dir, args):
     )
     return log_dir
 
-def initialize_img_matcher(matcher: str, device: str, max_num_keypoints: int):
-    """Initialize the matcher with provided arguments."""
+def initialize_img_matcher(
+    matcher: str,
+    device: str,
+    max_num_keypoints: int,
+    matcher_kwargs: Optional[Dict[str, Any]] = None,
+):
+    """Initialize the matcher with provided arguments.
+
+    matcher_kwargs: 按匹配器名字从 python/config/matcher_profiles.yaml 查到的额外构造参数
+    (比如 master 系列的 min_conf_thr、edm 的 ransac_model),原样透传给 vismatch.get_matcher()
+    (M5-B4:原来三处按 hasattr(img_matcher, "min_conf_thr") 判断、事后再赋值的写法改成这里统一
+    在构造时传进去)。
+    """
     if matcher == "none":
         return None
     else:
-        return get_matcher(matcher, device=device, max_num_keypoints=max_num_keypoints)
+        return get_matcher(
+            matcher, device=device, max_num_keypoints=max_num_keypoints, **(matcher_kwargs or {})
+        )
 
 def rgb(ftensor, true_shape=None):
     if isinstance(ftensor, list):

@@ -3,7 +3,9 @@ import sys
 import logging
 from datetime import datetime
 import argparse
+from typing import Any, Dict, Optional
 import numpy as np
+import yaml
 import matplotlib
 import sys as _sys
 import os as _os
@@ -12,6 +14,61 @@ from vismatch import available_models
 from utils.pose_solver import available_solvers
 
 GV_SCORE_THRESHOLD = 100.0
+
+# python/config/matcher_profiles.yaml:按 --img_matcher 分组的参数(image_size / n_kpts /
+# gv_min_inliers(_nodepth) / matcher_kwargs),见 load_matcher_profile 的用法。
+_DEFAULT_MATCHER_PROFILES_PATH = _os.path.join(
+	_os.path.dirname(_os.path.abspath(__file__)), '../config/matcher_profiles.yaml'
+)
+
+
+def load_matcher_profile(matcher_name: str, config_path: Optional[str] = None) -> Dict[str, Any]:
+	"""读 `config/matcher_profiles.yaml` 里 matcher_name 那一条。
+
+	没有登记这个匹配器的配置(比如新加的匹配器还没写配置)就返回空字典,调用方自己兜底默认值,
+	不在这里报错——这样加新匹配器时不写配置也能先跑起来,只是吃不到配置带来的自动填参数。
+	"""
+	path = config_path or _DEFAULT_MATCHER_PROFILES_PATH
+	if not os.path.exists(path):
+		return {}
+	with open(path, 'r') as f:
+		all_profiles = yaml.safe_load(f) or {}
+	return dict(all_profiles.get(matcher_name, {}) or {})
+
+
+def fill_args_from_matcher_profile(args: argparse.Namespace, config_path: Optional[str] = None) -> argparse.Namespace:
+	"""按 args.img_matcher 查 matcher_profiles.yaml,把命令行没显式给的参数填上去
+	(命令行显式给的优先,这里只填还是 None/未设置的字段)。
+
+	填完之后额外产出 args.matcher_kwargs(dict),原样透传给
+	utils.utils_image_matching_method.initialize_img_matcher -> vismatch.get_matcher。
+	"""
+	profile = load_matcher_profile(args.img_matcher, config_path)
+
+	if getattr(args, 'image_size', None) is None:
+		img_size = profile.get('image_size')
+		if img_size is not None:
+			args.image_size = list(img_size)
+
+	if getattr(args, 'n_kpts', None) is None:
+		args.n_kpts = profile.get('n_kpts', 2048)
+
+	if getattr(args, 'gv_min_inliers', None) is None:
+		args.gv_min_inliers = profile.get('gv_min_inliers', GV_SCORE_THRESHOLD)
+
+	if getattr(args, 'gv_min_inliers_nodepth', None) is None:
+		args.gv_min_inliers_nodepth = profile.get('gv_min_inliers_nodepth', GV_SCORE_THRESHOLD)
+
+	matcher_kwargs = dict(profile.get('matcher_kwargs', {}) or {})
+	# --min_master_conf_thre 是显式命令行参数(老接口,MASt3R 系列专用),给了就覆盖配置里的
+	# min_conf_thr;没给(None)就用配置里的值,配置也没有就不设(matcher 自己的默认值生效)。
+	if getattr(args, 'min_master_conf_thre', None) is not None:
+		matcher_kwargs['min_conf_thr'] = args.min_master_conf_thre
+	elif 'min_conf_thr' in matcher_kwargs:
+		args.min_master_conf_thre = matcher_kwargs['min_conf_thr']
+	args.matcher_kwargs = matcher_kwargs
+
+	return args
 
 sys.path.extend([
 	os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../VPR-methods-evaluation'),
@@ -75,9 +132,18 @@ def parse_arguments():
 	parser.add_argument('--depth_scale', type=float, default=0.001, help='0.001 or 1')
 	parser.add_argument("--ros_rgb_img_type", type=str, default='raw', help="raw or compressed")
 	parser.add_argument("--global_pos_threshold", type=float, default=20.0, help="Distance threshold to actively global localization")
-	parser.add_argument("--min_master_conf_thre", type=float, default=0.0, help="Threshold for the confidence of the Mast3R matches")
+	parser.add_argument("--min_master_conf_thre", type=float, default=None,
+										help="Threshold for the confidence of the Mast3R matches. Not given: filled from "
+										"config/matcher_profiles.yaml's matcher_kwargs.min_conf_thr for --img_matcher")
 	parser.add_argument("--min_kpts_inliers_thre", type=int, default=200, help="Number of keypoint inliers to consider image matching as valid")
 	parser.add_argument("--min_solver_inliers_thre", type=int, default=150, help="Number of solver inliers to consider image matching as valid")
+	parser.add_argument("--gv_min_inliers", type=float, default=None,
+										help="M5-B4 统一核验门槛(查询深度 PnP-RANSAC 内点数);不给就按 --img_matcher 从 "
+										"config/matcher_profiles.yaml 读")
+	parser.add_argument("--gv_min_inliers_nodepth", type=float, default=None,
+										help="同上,但用于查询没有深度时的基础矩阵核验分数(utils/geom_verify.verify_fundamental)")
+	parser.add_argument("--matcher_config", type=str, default=None,
+										help="matcher_profiles.yaml 的路径,不给就用 config/matcher_profiles.yaml(随本仓库)")
 	"""
 	Parameters for VPR methods
 	"""
@@ -119,7 +185,9 @@ def parse_arguments():
 	Parameters for image matching
 	"""
 	parser.add_argument("--img_matcher", type=str, default="sift-lightglue", choices=available_models, help="choose your matcher")
-	parser.add_argument("--n_kpts", type=int, default=2048, help="max num keypoints")
+	parser.add_argument("--n_kpts", type=int, default=None,
+										help="max num keypoints. Not given: filled from config/matcher_profiles.yaml "
+										"for --img_matcher (falls back to 2048)")
 	parser.add_argument("--save_img_matcher", action="store_true",
 											help="set to True if you want to save image matching by the model")	
 
@@ -229,6 +297,8 @@ def parse_arguments():
 	
 	if args.unit_type and abs(args.depth_scale - 1.0) > 1e-3:
 			raise ValueError(f"The depth scale should be 1.0 not {args.depth_scale} since unit_type is True.")
+
+	args = fill_args_from_matcher_profile(args, config_path=args.matcher_config)
 
 	return args
 
