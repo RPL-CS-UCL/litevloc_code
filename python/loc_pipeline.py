@@ -191,13 +191,23 @@ class LocPipeline:
 		
 		return node_min_dis
 
-	def perform_global_loc(self, save_viz=False):
+	def perform_global_loc(self, save_viz=False, candidate_subset=None):
+		"""
+		Args:
+			save_viz: save VPR top-K visualization (unchanged).
+			candidate_subset: Optional[Set[int]]. M5-B7: when the global planner has recently
+				(within ACTIVE_NODES_MAX_AGE_S, checked by the ROS caller) told us roughly where
+				the robot should be on the route, this is the set of DB node ids (poses.txt row
+				numbers) around there. We verify only inside this subset first, and fall back to
+				the regular full-map flow if nothing in the subset passes geometric verification.
+				Default None: behaves exactly like before this parameter was added.
+		"""
 		query_desc = self.curr_obs_node.get_descriptor()
 		assert query_desc.shape[1] == self.DB_DESCRIPTORS.shape[1]
 		assert query_desc.shape[1] == self.args.vpr_descriptors_dimension
 		self.curr_query_descs.append(query_desc)
 		self.curr_query_descs = self.curr_query_descs[-self.vpr_match_model.seqLen:]
-		
+
 		if len(self.curr_query_descs) >= self.vpr_match_model.seqLen:
 			# Perform sequence match
 			query_descs = np.array(self.curr_query_descs).reshape(-1, query_desc.shape[1])
@@ -209,15 +219,15 @@ class LocPipeline:
 					img_paths = [str(self.curr_obs_node.map_root / self.curr_obs_node.rgb_img_name)]
 				else:
 					img_paths = [str(self.image_graph.map_root / self.curr_obs_node.rgb_img_name)]
-				
+
 				for pred in recall_preds:
 					node_id = self.DB_Node_IDS[pred]
 					map_node = self.image_graph.get_node(node_id)
 					img_paths.append(str(self.image_graph.map_root / map_node.rgb_img_name))
-				
+
 				preds_correct = [None] * len(img_paths)
 				save_vpr_visualization(self.log_dir, self.curr_obs_node.id, img_paths, preds_correct)
-				
+
 				if hasattr(self.vpr_match_model, 'compute_diff_matrix'):
 					D_all = self.vpr_match_model.compute_diff_matrix(query_descs)
 					self.vpr_match_model.save_diff_matrix_fitting(
@@ -227,30 +237,53 @@ class LocPipeline:
 				else:
 					D_all = None
 
+			if candidate_subset:
+				# M5-B7:有先验时,先在候选节点子集里核验(全量重排一遍再按子集过滤取前 5,
+				# 不是直接拿上面已经截断到 5 个的 recall_preds 去过滤——那 5 个很可能全不在子集里)。
+				all_preds, _, _ = self.vpr_match_model.match(query_descs, recall_values=len(self.DB_Node_IDS))
+				# faiss 等 k > 数据库大小时会拿 -1 占位,这里顺手滤掉非法下标
+				subset_preds = [
+					p for p in all_preds
+					if 0 <= p < len(self.DB_Node_IDS) and self.DB_Node_IDS[p] in candidate_subset
+				][:5]
+				if subset_preds:
+					subset_result = self._verify_geometric(subset_preds)
+					if subset_result['succ']:
+						rospy.loginfo(f"[Global Loc] 先验候选子集里核验通过: {subset_result['map_id']}")
+						return subset_result
+				rospy.loginfo("[Global Loc] 先验候选子集里一个都没核验过,退回全图匹配")
+
 			# Perform geometric verification on the Top-K match
 			# Return the one with the maximum number of inliers
-			best_map_node_id, max_num_inliers = self.DB_Node_IDS[recall_preds[0]], 0
-			if self.img_matcher is not None:
-				for pred in recall_preds:
-					map_node_id = self.DB_Node_IDS[pred]
-					map_node = self.image_graph.get_node(map_node_id)
-					result = self.img_matcher(map_node.rgb_image, self.curr_obs_node.rgb_image)
-					num_inliers = result['num_inliers']
-					if num_inliers > max_num_inliers:
-						best_map_node_id, max_num_inliers = map_node_id, num_inliers
-					
-					out_str  = f"[GV] Query {self.curr_obs_node.rgb_img_name} - DB {map_node.rgb_img_name}\n"
-					out_str += f"Number of matched kpts: {num_inliers}"
-					rospy.loginfo(out_str)
+			return self._verify_geometric(recall_preds)
 
-				rospy.loginfo(f"[Global Loc] Map node: {best_map_node_id}")
-				if max_num_inliers >= GV_SCORE_THRESHOLD: 
-					return {'succ': True, 'map_id': best_map_node_id}
-			else:
+		return {'succ': False, 'map_id': None}
+
+	def _verify_geometric(self, recall_preds):
+		"""Geometric verification over a ranked list of DB indices; returns the best match if it
+		clears GV_SCORE_THRESHOLD (or the single candidate when there's no image matcher)."""
+		best_map_node_id, max_num_inliers = self.DB_Node_IDS[recall_preds[0]], 0
+		if self.img_matcher is not None:
+			for pred in recall_preds:
+				map_node_id = self.DB_Node_IDS[pred]
+				map_node = self.image_graph.get_node(map_node_id)
+				result = self.img_matcher(map_node.rgb_image, self.curr_obs_node.rgb_image)
+				num_inliers = result['num_inliers']
+				if num_inliers > max_num_inliers:
+					best_map_node_id, max_num_inliers = map_node_id, num_inliers
+
+				out_str  = f"[GV] Query {self.curr_obs_node.rgb_img_name} - DB {map_node.rgb_img_name}\n"
+				out_str += f"Number of matched kpts: {num_inliers}"
+				rospy.loginfo(out_str)
+
+			rospy.loginfo(f"[Global Loc] Map node: {best_map_node_id}")
+			if max_num_inliers >= GV_SCORE_THRESHOLD:
 				return {'succ': True, 'map_id': best_map_node_id}
+		else:
+			return {'succ': True, 'map_id': best_map_node_id}
 
-		return {'succ': False, 'map_id': None}		
-	
+		return {'succ': False, 'map_id': None}
+
 	def perform_local_loc(self):
 		result_fail = {'succ': False, 'T_w_obs': None, 'solver_inliers': 0}
 

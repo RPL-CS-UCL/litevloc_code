@@ -30,3 +30,35 @@ def test_route_to_markers_non_empty() -> None:
     # 两个关键帧应该各有一个编号 TEXT 标记
     text_markers = [m for m in markers.markers if m.ns == "litevloc_topo/labels"]
     assert len(text_markers) == len(graph.poses)
+    # next_index 没给 → 旧行为:整条线一个 namespace,一个绿色
+    route_markers = [m for m in markers.markers if m.ns == "litevloc_topo/route"]
+    assert len(route_markers) == 1
+    assert len(route_markers[0].points) == 3
+
+
+def test_route_to_markers_next_index_splits_walked_and_remaining() -> None:
+    """``next_index`` 给了(M5-B7):路线拆成"走过的"灰线 + "没走的"绿线,首尾相接不断。"""
+    graph = TopoGraph(poses={0: Pose2D(0.0, 0.0, 0.0), 1: Pose2D(2.0, 0.0, 1.0)}, adjacency={})
+    markers = route_to_markers(_route(), graph, frame_id="map", stamp=0, next_index=1)
+
+    walked = [m for m in markers.markers if m.ns == "litevloc_topo/route_walked"]
+    remaining = [m for m in markers.markers if m.ns == "litevloc_topo/route_remaining"]
+    assert len(walked) == 1 and len(remaining) == 1
+    assert len(walked[0].points) == 2  # waypoints[0:2]:走过的第一段 + 分界点
+    assert len(remaining[0].points) == 2  # waypoints[1:3]:分界点 + 没走的最后一段
+    # 两条线在分界点相接,不该有缝
+    assert (walked[0].points[-1].x, walked[0].points[-1].y) == (
+        remaining[0].points[0].x,
+        remaining[0].points[0].y,
+    )
+    # 旧的单色 namespace 不应该再出现
+    assert not [m for m in markers.markers if m.ns == "litevloc_topo/route"]
+
+
+def test_route_to_markers_next_index_zero_has_no_walked_line() -> None:
+    """一段都没走完(``next_index=0``)时,"走过的"那条线不到 2 个点,不画。"""
+    graph = TopoGraph(poses={0: Pose2D(0.0, 0.0, 0.0)}, adjacency={})
+    markers = route_to_markers(_route(), graph, frame_id="map", stamp=0, next_index=0)
+    assert not [m for m in markers.markers if m.ns == "litevloc_topo/route_walked"]
+    remaining = [m for m in markers.markers if m.ns == "litevloc_topo/route_remaining"]
+    assert len(remaining) == 1 and len(remaining[0].points) == 3

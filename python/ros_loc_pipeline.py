@@ -25,13 +25,13 @@ import time
 import queue
 import threading
 import traceback
-from typing import Callable, Optional
+from typing import Callable, Optional, Set
 
 # ROS
 import rospy
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Image, CompressedImage, CameraInfo
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Int32MultiArray, String
 from std_srvs.srv import Trigger, TriggerResponse, SetBool, SetBoolResponse
 import message_filters
 
@@ -58,6 +58,39 @@ map_path_lock = threading.Lock()
 # After this many consecutive local-localization failures, drop back to global
 # localization instead of waiting forever for a fused-odometry-based reset.
 MAX_LOCAL_LOC_FAILS = 3
+
+# M5-B7 (B7c): the global planner (nav_skills.ros_route_viz.RosRouteViz) publishes
+# /global_planner/active_nodes whenever it shows a route -- the DB node ids (poses.txt row
+# numbers) around the current segment, i.e. roughly where the robot should be on the map. A
+# global relocalization verifies only inside that set first (see
+# LocPipeline.perform_global_loc's candidate_subset) if it was received recently; older than
+# this many seconds, the robot has likely moved on, so it is treated as not received at all.
+ACTIVE_NODES_MAX_AGE_S = 10.0
+active_nodes_lock = threading.Lock()
+# {"nodes": Optional[Set[int]], "time": float} -- time.time() of the last message, not ROS time
+# (consistent with how this module times everything else outside the simulated-clock path).
+active_nodes_state = {"nodes": None, "time": 0.0}
+
+
+def active_nodes_callback(msg) -> None:
+	"""`/global_planner/active_nodes` subscriber callback: just records what arrived and when."""
+	with active_nodes_lock:
+		active_nodes_state["nodes"] = {int(n) for n in msg.data}
+		active_nodes_state["time"] = time.time()
+
+
+def current_candidate_subset() -> Optional[Set[int]]:
+	"""The active-nodes prior to use right now, or `None` if none was received or it expired
+	(`ACTIVE_NODES_MAX_AGE_S`) -- `perform_global_loc(candidate_subset=None)` runs the original,
+	unchanged full-map flow in that case."""
+	with active_nodes_lock:
+		nodes = active_nodes_state["nodes"]
+		received_at = active_nodes_state["time"]
+	if nodes is None:
+		return None
+	if time.time() - received_at > ACTIVE_NODES_MAX_AGE_S:
+		return None
+	return nodes
 
 # Pause/resume control, used by another node to stop this GPU-heavy loop once a
 # position is locked in (or once "no map here" is decided), and wake it up again
@@ -280,7 +313,7 @@ def process_frame(
 	"""Perform global localization via. visual place recognition"""
 	if not loc.has_global_pos:
 		loc_start_time = time.time()
-		result = loc.perform_global_loc(save_viz=False)
+		result = loc.perform_global_loc(save_viz=False, candidate_subset=current_candidate_subset())
 		rospy.loginfo(f"Global localization cost: {time.time() - loc_start_time:.3f}s")
 		if result['succ']:
 			matched_map_id = result['map_id']
@@ -479,6 +512,12 @@ def main(
 
 	# Subscribe to fusion odometry
 	fusion_odom_sub = rospy.Subscriber('/pose_fusion/odometry', Odometry, odom_callback)
+
+	# Subscribe to the global planner's active-nodes prior (M5-B7/B7c, see ACTIVE_NODES_MAX_AGE_S
+	# above): a global relocalization verifies inside it first if it is recent enough.
+	active_nodes_sub = rospy.Subscriber(
+		'/global_planner/active_nodes', Int32MultiArray, active_nodes_callback
+	)
 
 	# Subscribe to map-switch requests (T7): map_align_node.py publishes the new map
 	# directory here whenever the current-map pointer changes.

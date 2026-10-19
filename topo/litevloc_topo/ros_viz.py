@@ -37,11 +37,17 @@ def route_to_markers(
     frame_id: str,
     stamp,
     current_kf: Optional[int] = None,
+    next_index: Optional[int] = None,
 ):
     """路线 + 图 → ``visualization_msgs/MarkerArray``。
 
-    内容:路线连线(绿色 LINE_STRIP)+ 途经路点(SPHERE_LIST)+ 起点(蓝色方块)+ 终点(红色带朝向
-    箭头)+ 当前所在关键帧(黄色大球,``current_kf`` 给了才画)+ 每个关键帧编号(TEXT_VIEW_FACING)。
+    内容:路线连线 + 途经路点(SPHERE_LIST)+ 起点(蓝色方块)+ 终点(红色带朝向箭头)+ 当前所在
+    关键帧(黄色大球,``current_kf`` 给了才画)+ 每个关键帧编号(TEXT_VIEW_FACING)。
+
+    路线连线默认整条一个绿色(旧行为,``next_index`` 不给);``next_index`` 给了(M5-B7,
+    ``route_walker.RouteViz`` 要分"走过的"和"没走的")就拆成两条首尾相接的线——
+    ``route.waypoints[:next_index + 1]`` 灰色(走过的,含分界点)、
+    ``route.waypoints[next_index:]`` 绿色(没走的,同样含分界点,线不断)。
     """
     from geometry_msgs.msg import Point
     from std_msgs.msg import ColorRGBA
@@ -62,14 +68,31 @@ def route_to_markers(
         next_id[0] += 1
         return next_id[0] - 1
 
-    line = Marker()
-    _header(line)
-    line.ns, line.id = "litevloc_topo/route", _next_id()
-    line.type = Marker.LINE_STRIP
-    line.scale.x = 0.05
-    line.color = _color(0.0, 1.0, 0.0)
-    line.points = [Point(x=w.x, y=w.y, z=0.0) for w in route.waypoints]
-    array.markers.append(line)
+    def _line_marker(ns: str, points, color) -> Marker:
+        marker = Marker()
+        _header(marker)
+        marker.ns, marker.id = ns, _next_id()
+        marker.type = Marker.LINE_STRIP
+        marker.scale.x = 0.05
+        marker.color = color
+        marker.points = [Point(x=w.x, y=w.y, z=0.0) for w in points]
+        return marker
+
+    if next_index is None:
+        array.markers.append(
+            _line_marker("litevloc_topo/route", route.waypoints, _color(0.0, 1.0, 0.0))
+        )
+    else:
+        walked = route.waypoints[: next_index + 1]
+        remaining = route.waypoints[next_index:]
+        if len(walked) >= 2:
+            array.markers.append(
+                _line_marker("litevloc_topo/route_walked", walked, _color(0.5, 0.5, 0.5))
+            )
+        if len(remaining) >= 2:
+            array.markers.append(
+                _line_marker("litevloc_topo/route_remaining", remaining, _color(0.0, 1.0, 0.0))
+            )
 
     spheres = Marker()
     _header(spheres)
