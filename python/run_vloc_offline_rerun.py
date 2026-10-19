@@ -314,7 +314,7 @@ def main() -> None:
     vpr_match_model.initialize_model(db_descriptors)
 
     img_matcher = initialize_img_matcher(args.img_matcher, args.device, args.n_kpts)
-    if args.img_matcher in ("master", "master-fp16"):
+    if hasattr(img_matcher, "min_conf_thr"):  # MASt3R 系列(含各提速变体)都有这个置信度过滤,按属性判、不列名字
         img_matcher.min_conf_thr = args.min_master_conf_thre
 
     cfg.merge_from_file(args.config_pose_solver)

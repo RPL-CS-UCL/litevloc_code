@@ -91,7 +91,7 @@ class LocPipeline:
 
 	def init_img_matcher(self):
 		self.img_matcher = initialize_img_matcher(self.args.img_matcher, self.args.device, self.args.n_kpts)
-		if self.args.img_matcher == "master": 
+		if hasattr(self.img_matcher, "min_conf_thr"):  # MASt3R 系列(含各提速变体)都有这个置信度过滤,按属性判、不列名字
 			self.img_matcher.min_conf_thr = self.args.min_master_conf_thre
 		rospy.loginfo(f"Initialize Image matcher: {self.args.img_matcher}")
 		
