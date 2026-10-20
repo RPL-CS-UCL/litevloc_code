@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from litevloc_topo.goals import KeyframeGoal
+from litevloc_topo.goals import KeyframeGoal, PoseGoal
 from litevloc_topo.graph import Pose2D, TopoGraph, TopoGraphError
 from litevloc_topo.planner import TopoPlanner
 
@@ -85,3 +85,24 @@ def test_advance_same_start_goal_finishes_immediately() -> None:
     planner = TopoPlanner(_graph())
     planner.plan(Pose2D(0.0, 0.0, 0.0), KeyframeGoal(0))
     assert planner.advance(Pose2D(0.0, 0.0, 0.0), reach_m=0.1) is None
+
+
+def test_plan_pose_goal_appends_target_pose_when_not_coincident() -> None:
+    planner = TopoPlanner(_graph())
+    # (2.0, 0.5) 离 kf2(2.0, 0.0) 最近,但不重合,应规划到 kf2 再多接一个点
+    route = planner.plan(Pose2D(0.0, 0.0, 0.0), PoseGoal(2.0, 0.5, 0.3))
+    assert route.kf_path == (0, 1, 2)
+    assert route.waypoint_kfs[-1] is None
+    assert route.waypoints[-1] == Pose2D(2.0, 0.5, 0.3)
+    assert route.length_m == pytest.approx(2.0 + 0.5)
+
+
+def test_plan_pose_goal_coincident_with_keyframe_does_not_duplicate() -> None:
+    planner = TopoPlanner(_graph())
+    # 目标位姿正好和 kf2 的位置重合,朝向不同:不额外多接一个点,只换朝向
+    route = planner.plan(Pose2D(0.0, 0.0, 0.0), PoseGoal(2.0, 0.0, 1.23))
+    assert route.kf_path == (0, 1, 2)
+    assert route.waypoint_kfs[-1] == 2
+    assert len(route.waypoints) == len(route.waypoint_kfs)
+    assert route.waypoints[-1] == Pose2D(2.0, 0.0, 1.23)
+    assert route.length_m == pytest.approx(2.0)

@@ -51,6 +51,22 @@ class ObjectGoal:
         raise TopoGraphError(f"地图里没有实例 {self.instance_id}")
 
 
+class PoseGoal:
+    """地图系位姿目标(M5-B9):规划到离它最近的关键帧,最后接上这个位姿本身当最后一个路点。
+
+    和 ``KeyframeGoal`` 不同,``resolve`` 只给 ``TopoPlanner`` 用来找"该走到哪个关键帧附近",
+    真正"接上位姿本身"这一步在 ``planner.TopoPlanner.plan`` 里做(见那里的说明)。
+    """
+
+    def __init__(self, x: float, y: float, yaw: float) -> None:
+        self.x = x
+        self.y = y
+        self.yaw = yaw
+
+    def resolve(self, graph: TopoGraph, map_dir: Optional[Path]) -> int:
+        return graph.nearest(self.x, self.y)
+
+
 class ImageGoal:
     """按检索结果或图像描述子选目标关键帧,两种构造方式二选一。
 

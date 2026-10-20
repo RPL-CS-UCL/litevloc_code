@@ -47,6 +47,22 @@ def _quat_wxyz_to_matrix(qw: float, qx: float, qy: float, qz: float) -> np.ndarr
     )
 
 
+def resolve_place_dir(map_dir: Path) -> Path:
+    """地点图(place graph)目录:``map_dir/place`` 存在且有 ``poses.txt`` 就用它,否则退回
+    ``map_dir`` 本身(M5-B9:旧图没有分出地点图时,直接拿场景图当地点图用,不用重建)。
+
+    Args:
+        map_dir: 场景图目录(建图产物的那一层,不是地点图)。
+
+    Returns:
+        该用来做 LiteVLoc 定位 / 规划的那个目录。
+    """
+    place_dir = Path(map_dir) / "place"
+    if (place_dir / "poses.txt").is_file():
+        return place_dir
+    return Path(map_dir)
+
+
 def read_camera_poses(map_dir: Path) -> List[np.ndarray]:
     """读 ``poses.txt``,逐行算出相机在地图系里的 4x4 位姿(已取逆);行号即关键帧编号。
 

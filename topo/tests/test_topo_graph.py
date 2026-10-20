@@ -198,3 +198,25 @@ def test_edge_length_missing_edge_raises() -> None:
     graph = from_edges(poses, [])
     with pytest.raises(TopoGraphError):
         graph.edge_length(0, 1)
+
+
+def test_resolve_place_dir_prefers_place_subdir_when_present(tmp_path: Path) -> None:
+    from litevloc_topo.graph import resolve_place_dir
+
+    map_dir = tmp_path / "map"
+    place_dir = map_dir / "place"
+    place_dir.mkdir(parents=True)
+    (place_dir / "poses.txt").write_text("", encoding="utf-8")
+    assert resolve_place_dir(map_dir) == place_dir
+
+
+def test_resolve_place_dir_falls_back_without_place_poses(tmp_path: Path) -> None:
+    from litevloc_topo.graph import resolve_place_dir
+
+    map_dir = tmp_path / "map"
+    map_dir.mkdir()
+    # 没有 place/ 子目录
+    assert resolve_place_dir(map_dir) == map_dir
+    # 有 place/ 子目录但没有 poses.txt(比如写一半)也退回 map_dir
+    (map_dir / "place").mkdir()
+    assert resolve_place_dir(map_dir) == map_dir

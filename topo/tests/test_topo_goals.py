@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from litevloc_topo.goals import Goal, ImageGoal, KeyframeGoal, LanguageGoal, ObjectGoal
+from litevloc_topo.goals import Goal, ImageGoal, KeyframeGoal, LanguageGoal, ObjectGoal, PoseGoal
 from litevloc_topo.graph import Pose2D, TopoGraph, TopoGraphError
 
 _GRAPH = TopoGraph(
@@ -86,3 +86,9 @@ class _FixedResolver:
 def test_language_goal_delegates_to_resolver() -> None:
     goal = LanguageGoal("去冰箱那边", _FixedResolver())
     assert goal.resolve(_GRAPH, None) == 2
+
+
+def test_pose_goal_resolves_to_nearest_keyframe() -> None:
+    # (1.9, 0.0) 离 kf2(2.0, 0.0) 最近
+    assert PoseGoal(1.9, 0.0, 0.0).resolve(_GRAPH, None) == 2
+    assert PoseGoal(0.1, 0.0, 0.0).resolve(_GRAPH, None) == 0

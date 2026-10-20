@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 from typing import FrozenSet, Optional, Tuple
 
-from .goals import Goal
+from .goals import Goal, PoseGoal
 from .graph import Pose2D, TopoGraph, TopoGraphError
 from .route import Route, path_to_waypoints_with_kf
 from .search import NoPathError, dijkstra
@@ -61,12 +61,42 @@ class TopoPlanner:
     def plan(self, start: Pose2D, goal: Goal) -> Route:
         """起点 = 离 ``start`` 最近的关键帧,终点 = ``goal.resolve(...)``,按 ``self.blocked`` 规划。
 
+        ``goal`` 是 ``PoseGoal``(地图系位姿目标,M5-B9)时,规划到离它最近的关键帧之后,
+        再在路线末尾接上这个位姿本身当最后一个路点(``waypoint_kfs`` 对应位置填 ``None``);
+        如果路线最后一个关键帧的位置已经和目标位姿重合(在原图上直接给关键帧编号当目标时就是
+        这种情况),不额外多接一个几乎重复的点,只把朝向换成目标位姿本身的。
+
         Raises:
             TopoGraphError: 目标关键帧不在地图里,或和起点不连通。
         """
         start_kf = self._graph.nearest(start.x, start.y)
         goal_kf = goal.resolve(self._graph, self._map_dir)
-        return self._plan_to(start_kf, goal_kf)
+        route = self._plan_to(start_kf, goal_kf)
+        if isinstance(goal, PoseGoal):
+            route = self._append_pose_goal(route, goal)
+        return route
+
+    def _append_pose_goal(self, route: Route, goal: PoseGoal) -> Route:
+        """在路线末尾接上 ``goal`` 这个具体位姿(见 ``plan`` 的说明)。"""
+        last = route.waypoints[-1]
+        coincide = math.hypot(last.x - goal.x, last.y - goal.y) <= 1e-9
+        target = Pose2D(goal.x, goal.y, goal.yaw)
+        if coincide:
+            waypoints = route.waypoints[:-1] + (target,)
+            waypoint_kfs = route.waypoint_kfs
+            extra_length = 0.0
+        else:
+            waypoints = route.waypoints + (target,)
+            waypoint_kfs = route.waypoint_kfs + (None,)
+            extra_length = math.hypot(last.x - goal.x, last.y - goal.y)
+        new_route = Route(
+            kf_path=route.kf_path,
+            length_m=route.length_m + extra_length,
+            waypoints=waypoints,
+            waypoint_kfs=waypoint_kfs,
+        )
+        self._current_route = new_route
+        return new_route
 
     def replan(self, from_pose: Pose2D, block_edge: Optional[Tuple[int, int]] = None) -> Route:
         """先封边(如果给了),再从 ``from_pose`` 到**上一次 plan 的目标关键帧**重规划。

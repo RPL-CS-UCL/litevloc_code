@@ -4,7 +4,7 @@ nav_mapping(nav_system)和 LiteVLoc(本仓库 ``global_planner.py`` / ``utils_sh
 共用这一份实现,不再各自维护一套 Dijkstra。用法见同目录 ``README.md``。
 """
 
-from .goals import Goal, ImageGoal, KeyframeGoal, LanguageGoal, ObjectGoal, TextResolver
+from .goals import Goal, ImageGoal, KeyframeGoal, LanguageGoal, ObjectGoal, PoseGoal, TextResolver
 from .graph import (
     Pose2D,
     TopoGraph,
@@ -13,6 +13,7 @@ from .graph import (
     from_edges,
     load_topo_graph,
     read_camera_poses,
+    resolve_place_dir,
 )
 from .planner import TopoPlanner
 from .route import (
@@ -32,6 +33,7 @@ __all__ = [
     "KeyframeGoal",
     "LanguageGoal",
     "ObjectGoal",
+    "PoseGoal",
     "TextResolver",
     "Pose2D",
     "TopoGraph",
@@ -40,6 +42,7 @@ __all__ = [
     "from_edges",
     "load_topo_graph",
     "read_camera_poses",
+    "resolve_place_dir",
     "TopoPlanner",
     "MAX_SEGMENT_M",
     "MIN_WAYPOINT_SPACING_M",
