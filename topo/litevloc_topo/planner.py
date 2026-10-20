@@ -9,6 +9,9 @@ from .graph import Pose2D, TopoGraph, TopoGraphError
 from .route import Route, path_to_waypoints_with_kf
 from .search import NoPathError, dijkstra
 
+# 路线开头离机器人这么近(米)的路点直接跳过,不让机器人回头去踩(见 TopoPlanner._trim_start)
+START_SKIP_M = 0.5
+
 
 class TopoPlanner:
     """一次任务生命周期内的规划状态:封过的边一直封着,直到 ``clear_blocked``。"""
@@ -19,6 +22,7 @@ class TopoPlanner:
         self._blocked: FrozenSet[Tuple[int, int]] = frozenset()
         self._current_route: Optional[Route] = None
         self._goal_kf: Optional[int] = None
+        self._pose_goal: Optional[PoseGoal] = None
         self._subgoal_index = 0
 
     @property
@@ -71,10 +75,32 @@ class TopoPlanner:
         """
         start_kf = self._graph.nearest(start.x, start.y)
         goal_kf = goal.resolve(self._graph, self._map_dir)
+        self._pose_goal = goal if isinstance(goal, PoseGoal) else None
         route = self._plan_to(start_kf, goal_kf)
-        if isinstance(goal, PoseGoal):
-            route = self._append_pose_goal(route, goal)
-        return route
+        if self._pose_goal is not None:
+            route = self._append_pose_goal(route, self._pose_goal)
+        return self._trim_start(route, start)
+
+    def _trim_start(self, route: Route, start: Pose2D) -> Route:
+        """去掉路线开头机器人已经越过的路点:离机器人不到 ``START_SKIP_M``,或者机器人离下一个路点
+        比这个路点离下一个路点还近(说明它在机器人身后)。最近关键帧常在机器人身后约半米,不去掉的话
+        走路状态机会先让机器人倒退回去,局部规划器只会往前走,倒退几十厘米就被判卡住(M5-B8 实测)。
+        至少留最后一个路点。"""
+        waypoints, kfs = list(route.waypoints), list(route.waypoint_kfs)
+        while len(waypoints) > 1:
+            cur, nxt = waypoints[0], waypoints[1]
+            d_start_cur = math.hypot(cur.x - start.x, cur.y - start.y)
+            passed = math.hypot(nxt.x - start.x, nxt.y - start.y) <= math.hypot(nxt.x - cur.x, nxt.y - cur.y)
+            if d_start_cur >= START_SKIP_M and not passed:
+                break
+            waypoints.pop(0)
+            kfs.pop(0)
+        if len(waypoints) == len(route.waypoints):
+            return route
+        trimmed = Route(kf_path=route.kf_path, length_m=route.length_m,
+                        waypoints=tuple(waypoints), waypoint_kfs=tuple(kfs))
+        self._current_route = trimmed
+        return trimmed
 
     def _append_pose_goal(self, route: Route, goal: PoseGoal) -> Route:
         """在路线末尾接上 ``goal`` 这个具体位姿(见 ``plan`` 的说明)。"""
@@ -109,7 +135,10 @@ class TopoPlanner:
         if self._goal_kf is None:
             raise TopoGraphError("还没有 plan 过,不能 replan")
         start_kf = self._graph.nearest(from_pose.x, from_pose.y)
-        return self._plan_to(start_kf, self._goal_kf)
+        route = self._plan_to(start_kf, self._goal_kf)
+        if self._pose_goal is not None:  # 位姿目标重规划后也要把最后那个位姿接回去
+            route = self._append_pose_goal(route, self._pose_goal)
+        return self._trim_start(route, from_pose)
 
     def advance(self, robot: Pose2D, reach_m: float) -> Optional[int]:
         """子目标推进:机身到当前子目标的距离 < ``reach_m`` 就前进一个,返回当前子目标关键帧。

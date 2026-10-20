@@ -106,3 +106,31 @@ def test_plan_pose_goal_coincident_with_keyframe_does_not_duplicate() -> None:
     assert len(route.waypoints) == len(route.waypoint_kfs)
     assert route.waypoints[-1] == Pose2D(2.0, 0.0, 1.23)
     assert route.length_m == pytest.approx(2.0)
+
+
+def test_plan_skips_start_waypoint_behind_robot() -> None:
+    """机器人已经越过最近关键帧(在 1.3 m 处,最近帧 1 在身后 0.3 m)时,路线不该先让它倒退回去。"""
+    route = TopoPlanner(_graph()).plan(Pose2D(1.3, 0.0, 0.0), KeyframeGoal(3))
+    assert (route.waypoints[0].x, route.waypoints[0].y) == pytest.approx((2.0, 0.0))
+    assert route.waypoint_kfs[0] == 2
+
+
+def test_plan_skips_start_waypoint_under_robot() -> None:
+    """站在关键帧上(离它 < 0.5 m)出发时,第一个路点就是下一个关键帧。"""
+    route = TopoPlanner(_graph()).plan(Pose2D(0.05, 0.0, 0.0), KeyframeGoal(2))
+    assert (route.waypoints[0].x, route.waypoints[0].y) == pytest.approx((1.0, 0.0))
+
+
+def test_plan_keeps_last_waypoint_when_already_there() -> None:
+    route = TopoPlanner(_graph()).plan(Pose2D(2.0, 1.0, 0.0), KeyframeGoal(3))
+    assert len(route.waypoints) == 1 and route.waypoint_kfs[-1] == 3
+
+
+def test_replan_keeps_pose_goal_at_end() -> None:
+    """位姿目标重规划后,路线末尾仍是那个位姿(原来重规划会丢掉它)。"""
+    planner = TopoPlanner(_graph())
+    planner.plan(Pose2D(0.0, 0.0, 0.0), PoseGoal(2.0, 1.6, 0.3))
+    route = planner.replan(Pose2D(1.0, 0.0, 0.0))
+    last = route.waypoints[-1]
+    assert (last.x, last.y, last.yaw) == pytest.approx((2.0, 1.6, 0.3))
+    assert route.waypoint_kfs[-1] is None
