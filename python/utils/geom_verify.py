@@ -215,12 +215,19 @@ def verify_fundamental(
 
     Returns:
         网格去重后,基础矩阵 RANSAC(USAC_MAGSAC,阈值 1 像素)的内点数;点不够(< 8,
-        基础矩阵最少需要的对应点数)或者解不出来时返回 0。
+        基础矩阵最少需要的对应点数)、解不出来、或者 OpenCV 自己内部算不出来直接报错
+        (某些点集会让 ``cv2.findFundamentalMat`` 抛 ``cv2.error``,比如实测报过的
+        ``!model.empty() in function 'setModelParameters'``)时都返回 0,跟"解不出来"同一个
+        处理,不往上抛。
     """
     kq, km = grid_dedup(kpts_query, kpts_map, cell_px=cell_px, max_points=max_points)
     if kq.shape[0] < 8:
         return 0
-    _, mask = cv2.findFundamentalMat(kq, km, cv2.USAC_MAGSAC, reproj_thresh_px)
+    try:
+        _, mask = cv2.findFundamentalMat(kq, km, cv2.USAC_MAGSAC, reproj_thresh_px)
+    except cv2.error as exc:
+        logger.warning("基础矩阵求解抛异常,按解不出来处理(内点数记 0): %s", exc)
+        return 0
     if mask is None:
         return 0
     return int(mask.sum())

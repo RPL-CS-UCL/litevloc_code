@@ -8,6 +8,7 @@ from __future__ import annotations
 import pathlib
 import sys
 
+import cv2
 import numpy as np
 import pytest
 
@@ -226,6 +227,21 @@ def test_verify_fundamental_consistent_matches_pass():
 def test_verify_fundamental_too_few_points():
     data = _synthetic_pure_translation(n_pts=5, translation=(0.5, 0.0, 0.0))
     inliers = geom_verify.verify_fundamental(data["kpts_query"][:5], data["kpts_map"][:5])
+    assert inliers == 0
+
+
+def test_verify_fundamental_opencv_error_returns_zero(monkeypatch):
+    """Some point sets make ``cv2.findFundamentalMat`` raise ``cv2.error`` instead of returning
+    an empty mask (seen in practice: ``!model.empty() in function 'setModelParameters'``). That
+    must be treated the same as "could not solve" (inlier count 0), not propagate up and crash
+    the caller."""
+    data = _synthetic_pure_translation(n_pts=200, translation=(0.5, 0.1, 0.05))
+
+    def _raise(*_args, **_kwargs):
+        raise cv2.error("(-215:Assertion failed) !model.empty() in function 'setModelParameters'")
+
+    monkeypatch.setattr(geom_verify.cv2, "findFundamentalMat", _raise)
+    inliers = geom_verify.verify_fundamental(data["kpts_query"], data["kpts_map"])
     assert inliers == 0
 
 
