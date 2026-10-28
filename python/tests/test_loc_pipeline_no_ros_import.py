@@ -196,3 +196,49 @@ def test_localize_obs_local_mode_works_without_ros(loc_pipeline_mod_no_ros):
     # perform_local_loc 原来的行为(不管核验过没过都记匹配点,供可视化用)依然保留。
     assert ref_node.get_matched_kpts()[1] == len(kpts_map)
     assert obs_node.get_matched_kpts()[1] == len(kpts_map)
+
+
+def test_global_and_local_thresholds_apply_separately(loc_pipeline_mod_no_ros):
+    """全局定位看 gv_min_inliers、本地跟踪看 gv_min_inliers_local(用户 10-28 定 50 / 100),互不影响。"""
+    T_world_map = np.eye(4)
+    T_world_query = np.eye(4)
+    T_world_query[:3, 3] = [0.2, 0.0, 0.0]
+    kpts_map, kpts_query, depth_img = _synthetic_match(T_world_map, T_world_query, seed=12)
+
+    def fake_matcher(_map_rgb, _obs_rgb):
+        return {"num_inliers": len(kpts_map), "inlier_kpts0": kpts_map, "inlier_kpts1": kpts_query}
+
+    def run(global_th, local_th):
+        pipeline = _make_bare_pipeline_no_ros(loc_pipeline_mod_no_ros, fake_matcher, gv_min_inliers=global_th)
+        pipeline.args.gv_min_inliers_local = local_th
+        pipeline.image_graph = SimpleNamespace(
+            get_node=lambda nid: _make_node(trans=T_world_map[:3, 3], node_id=nid))
+        depth = torch.from_numpy(depth_img).unsqueeze(0)
+        obs_g = _make_node(trans=T_world_query[:3, 3], node_id="obs", depth_image=depth)
+        obs_l = _make_node(trans=T_world_query[:3, 3], node_id="obs", depth_image=depth)
+        g = pipeline.localize_obs(obs_g, mode="global", prior={"candidate_ids": [7]})
+        loc = pipeline.localize_obs(obs_l, mode="local",
+                                    prior={"ref_map_node": _make_node(trans=T_world_map[:3, 3], node_id=3)})
+        return g, loc
+
+    g, loc = run(global_th=10, local_th=10_000)  # 全局过、本地门槛高到过不了
+    assert g.succ is True and loc.succ is False and loc.verify_inliers == g.verify_inliers
+    g, loc = run(global_th=10_000, local_th=10)  # 反过来
+    assert g.succ is False and loc.succ is True
+
+
+def test_local_threshold_falls_back_to_global_when_not_configured(loc_pipeline_mod_no_ros):
+    T_world_map = np.eye(4)
+    T_world_query = np.eye(4)
+    T_world_query[:3, 3] = [0.2, 0.0, 0.0]
+    kpts_map, kpts_query, depth_img = _synthetic_match(T_world_map, T_world_query, seed=13)
+
+    def fake_matcher(_map_rgb, _obs_rgb):
+        return {"num_inliers": len(kpts_map), "inlier_kpts0": kpts_map, "inlier_kpts1": kpts_query}
+
+    pipeline = _make_bare_pipeline_no_ros(loc_pipeline_mod_no_ros, fake_matcher, gv_min_inliers=10_000)
+    depth = torch.from_numpy(depth_img).unsqueeze(0)
+    obs = _make_node(trans=T_world_query[:3, 3], node_id="obs", depth_image=depth)
+    loc = pipeline.localize_obs(obs, mode="local",
+                                prior={"ref_map_node": _make_node(trans=T_world_map[:3, 3], node_id=3)})
+    assert loc.succ is False  # 没配本地门槛,就按全局 10000 判

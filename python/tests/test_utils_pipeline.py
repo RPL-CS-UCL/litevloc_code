@@ -131,10 +131,25 @@ def test_fill_args_from_matcher_profile_is_idempotent_on_prefilled_args():
     assert args.matcher_kwargs == {"min_conf_thr": 6.0}
 
 
-def test_real_profile_edm_requires_more_than_200_inliers():
-    """用户 10-28 定:EDM 定位的核验内点 > 200 才算成功(全局定位和本地跟踪共用这个门槛)。"""
+def test_real_profile_edm_global_50_local_100():
+    """用户 10-28 定:EDM 全局定位核验内点门槛 50、本地跟踪 100,两个配置项分开。"""
     from utils.utils_pipeline import load_matcher_profile
 
     profile = load_matcher_profile("edm")
-    assert profile["gv_min_inliers"] == 201
-    assert 200 < profile["gv_min_inliers"]  # 200 不算,201 算
+    assert profile["gv_min_inliers"] == 50
+    assert profile["gv_min_inliers_local"] == 100
+
+
+def test_local_threshold_filled_from_profile_or_falls_back_to_global(tmp_path):
+    import argparse
+
+    from utils.utils_pipeline import fill_args_from_matcher_profile
+
+    both = tmp_path / "both.yaml"
+    both.write_text("m1:\n  gv_min_inliers: 50\n  gv_min_inliers_local: 100\n")
+    args = fill_args_from_matcher_profile(argparse.Namespace(img_matcher="m1"), str(both))
+    assert (args.gv_min_inliers, args.gv_min_inliers_local) == (50, 100)
+    only_global = tmp_path / "global.yaml"
+    only_global.write_text("m2:\n  gv_min_inliers: 70\n")
+    args = fill_args_from_matcher_profile(argparse.Namespace(img_matcher="m2"), str(only_global))
+    assert args.gv_min_inliers_local == 70  # 没配本地门槛就跟全局同一个数

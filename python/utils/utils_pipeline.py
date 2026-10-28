@@ -56,6 +56,10 @@ def fill_args_from_matcher_profile(args: argparse.Namespace, config_path: Option
 	if getattr(args, 'gv_min_inliers', None) is None:
 		args.gv_min_inliers = profile.get('gv_min_inliers', GV_SCORE_THRESHOLD)
 
+	# 本地跟踪的门槛只从配置读(不加命令行开关);配置没给就跟全局 gv_min_inliers 同一个数。
+	if getattr(args, 'gv_min_inliers_local', None) is None:
+		args.gv_min_inliers_local = profile.get('gv_min_inliers_local', args.gv_min_inliers)
+
 	if getattr(args, 'gv_min_inliers_nodepth', None) is None:
 		args.gv_min_inliers_nodepth = profile.get('gv_min_inliers_nodepth', GV_SCORE_THRESHOLD)
 

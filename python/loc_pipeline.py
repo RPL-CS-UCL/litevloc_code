@@ -354,7 +354,8 @@ class LocPipeline:
 					"最近关键帧 + 邻居里挑描述子最近的")。
 
 		Returns:
-			LocResult。stage="none" 表示没找到候选、或核验分数没过 gv_min_inliers 门槛。
+			LocResult。stage="none" 表示没找到候选、或核验分数没过门槛(全局用 gv_min_inliers,
+			本地跟踪用 gv_min_inliers_local,没深度时两处都用 gv_min_inliers_nodepth)。
 		"""
 		prior = prior or {}
 		has_depth = getattr(obs_node, "depth_image", None) is not None
@@ -405,7 +406,12 @@ class LocPipeline:
 			obs_node.set_matched_kpts(match_result["inlier_kpts1"], num_inliers_raw)
 			logging.info(f"Number of matched kpts inliers: {num_inliers_raw} (统一核验: {inliers})")
 
-			succ = T_world_obs is not None and inliers >= gv_threshold
+			# 本地跟踪(已经知道大概在哪,只跟参考关键帧核对)单独一个门槛 gv_min_inliers_local,
+			# 和全局定位(在全图里找)的 gv_min_inliers 分开;配置没给就跟全局用同一个数。
+			local_threshold = (
+				getattr(self.args, "gv_min_inliers_local", None) or self.args.gv_min_inliers
+			) if has_depth else self.args.gv_min_inliers_nodepth
+			succ = T_world_obs is not None and inliers >= local_threshold
 			return LocResult(
 				succ=succ, stage=("local" if succ else "none"),
 				map_id=(ref_map_node.id if succ else None),
