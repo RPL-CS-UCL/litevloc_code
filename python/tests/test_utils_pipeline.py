@@ -129,3 +129,12 @@ def test_fill_args_from_matcher_profile_is_idempotent_on_prefilled_args():
     assert args.gv_min_inliers == 4
     assert args.gv_min_inliers_nodepth == 5
     assert args.matcher_kwargs == {"min_conf_thr": 6.0}
+
+
+def test_real_profile_edm_requires_more_than_200_inliers():
+    """用户 10-28 定:EDM 定位的核验内点 > 200 才算成功(全局定位和本地跟踪共用这个门槛)。"""
+    from utils.utils_pipeline import load_matcher_profile
+
+    profile = load_matcher_profile("edm")
+    assert profile["gv_min_inliers"] == 201
+    assert 200 < profile["gv_min_inliers"]  # 200 不算,201 算
