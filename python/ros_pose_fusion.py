@@ -50,6 +50,9 @@ init_extrinsics = False
 
 path_publish_freq = 1
 last_timestamp = 0
+# /pose_fusion/path keeps only the poses of the last 10 min: it is resent whole on every publish,
+# so an unbounded path grows with the run (8 Mbps per viewer after a few hours in sim, 10-29).
+PATH_KEEP_S = 600.0
 
 tf_buffer, listener = None, None
 
@@ -61,6 +64,13 @@ if args.odom_type == 'depth_reg':
 else:
 	# others:
 	SIGMA_PRIOR = np.array([np.deg2rad(3.0), np.deg2rad(3.0), np.deg2rad(3.0), 0.05, 0.05, 0.5])
+
+def trim_path(poses, cutoff_sec):
+	"""Drop the poses stamped before cutoff_sec from the head of a time-ordered pose list, in place."""
+	n = 0
+	while n < len(poses) and poses[n].header.stamp.to_sec() < cutoff_sec:
+		n += 1
+	del poses[:n]
 
 def odom_local_callback(odom_msg):
 	# TODO(gogojjh): record the velocity of the local odometry
@@ -180,6 +190,7 @@ def odom_local_callback(odom_msg):
 		pose_fusion.path_msg.header = header
 		pose_msg = ros_msg.convert_vec_to_rospose(trans, quat, header)
 		pose_fusion.path_msg.poses.append(pose_msg)
+		trim_path(pose_fusion.path_msg.poses, curr_time - PATH_KEEP_S)
 		# The two paths are only for visualization and cost O(graph size) per publish (path_opt walks every
 		# variable): over a 15 min run they took the node from 1 % to 38 % of a core, so publish only
 		# while someone subscribes.

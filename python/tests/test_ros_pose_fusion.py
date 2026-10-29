@@ -173,3 +173,17 @@ def test_reset_clears_graph_and_drops_globals_from_before_reset(fusion):
 	assert len(new_msgs) == len(stamps) - (half + 5) - GLOBAL_DELAY
 	gt_by_stamp = {round(s, 6): g for s, g in zip(stamps, gt)}
 	assert max(_trans_err(m, gt_by_stamp[round(m.header.stamp.to_sec(), 6)]) for m in new_msgs) < 0.05
+
+
+def test_path_keeps_only_recent_window(fusion, monkeypatch):
+	# /pose_fusion/path is resent whole on every publish; it keeps only the last PATH_KEEP_S seconds
+	monkeypatch.setattr(fusion, "PATH_KEEP_S", 10.0)
+	origin = _matrix(3.0, -2.0, 40.0)
+	stamps, gt, local = _trajectory(int(30 * RATE_HZ), 1000.0, origin)
+	_run(fusion, stamps, gt, local)
+	poses = fusion.pose_fusion.path_msg.poses
+	first, last = poses[0].header.stamp.to_sec(), poses[-1].header.stamp.to_sec()
+	assert last == pytest.approx(stamps[-1])
+	assert last - 10.0 <= first < last - 10.0 + 1.5 / RATE_HZ
+	assert len(poses) == pytest.approx(10.0 * RATE_HZ, abs=2)
+	assert fusion.pose_fusion.pub_path.msgs[-1].poses[0].header.stamp.to_sec() >= last - 10.0 - 1.0
